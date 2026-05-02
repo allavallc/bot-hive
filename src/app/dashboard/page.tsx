@@ -1,7 +1,7 @@
 import { db } from "@/db";
-import { account } from "@/db/schema";
+import { account, projects } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -50,10 +50,31 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const userProjects = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.ownerId, session.user.id))
+    .orderBy(desc(projects.createdAt));
+
   return (
     <main>
       <h1>Welcome, {session.user.name}.</h1>
-      <p>No projects yet.</p>
+      <h2>Your projects</h2>
+      {userProjects.length === 0 ? (
+        <p>No projects yet.</p>
+      ) : (
+        <ul>
+          {userProjects.map((p) => (
+            <li key={p.id}>
+              <a href={`/projects/${p.id}`}>{p.displayName}</a> — <code>{p.githubRepo}</code> —{" "}
+              {p.status}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p>
+        <a href="/projects/new">Connect another repo</a>
+      </p>
       <form action={signOut}>
         <button type="submit">Sign out</button>
       </form>
