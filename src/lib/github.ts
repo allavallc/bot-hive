@@ -21,7 +21,7 @@ function loadPrivateKey(): string {
 
 let appInstance: App | null = null;
 
-function getApp(): App {
+export function getApp(): App {
   if (appInstance) return appInstance;
 
   const appId = process.env.GITHUB_APP_ID;
