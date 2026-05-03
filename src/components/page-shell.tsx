@@ -5,7 +5,7 @@ import { Wordmark } from "./wordmark";
 
 export function PageShell({
   children,
-  brandHref = "/dashboard",
+  brandHref = "/",
   rightSlot,
   showCrumb = false,
   crumbHref = "/dashboard",

@@ -44,21 +44,15 @@
 }
 
 .brand {
-  font-family: var(--display);
-  font-weight: 900;
-  font-size: 1.25rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   display: inline-flex;
-  gap: 0.4em;
-}
-
-.brandPrimary {
+  align-items: center;
+  text-decoration: none;
   color: var(--ink);
+  transition: opacity 0.2s ease;
 }
 
-.brandAccent {
-  color: var(--accent);
+.brand:hover {
+  opacity: 0.85;
 }
 
 .mastheadMeta {

@@ -1,5 +1,7 @@
 "use client";
 
+import { Wordmark } from "@/components/wordmark";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./board.module.css";
@@ -102,10 +104,9 @@ export function Board({
   return (
     <div className={styles.root}>
       <header className={styles.masthead}>
-        <div className={styles.brand}>
-          <span className={styles.brandPrimary}>Bot</span>
-          <span className={styles.brandAccent}>Hive</span>
-        </div>
+        <Link href="/" className={styles.brand} aria-label="Bot Hive">
+          <Wordmark height={28} />
+        </Link>
         <div className={styles.mastheadMeta}>
           <span className={styles.connState} data-on={connected}>
             {connected ? "● live" : "○ reconnecting"}

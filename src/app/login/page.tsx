@@ -22,7 +22,7 @@ export default function LoginPage() {
   }
 
   return (
-    <PageShell brandHref="/login">
+    <PageShell brandHref="/">
       <div className={ui.hero}>
         {showHint && (
           <aside className={ui.hint} aria-label="Sign-out hint">
