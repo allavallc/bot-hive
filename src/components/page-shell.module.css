@@ -191,10 +191,11 @@
 
 .numberedSection {
   display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 24px;
+  grid-template-columns: 80px 1fr;
+  gap: 28px;
   padding: 36px 0;
   border-bottom: 1px solid var(--line);
+  align-items: start;
 }
 
 .numberedSection:last-child {
@@ -203,11 +204,12 @@
 
 .sectionNumber {
   font-family: var(--mono);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  color: var(--ink-dimmer);
-  padding-top: 6px;
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--ink);
+  padding-top: 4px;
 }
 
 .sectionHeading {
@@ -231,8 +233,12 @@
 
 @media (max-width: 600px) {
   .numberedSection {
-    grid-template-columns: 40px 1fr;
+    grid-template-columns: 56px 1fr;
     gap: 16px;
+  }
+
+  .sectionNumber {
+    font-size: 1.5rem;
   }
 }
 
