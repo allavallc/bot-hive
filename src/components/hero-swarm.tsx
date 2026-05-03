@@ -72,6 +72,7 @@ export function HeroSwarm() {
       {SWARM.map((bot) => (
         <div key={bot.name} className={`${styles.carrier} ${styles[bot.botClass]}`}>
           <RobotMascot name={bot.name} className={styles.carrierMascot} />
+          <span className={styles.botName}>{bot.name}</span>
           <span className={`${styles.crate} ${styles[bot.crateClass]}`} aria-hidden="true" />
         </div>
       ))}
@@ -79,6 +80,7 @@ export function HeroSwarm() {
       {/* Worker — comes from off-page right, takes a crate, leaves off-page right */}
       <div className={styles.worker}>
         <RobotMascot name="boss" className={styles.workerMascot} />
+        <span className={styles.botName}>boss</span>
         <span className={styles.workerCrate} aria-hidden="true" />
       </div>
     </div>
