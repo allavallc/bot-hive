@@ -3,11 +3,11 @@ import styles from "./hero-swarm.module.css";
 
 const SWARM = [
   { name: "claude", botClass: "bot1", crateClass: "crate1" },
-  { name: "sarah", botClass: "bot2", crateClass: "crate2" },
-  { name: "alex", botClass: "bot3", crateClass: "crate3" },
-  { name: "rin", botClass: "bot4", crateClass: "crate4" },
-  { name: "kim", botClass: "bot5", crateClass: "crate5" },
-  { name: "jess", botClass: "bot6", crateClass: "crate6" },
+  { name: "codex", botClass: "bot2", crateClass: "crate2" },
+  { name: "copilot", botClass: "bot3", crateClass: "crate3" },
+  { name: "cursor", botClass: "bot4", crateClass: "crate4" },
+  { name: "aider", botClass: "bot5", crateClass: "crate5" },
+  { name: "gemini", botClass: "bot6", crateClass: "crate6" },
 ] as const;
 
 const BACKLOG_CRATES = [
