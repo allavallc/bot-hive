@@ -50,3 +50,11 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* Bolded white text is hard to read on dark — use accent color
+   for emphasis instead of synthetic bold. */
+strong,
+b {
+  font-weight: inherit;
+  color: var(--accent);
+}
