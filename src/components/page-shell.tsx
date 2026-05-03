@@ -1,6 +1,6 @@
-import { signOutAction } from "@/lib/sign-out";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { PageNav } from "./page-nav";
 import styles from "./page-shell.module.css";
 import { Wordmark } from "./wordmark";
 
@@ -25,33 +25,7 @@ export function PageShell({
         <Link href={brandHref} className={styles.brand} aria-label="Bot Hive">
           <Wordmark height={28} />
         </Link>
-        <nav className={styles.nav} aria-label="Main">
-          {signedIn && (
-            <Link href="/dashboard" className={styles.navLink}>
-              Dashboard
-            </Link>
-          )}
-          <Link href="/pricing" className={styles.navLink}>
-            Pricing
-          </Link>
-          <Link href="/setup" className={styles.navLink}>
-            Setup
-          </Link>
-          <Link href="/about" className={styles.navLink}>
-            About
-          </Link>
-          {signedIn ? (
-            <form action={signOutAction} className={styles.navAuthForm}>
-              <button type="submit" className={styles.navAuth}>
-                Sign out
-              </button>
-            </form>
-          ) : (
-            <Link href="/login" className={styles.navAuth}>
-              Sign in
-            </Link>
-          )}
-        </nav>
+        <PageNav signedIn={signedIn} />
       </header>
       <main className={styles.main}>
         {showCrumb && (
