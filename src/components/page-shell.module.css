@@ -409,6 +409,138 @@
   }
 }
 
+/* Pricing card grid — used by /pricing */
+
+.pricingGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 48px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.pricingCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 36px 28px 32px;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.pricingCard:last-child {
+  border-right: none;
+}
+
+.pricingCard:hover {
+  background: var(--bg-2);
+}
+
+.pricingCardFeatured {
+  background: rgba(196, 114, 74, 0.05);
+  position: relative;
+}
+
+.pricingCardFeatured::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.pricingTier {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.priceAmount {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(2.25rem, 4vw, 2.75rem);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.priceSuffix {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  color: var(--ink-dim);
+}
+
+.pricingBlurb {
+  font-family: var(--read);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  min-height: 3em;
+}
+
+.featureList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  flex: 1;
+}
+
+.featureList li {
+  font-family: var(--read);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  padding-left: 16px;
+  position: relative;
+}
+
+.featureList li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 8px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.pricingCta {
+  margin-top: 16px;
+}
+
+@media (max-width: 800px) {
+  .pricingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pricingCard {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pricingCard:last-child {
+    border-bottom: none;
+  }
+}
+
 /* Form primitives — used by /contact and any future form */
 
 .form {
