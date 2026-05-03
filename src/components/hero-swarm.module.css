@@ -40,7 +40,7 @@
 .bot1 {
   top: 8%;
   left: 0;
-  animation: path1 8s ease-in-out infinite;
+  animation: path1 8s linear infinite;
 }
 .crate1 {
   animation: cratePhase 8s ease-in-out infinite;
@@ -49,7 +49,7 @@
 .bot2 {
   top: 70%;
   left: 0;
-  animation: path2 10s ease-in-out infinite;
+  animation: path2 10s linear infinite;
   animation-delay: -3s;
 }
 .crate2 {
@@ -60,7 +60,7 @@
 .bot3 {
   top: 38%;
   left: 0;
-  animation: path3 9s ease-in-out infinite;
+  animation: path3 9s linear infinite;
   animation-delay: -5s;
 }
 .crate3 {
@@ -71,7 +71,7 @@
 .bot4 {
   top: 18%;
   left: 0;
-  animation: path4 11s ease-in-out infinite;
+  animation: path4 11s linear infinite;
   animation-delay: -2s;
 }
 .crate4 {
@@ -82,7 +82,7 @@
 .bot5 {
   top: 82%;
   left: 0;
-  animation: path5 7s ease-in-out infinite;
+  animation: path5 7s linear infinite;
   animation-delay: -7s;
 }
 .crate5 {
@@ -93,7 +93,7 @@
 .bot6 {
   top: 52%;
   left: 0;
-  animation: path6 8.5s ease-in-out infinite;
+  animation: path6 8.5s linear infinite;
   animation-delay: -1.5s;
 }
 .crate6 {
