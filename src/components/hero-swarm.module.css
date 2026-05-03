@@ -46,53 +46,83 @@
   background: var(--accent);
 }
 
-/* Dock — destination on the right of the Done column */
+/* Backlog supply — static yellow crates waiting to be picked up */
 
-.dock {
+.backlogCrate {
   position: absolute;
-  right: 4px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border: 1px solid var(--bg);
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* Done shelf — accumulating pile, faded in on staggered timing */
+
+.doneShelf {
+  position: absolute;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 28px;
-  height: 50px;
-  border: 1px solid var(--accent);
-  border-right: none;
-  background: rgba(196, 114, 74, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(3, 14px);
+  grid-template-rows: repeat(2, 14px);
+  gap: 4px;
   pointer-events: none;
 }
 
-.dockPile {
+.shelfCrate {
   width: 14px;
   height: 14px;
   background: var(--accent);
   border: 1px solid var(--bg);
-  animation: dockPilePulse 8s linear infinite;
 }
 
-@keyframes dockPilePulse {
-  0%,
-  20% {
-    opacity: 0.3;
-    transform: scale(0.8);
-  }
-  35% {
-    opacity: 0.6;
-    transform: scale(1);
-  }
-  55% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-  72% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-  78% {
+.shelf1 {
+  animation: shelfPulse 8s linear infinite;
+  animation-delay: -1s;
+}
+.shelf2 {
+  animation: shelfPulse 8s linear infinite;
+  animation-delay: -2s;
+}
+.shelf3 {
+  animation: shelfPulse 8s linear infinite;
+  animation-delay: -3s;
+}
+.shelf4 {
+  animation: shelfPulse 8s linear infinite;
+  animation-delay: -4s;
+}
+.shelf5 {
+  animation: shelfPulse 8s linear infinite;
+  animation-delay: -5s;
+}
+.shelf6 {
+  animation: shelfPulse 8s linear infinite;
+  animation-delay: -6s;
+}
+
+@keyframes shelfPulse {
+  /* fade in (crate delivered) */
+  0% {
     opacity: 0;
     transform: scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  /* sit on the shelf */
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  /* worker picks it up — fade out */
+  85% {
+    opacity: 0;
+    transform: scale(0.7);
   }
   100% {
     opacity: 0;
@@ -189,8 +219,8 @@
   animation-delay: -1.5s;
 }
 
-/* Curved out-and-back paths. Drop points pushed to ~92% across the
-   swarm so carriers actually reach the dock in the Done column. */
+/* Curved out-and-back paths. Drop points pushed across the swarm
+   so carriers reach the shelf in the Done column. */
 
 @keyframes path1 {
   0% {
@@ -382,7 +412,7 @@
   }
 }
 
-/* Worker — clears the dock pile periodically */
+/* Worker — clears the shelf periodically */
 
 .worker {
   position: absolute;
@@ -391,7 +421,7 @@
   width: 32px;
   height: 32px;
   margin-top: -16px;
-  animation: workerCycle 8s linear infinite;
+  animation: workerCycle 10s linear infinite;
 }
 
 .workerMascot {
@@ -409,38 +439,45 @@
   height: 9px;
   background: var(--accent);
   border: 1px solid var(--bg);
-  animation: workerCrateCycle 8s linear infinite;
+  animation: workerCrateCycle 10s linear infinite;
 }
 
 @keyframes workerCycle {
+  /* off-screen right, waiting */
   0%,
-  60% {
+  55% {
     transform: translateX(60px) scaleX(-1);
   }
+  /* enter — moving left to the shelf */
+  68% {
+    transform: translateX(-50px) scaleX(-1);
+  }
+  /* pickup pause + flip to face right */
   72% {
-    transform: translateX(-44px) scaleX(-1);
+    transform: translateX(-50px) scaleX(1);
   }
-  76% {
-    transform: translateX(-44px) scaleX(1);
-  }
-  92% {
-    transform: translateX(80px) scaleX(1);
+  /* exit right with crate, off the page */
+  90% {
+    transform: translateX(120px) scaleX(1);
   }
   100% {
-    transform: translateX(80px) scaleX(1);
+    transform: translateX(120px) scaleX(1);
   }
 }
 
 @keyframes workerCrateCycle {
+  /* invisible while approaching empty */
   0%,
-  74% {
+  70% {
     opacity: 0;
   }
-  77%,
-  92% {
+  /* appears when worker picks up at shelf */
+  73%,
+  90% {
     opacity: 1;
   }
-  93%,
+  /* gone after exit */
+  91%,
   100% {
     opacity: 0;
   }
@@ -461,7 +498,12 @@
   .crate6,
   .worker,
   .workerCrate,
-  .dockPile {
+  .shelf1,
+  .shelf2,
+  .shelf3,
+  .shelf4,
+  .shelf5,
+  .shelf6 {
     animation: none;
   }
 }
