@@ -17,42 +17,42 @@ export default async function SetupPage() {
         doesn't have a <code>hive/</code> folder yet, we scaffold one for you in a single commit.
       </p>
 
-      <ol className={ui.list}>
+      <ol className={ui.stepsList}>
         <li>
-          <span className={ui.listItem}>
-            <span className={ui.listItemNumber}>01</span>
-            <span className={ui.listItemBody}>
-              <span className={ui.listItemTitle}>Sign in with GitHub</span>
-              <span className={ui.listItemMeta}>
+          <div className={ui.step}>
+            <span className={ui.stepNumber}>1</span>
+            <div className={ui.stepBody}>
+              <span className={ui.stepTitle}>Sign in with GitHub</span>
+              <span className={ui.stepDescription}>
                 One click. We use your GitHub identity for sign-in only — no repo access yet.
               </span>
-            </span>
-          </span>
+            </div>
+          </div>
         </li>
         <li>
-          <span className={ui.listItem}>
-            <span className={ui.listItemNumber}>02</span>
-            <span className={ui.listItemBody}>
-              <span className={ui.listItemTitle}>Install the GitHub App on a repo</span>
-              <span className={ui.listItemMeta}>
+          <div className={ui.step}>
+            <span className={ui.stepNumber}>2</span>
+            <div className={ui.stepBody}>
+              <span className={ui.stepTitle}>Install the GitHub App on a repo</span>
+              <span className={ui.stepDescription}>
                 From your dashboard, "Connect a repo" links to GitHub's installer. Pick the repos
                 you want Bot Hive to watch — read + write on contents (so we can scaffold), webhooks
                 on push.
               </span>
-            </span>
-          </span>
+            </div>
+          </div>
         </li>
         <li>
-          <span className={ui.listItem}>
-            <span className={ui.listItemNumber}>03</span>
-            <span className={ui.listItemBody}>
-              <span className={ui.listItemTitle}>Watch the board update on every push</span>
-              <span className={ui.listItemMeta}>
+          <div className={ui.step}>
+            <span className={ui.stepNumber}>3</span>
+            <div className={ui.stepBody}>
+              <span className={ui.stepTitle}>Watch the board update on every push</span>
+              <span className={ui.stepDescription}>
                 Each <code>hive/</code> ticket renders as a card. Bots commit changes, your board
                 updates within seconds via SSE — no manual refresh.
               </span>
-            </span>
-          </span>
+            </div>
+          </div>
         </li>
       </ol>
 

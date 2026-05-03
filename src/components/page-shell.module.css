@@ -545,6 +545,67 @@
   }
 }
 
+/* Step list — bigger white numerals for "how to" pages like /setup */
+
+.stepsList {
+  list-style: none;
+  margin-top: 32px;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 28px;
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+  align-items: start;
+}
+
+.stepsList li:last-child .step {
+  border-bottom: 1px solid var(--line);
+}
+
+.stepNumber {
+  font-family: var(--mono);
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  line-height: 1;
+  padding-top: 4px;
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stepTitle {
+  font-family: var(--read);
+  font-size: 1.125rem;
+  color: var(--ink);
+}
+
+.stepDescription {
+  font-family: var(--read);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 600px) {
+  .step {
+    grid-template-columns: 56px 1fr;
+    gap: 16px;
+  }
+
+  .stepNumber {
+    font-size: 1.5rem;
+  }
+}
+
 /* Footnotes — small clarifying notes referenced from body copy */
 
 .footnoteRef {
