@@ -8,7 +8,7 @@ export default async function PricingPage() {
   return (
     <PageShell signedIn={!!session}>
       <span className={ui.kicker}>Pricing</span>
-      <h1 className={ui.pageTitle}>Pay when the horde grows.</h1>
+      <h1 className={ui.pageTitle}>Pay when the hive grows.</h1>
       <p className={ui.lede}>
         <strong>Free</strong> for up to 2 bots on a repo. <strong>$15/month</strong> per repo once
         you go past 2. <strong>Enterprise</strong> pricing exists for the odd case — reach out at{" "}

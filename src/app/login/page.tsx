@@ -42,6 +42,9 @@ export default function LoginPage() {
           )}
           <span className={ui.kicker}>Welcome</span>
           <h1 className={ui.pageTitle}>Live kanban for your hive of bots.</h1>
+          <p className={ui.tagline}>
+            The future of software development is managing bots, not managing humans.
+          </p>
           <p className={ui.lede}>
             Connect a GitHub repo with a <code>hive/</code> folder and watch your tickets render as
             a live board. Bots commit, the board updates within seconds.

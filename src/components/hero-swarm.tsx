@@ -13,8 +13,19 @@ const SWARM = [
 export function HeroSwarm() {
   return (
     <div className={styles.swarm} aria-hidden="true">
+      <div className={styles.columns}>
+        <div className={styles.column}>
+          <span className={styles.columnLabel}>Backlog</span>
+        </div>
+        <div className={styles.column}>
+          <span className={styles.columnLabel}>In progress</span>
+        </div>
+        <div className={styles.column}>
+          <span className={styles.columnLabel}>Done</span>
+        </div>
+      </div>
+
       <div className={styles.dock}>
-        <span className={styles.dockLabel}>DOCK</span>
         <span className={styles.dockPile} />
       </div>
 
