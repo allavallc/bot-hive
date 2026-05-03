@@ -37,7 +37,6 @@ const COLUMNS = [
 const NOT_DOING = { state: "not-doing", label: "Not doing" } as const;
 
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
-const EFFORTS = ["XS", "S", "M", "L", "XL"];
 
 export function Board({
   project,
@@ -59,9 +58,7 @@ export function Board({
   const [generatedAt, setGeneratedAt] = useState<Date>(new Date());
 
   const filterPriority = params.get("priority") ?? "";
-  const filterEffort = params.get("effort") ?? "";
   const filterFeature = params.get("feature") ?? "";
-  const readyOnly = params.get("ready") === "1";
 
   function setFilter(key: string, value: string | null) {
     const next = new URLSearchParams(params.toString());
@@ -87,27 +84,14 @@ export function Board({
     return () => es.close();
   }, [project.id]);
 
-  const doneHvIds = useMemo(
-    () => new Set(tickets.filter((t) => t.state === "done").map((t) => t.hvId)),
-    [tickets],
-  );
-
   const visible = useMemo(
     () =>
       tickets.filter((t) => {
         if (filterPriority && t.frontmatter.Priority !== filterPriority) return false;
-        if (filterEffort && t.frontmatter.Effort !== filterEffort) return false;
         if (filterFeature && t.frontmatter["Feature set"] !== filterFeature) return false;
-        if (readyOnly) {
-          const blockers = (t.frontmatter["Blocked by"] ?? "")
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          if (blockers.some((id) => !doneHvIds.has(id))) return false;
-        }
         return true;
       }),
-    [tickets, filterPriority, filterEffort, filterFeature, readyOnly, doneHvIds],
+    [tickets, filterPriority, filterFeature],
   );
 
   const cols = showNotDoing ? [...COLUMNS, NOT_DOING] : COLUMNS;
@@ -116,7 +100,7 @@ export function Board({
   for (const t of visible) byColumn.get(t.state)?.push(t);
 
   return (
-    <main className={styles.root}>
+    <div className={styles.root}>
       <header className={styles.masthead}>
         <div className={styles.brand}>
           <span className={styles.brandPrimary}>Bot</span>
@@ -130,78 +114,69 @@ export function Board({
         </div>
       </header>
 
-      <nav className={styles.subnav}>
-        <a href={`/projects/${project.id}`} className={styles.subnavActive}>
-          Board
-        </a>
-        <a href="/dashboard" className={styles.subnavLink}>
-          ← Dashboard
-        </a>
-        <span className={styles.subnavRepo}>{project.githubRepo}</span>
-      </nav>
+      <main className={styles.main}>
+        <nav className={styles.subnav}>
+          <a href={`/projects/${project.id}`} className={styles.subnavActive}>
+            Board
+          </a>
+          <a href="/dashboard" className={styles.subnavLink}>
+            ← Dashboard
+          </a>
+          <span className={styles.subnavRepo}>{project.githubRepo}</span>
+        </nav>
 
-      <section className={styles.filters}>
-        <FilterSelect
-          label="Priority"
-          value={filterPriority}
-          options={PRIORITIES}
-          onChange={(v) => setFilter("priority", v || null)}
-        />
-        <FilterSelect
-          label="Effort"
-          value={filterEffort}
-          options={EFFORTS}
-          onChange={(v) => setFilter("effort", v || null)}
-        />
-        <FilterSelect
-          label="Feature set"
-          value={filterFeature}
-          options={features.map((f) => ({
-            value: f.fsId,
-            label: f.fsId.replace(/^feature-set-/, "fs-"),
-          }))}
-          onChange={(v) => setFilter("feature", v || null)}
-        />
-        <FilterToggle
-          label="Ready only"
-          active={readyOnly}
-          onChange={(v) => setFilter("ready", v ? "1" : null)}
-        />
-        <FilterToggle label="Show not-doing" active={showNotDoing} onChange={setShowNotDoing} />
-      </section>
+        <section className={styles.filters}>
+          <FilterSelect
+            label="Priority"
+            value={filterPriority}
+            options={PRIORITIES}
+            onChange={(v) => setFilter("priority", v || null)}
+          />
+          <FilterSelect
+            label="Feature set"
+            value={filterFeature}
+            options={features.map((f) => ({
+              value: f.fsId,
+              label: f.fsId.replace(/^feature-set-/, "fs-"),
+            }))}
+            onChange={(v) => setFilter("feature", v || null)}
+          />
+          <FilterToggle label="Show not-doing" active={showNotDoing} onChange={setShowNotDoing} />
+        </section>
 
-      <section
-        className={styles.board}
-        style={{ gridTemplateColumns: `repeat(${cols.length}, 1fr)` }}
-      >
-        {cols.map((col) => {
-          const items = byColumn.get(col.state) ?? [];
-          return (
-            <div key={col.state} className={styles.column}>
-              <div className={styles.columnHeader}>
-                <span className={styles.columnLabel}>{col.label}</span>
-                <span className={styles.columnCount}>{items.length}</span>
+        <section
+          className={styles.board}
+          style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}
+        >
+          {cols.map((col) => {
+            const items = byColumn.get(col.state) ?? [];
+            return (
+              <div key={col.state} className={styles.column}>
+                <div className={styles.columnHeader}>
+                  <span className={styles.columnLabel}>{col.label}</span>
+                  <span className={styles.columnCount}>{items.length}</span>
+                </div>
+                <div className={styles.cards}>
+                  {items.length === 0 ? (
+                    <div className={styles.empty}>No tickets</div>
+                  ) : (
+                    items.map((t) => (
+                      <Card
+                        key={t.id}
+                        ticket={t}
+                        features={features}
+                        expanded={expandedId === t.id}
+                        onToggle={() => setExpandedId((curr) => (curr === t.id ? null : t.id))}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-              <div className={styles.cards}>
-                {items.length === 0 ? (
-                  <div className={styles.empty}>No tickets</div>
-                ) : (
-                  items.map((t) => (
-                    <Card
-                      key={t.id}
-                      ticket={t}
-                      features={features}
-                      expanded={expandedId === t.id}
-                      onToggle={() => setExpandedId((curr) => (curr === t.id ? null : t.id))}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </section>
-    </main>
+            );
+          })}
+        </section>
+      </main>
+    </div>
   );
 }
 
@@ -263,6 +238,60 @@ function FilterToggle({
   );
 }
 
+const ROBOT_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+];
+
+function robotColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  }
+  return ROBOT_COLORS[Math.abs(h) % ROBOT_COLORS.length];
+}
+
+function RobotMascot({ name }: { name?: string }) {
+  const color = name ? robotColor(name) : "#22c55e";
+  const delay = useMemo(() => -Math.random() * 12, []);
+  return (
+    <svg
+      className={styles.botRobot}
+      viewBox="0 0 18 18"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      style={{
+        color,
+        filter: `drop-shadow(0 0 3px ${color}99)`,
+        animationDelay: `${delay}s`,
+      }}
+    >
+      <title>{name ?? "bot"}</title>
+      <circle cx="9" cy="1" r="1" fill="currentColor" />
+      <line
+        x1="9"
+        y1="1.5"
+        x2="9"
+        y2="3.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <rect x="3" y="3.5" width="12" height="10.5" rx="2" fill="currentColor" />
+      <circle cx="6.5" cy="8" r="1.3" fill="var(--bg)" />
+      <circle cx="11.5" cy="8" r="1.3" fill="var(--bg)" />
+      <rect x="5" y="14" width="2" height="3" fill="currentColor" />
+      <rect x="11" y="14" width="2" height="3" fill="currentColor" />
+    </svg>
+  );
+}
+
 function Card({
   ticket,
   features,
@@ -280,12 +309,8 @@ function Card({
   const assignee = fm["Assigned to"];
 
   return (
-    <article
-      className={styles.card}
-      data-expanded={expanded}
-      data-priority={fm.Priority}
-      data-state={ticket.state}
-    >
+    <article className={styles.card} data-expanded={expanded} data-state={ticket.state}>
+      {ticket.state === "in-progress" && <RobotMascot name={assignee} />}
       <button
         type="button"
         className={styles.cardButton}
@@ -297,25 +322,19 @@ function Card({
           }
         }}
       >
-        {fs && (
-          <span className={styles.cardFsBadge}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>
-        )}
-        <span className={styles.cardIdRow}>
+        <span className={styles.cardTop}>
           <span className={styles.cardId}>{ticket.hvId}</span>
-          {fm.Priority && (
-            <span className={styles.cardBadge} data-priority={fm.Priority}>
-              {fm.Priority}
-            </span>
-          )}
-          {fm.Effort && <span className={styles.cardBadge}>{fm.Effort}</span>}
-        </span>
-        <span className={styles.cardTitle}>{ticket.title}</span>
-        {assignee && (
-          <span className={styles.cardAssignee}>
-            <span className={styles.cardAssigneeDot} aria-hidden="true" />
-            {assignee}
+          <span className={styles.badges}>
+            {fm.Priority && (
+              <span className={styles.badge} data-priority={fm.Priority}>
+                {fm.Priority}
+              </span>
+            )}
+            {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
           </span>
-        )}
+        </span>
+        {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
+        <span className={styles.cardTitle}>{ticket.title}</span>
       </button>
       {expanded && (
         <div className={styles.cardBody}>

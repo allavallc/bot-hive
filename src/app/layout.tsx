@@ -1,5 +1,6 @@
 import { Anton, Atkinson_Hyperlegible, Inter, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
+import "./globals.css";
 
 const display = Anton({
   subsets: ["latin"],
