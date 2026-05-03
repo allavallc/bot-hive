@@ -34,6 +34,9 @@ export function PageShell({
           <Link href="/pricing" className={styles.navLink}>
             Pricing
           </Link>
+          <Link href="/setup" className={styles.navLink}>
+            Setup
+          </Link>
           <Link href="/about" className={styles.navLink}>
             About
           </Link>
