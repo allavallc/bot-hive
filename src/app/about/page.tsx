@@ -18,14 +18,20 @@ export default async function AboutPage() {
         <span className={ui.sectionNumber}>1</span>
         <div>
           <h2 className={ui.sectionHeading}>Bot count is the scaling axis, not team size.</h2>
-          <p className={ui.sectionBody}>
-            A solo developer running five Claude Code agents has the same coordination problem as a
-            twenty-person team running fifty bots. Both need a single place where humans can see
-            what bots are doing and bots can see what humans want next. Team size is incidental; the
-            number of agents committing to your repo is what determines whether you need
-            coordination at all. Bot Hive doesn't care which side of that scale you're on — it works
-            the same on day one with two bots as it does on month twelve with twenty.
-          </p>
+          <ul className={ui.sectionList}>
+            <li>
+              One developer running five agents has the same coordination problem as a 20-person
+              team running fifty.
+            </li>
+            <li>
+              Both need a single place where humans see what bots are doing and bots see what humans
+              want next.
+            </li>
+            <li>
+              Team size is incidental — bot count is what decides whether coordination is needed.
+            </li>
+            <li>Works the same on day one with two bots as on month twelve with twenty.</li>
+          </ul>
         </div>
       </section>
 
@@ -35,14 +41,23 @@ export default async function AboutPage() {
           <h2 className={ui.sectionHeading}>
             The future of software development is managing bots, not managing humans.
           </h2>
-          <p className={ui.sectionBody}>
-            AI coding agents are getting cheap and capable fast. The bottleneck isn't writing code
-            anymore — it's coordinating multiple agents against the same codebase without stepping
-            on each other, and feeding them intent fast enough to keep them productive. Leverage
-            shifts from typing speed to clarity of direction and quality of feedback loops. Whether
-            the team is one human or fifty, the work looks the same: turn intent into tickets, watch
-            bots claim and close them, accept or reject the result. Bot Hive is the loop.
-          </p>
+          <ul className={ui.sectionList}>
+            <li>AI coding agents are getting cheap and capable fast.</li>
+            <li>
+              The bottleneck isn't writing code — it's coordinating multiple agents against the same
+              codebase without collisions, and feeding them intent fast enough to keep them
+              productive.
+            </li>
+            <li>
+              Leverage shifts from typing speed to clarity of direction and quality of feedback
+              loops.
+            </li>
+            <li>
+              The work is the same with one human or fifty: turn intent into tickets, watch bots
+              claim and close them, accept or reject the result.
+            </li>
+            <li>Bot Hive is that loop.</li>
+          </ul>
         </div>
       </section>
 
@@ -50,13 +65,20 @@ export default async function AboutPage() {
         <span className={ui.sectionNumber}>3</span>
         <div>
           <h2 className={ui.sectionHeading}>How it works.</h2>
-          <p className={ui.sectionBody}>
-            Bot Hive is a coordination layer for teams (or a single developer) running multiple AI
-            bots on the same codebase. Every bot writes its tickets as markdown files in your repo's{" "}
-            <code>hive/</code> folder; Bot Hive renders those files as a live kanban board. Push a
-            commit, see the card move. No new database, no proprietary lock-in — your tickets are
-            just files in your git history.
-          </p>
+          <ul className={ui.sectionList}>
+            <li>
+              A coordination layer for one developer or a team running multiple AI bots on the same
+              codebase.
+            </li>
+            <li>
+              Every bot writes tickets as markdown files in your repo's <code>hive/</code> folder.
+            </li>
+            <li>
+              Bot Hive renders those files as a live kanban board — push a commit, see the card
+              move.
+            </li>
+            <li>No new database, no lock-in — tickets are just files in your git history.</li>
+          </ul>
         </div>
       </section>
     </PageShell>

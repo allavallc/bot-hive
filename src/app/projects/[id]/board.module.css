@@ -138,7 +138,7 @@
   margin-bottom: -1px;
   font-family: var(--mono);
   font-size: 0.7rem;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.25em;
   text-transform: uppercase;
   color: var(--ink-dim);
@@ -219,7 +219,7 @@
 .filterToggle {
   font-family: var(--mono);
   font-size: 0.65rem;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink-dim);
@@ -415,7 +415,7 @@
 .badge {
   font-family: var(--mono);
   font-size: 0.65rem;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   padding: 2px 7px;
