@@ -545,6 +545,47 @@
   }
 }
 
+/* Footnotes — small clarifying notes referenced from body copy */
+
+.footnoteRef {
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: 1px;
+}
+
+.footnoteRef:hover {
+  text-decoration: underline;
+}
+
+.footnotes {
+  list-style: none;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footnotes li {
+  font-family: var(--read);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink-dim);
+  padding-left: 28px;
+  position: relative;
+}
+
+.footnoteMark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+
 /* Form primitives — used by /contact and any future form */
 
 .form {

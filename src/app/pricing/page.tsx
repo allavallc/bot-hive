@@ -18,7 +18,7 @@ export default async function PricingPage() {
         the cases pricing tables can't capture.
       </p>
 
-      <div className={ui.pricingGrid}>
+      <div className={ui.pricingGrid} id="pricing-grid">
         <div className={ui.pricingCard}>
           <span className={ui.pricingTier}>Free</span>
           <div className={ui.priceRow}>
@@ -45,18 +45,21 @@ export default async function PricingPage() {
           <span className={ui.pricingTier}>Team</span>
           <div className={ui.priceRow}>
             <span className={ui.priceAmount}>$15</span>
-            <span className={ui.priceSuffix}>/ month per repo</span>
+            <span className={ui.priceSuffix}>/ month flat</span>
           </div>
           <p className={ui.pricingBlurb}>
-            Once a repo has more than 2 bots running on it, $15/month covers that repo. Other repos
-            stay free.
+            Once a repo has more than 2 bots
+            <a href="#fn-2bots" className={ui.footnoteRef}>
+              <sup>1</sup>
+            </a>{" "}
+            running on it, upgrade for $15/month and all repos are covered.
           </p>
           <ul className={ui.featureList}>
             <li>Unlimited active bots per repo</li>
-            <li>Unlimited connected repos</li>
+            <li>Unlimited connected repos — all covered by the one upgrade</li>
             <li>Live kanban + SSE updates</li>
             <li>Priority email support</li>
-            <li>Per-repo billing — only pay for the repos that need it</li>
+            <li>Cancel any time; downgrade back to free instantly</li>
           </ul>
           <p className={ui.pricingCta}>
             <Link href={ctaHref} className={ui.btnOut}>
@@ -88,6 +91,15 @@ export default async function PricingPage() {
           </p>
         </div>
       </div>
+
+      <ol className={ui.footnotes}>
+        <li id="fn-2bots">
+          <span className={ui.footnoteMark}>1</span> Two bots on a repo means two bots committing to
+          it total — that could be one person running two agents, or two people each running their
+          own. Either way, once a single repo crosses the threshold, the upgrade kicks in and every
+          repo on your account is covered for the same flat fee.
+        </li>
+      </ol>
     </PageShell>
   );
 }
