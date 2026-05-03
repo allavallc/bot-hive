@@ -258,6 +258,104 @@ function robotColor(name: string): string {
   return ROBOT_COLORS[Math.abs(h) % ROBOT_COLORS.length];
 }
 
+function BugIcon() {
+  return (
+    <svg
+      className={styles.bugIcon}
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="bug"
+      role="img"
+    >
+      <title>bug</title>
+      <ellipse
+        cx="8"
+        cy="9"
+        rx="3.5"
+        ry="4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <line x1="8" y1="4.5" x2="8" y2="13.5" stroke="currentColor" strokeWidth="1" />
+      <line
+        x1="6"
+        y1="3"
+        x2="5"
+        y2="1.5"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="10"
+        y1="3"
+        x2="11"
+        y2="1.5"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="4.5"
+        y1="7"
+        x2="2"
+        y2="6"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="11.5"
+        y1="7"
+        x2="14"
+        y2="6"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="4"
+        y1="9"
+        x2="1.5"
+        y2="9"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="12"
+        y1="9"
+        x2="14.5"
+        y2="9"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="4.5"
+        y1="11"
+        x2="2"
+        y2="12"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="11.5"
+        y1="11"
+        x2="14"
+        y2="12"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function RobotMascot({ name }: { name?: string }) {
   const color = name ? robotColor(name) : "#22c55e";
   const delay = useMemo(() => -Math.random() * 12, []);
@@ -324,6 +422,7 @@ function Card({
         }}
       >
         <span className={styles.cardTop}>
+          {fm.Type === "bug" && <BugIcon />}
           <span className={styles.cardId}>{ticket.hvId}</span>
           <span className={styles.badges}>
             {fm.Priority && (

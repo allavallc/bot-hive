@@ -378,6 +378,12 @@
   white-space: nowrap;
 }
 
+.bugIcon {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
 .badges {
   display: flex;
   gap: 6px;
