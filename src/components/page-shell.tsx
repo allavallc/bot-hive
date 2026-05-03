@@ -1,3 +1,4 @@
+import { signOutAction } from "@/lib/sign-out";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import styles from "./page-shell.module.css";
@@ -5,15 +6,15 @@ import { Wordmark } from "./wordmark";
 
 export function PageShell({
   children,
+  signedIn = false,
   brandHref = "/",
-  rightSlot,
   showCrumb = false,
   crumbHref = "/dashboard",
   crumbLabel = "← Dashboard",
 }: {
   children: ReactNode;
+  signedIn?: boolean;
   brandHref?: string;
-  rightSlot?: ReactNode;
   showCrumb?: boolean;
   crumbHref?: string;
   crumbLabel?: string;
@@ -24,7 +25,30 @@ export function PageShell({
         <Link href={brandHref} className={styles.brand} aria-label="Bot Hive">
           <Wordmark height={28} />
         </Link>
-        {rightSlot && <div className={styles.mastheadMeta}>{rightSlot}</div>}
+        <nav className={styles.nav} aria-label="Main">
+          {signedIn && (
+            <Link href="/dashboard" className={styles.navLink}>
+              Dashboard
+            </Link>
+          )}
+          <Link href="/pricing" className={styles.navLink}>
+            Pricing
+          </Link>
+          <Link href="/about" className={styles.navLink}>
+            About
+          </Link>
+          {signedIn ? (
+            <form action={signOutAction} className={styles.navAuthForm}>
+              <button type="submit" className={styles.navAuth}>
+                Sign out
+              </button>
+            </form>
+          ) : (
+            <Link href="/login" className={styles.navAuth}>
+              Sign in
+            </Link>
+          )}
+        </nav>
       </header>
       <main className={styles.main}>
         {showCrumb && (
@@ -37,20 +61,6 @@ export function PageShell({
         {children}
       </main>
     </div>
-  );
-}
-
-export function SignOutForm({
-  action,
-}: {
-  action: () => void | Promise<void>;
-}) {
-  return (
-    <form action={action}>
-      <button type="submit" className={styles.btnGhost}>
-        Sign out
-      </button>
-    </form>
   );
 }
 

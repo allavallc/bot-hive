@@ -34,6 +34,64 @@
   opacity: 0.85;
 }
 
+/* Top-bar nav */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.navLink {
+  color: var(--ink-dim);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.navLink:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.navAuth {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  padding: 8px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.navAuth:hover {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.navAuthForm {
+  display: inline-flex;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .nav {
+    gap: 14px;
+    font-size: 0.65rem;
+  }
+}
+
 .mastheadMeta {
   display: flex;
   align-items: center;

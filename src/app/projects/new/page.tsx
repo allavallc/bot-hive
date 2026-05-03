@@ -13,7 +13,7 @@ export default async function NewProjectPage() {
   const installUrl = slug ? `https://github.com/apps/${slug}/installations/new` : null;
 
   return (
-    <PageShell showCrumb>
+    <PageShell signedIn showCrumb>
       <span className={ui.kicker}>Connect a repo</span>
       <h1 className={ui.pageTitle}>Install Hive on a repository.</h1>
       <p className={ui.lede}>
