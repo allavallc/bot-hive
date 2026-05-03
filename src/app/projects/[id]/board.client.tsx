@@ -116,12 +116,14 @@ export function Board({
       </header>
 
       <main className={styles.main}>
+        <nav className={styles.crumb}>
+          <a href="/dashboard" className={styles.crumbLink}>
+            ← Dashboard
+          </a>
+        </nav>
         <nav className={styles.subnav}>
           <a href={`/projects/${project.id}`} className={styles.subnavActive}>
             Board
-          </a>
-          <a href="/dashboard" className={styles.subnavLink}>
-            ← Dashboard
           </a>
           <span className={styles.subnavRepo}>{project.githubRepo}</span>
         </nav>

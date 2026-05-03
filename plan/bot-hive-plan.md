@@ -1,8 +1,8 @@
-# Hive — Build Plan
+# Bot Hive — Build Plan
 
-A hosted web service that gives small teams a coordination layer for hordes of AI bots working on a shared codebase. Users connect their GitHub repo, bots commit ticket files into the repo, and Hive provides a live multi-tenant board, channel adapters (email, Telegram, Discord), and human approval flows.
+A hosted web service that gives small teams a coordination layer for swarms of AI bots working on a shared codebase. Users connect their GitHub repo, bots commit ticket files into the repo, and Bot Hive provides a live multi-tenant board, channel adapters (email, Telegram, Discord), and human approval flows.
 
-This is a **new project, clean slate**. It is related by convention to the existing Horde of Bots OSS project (same ticket schema, same files-in-git approach), but does not share code with it. Reimplement what's needed in TypeScript.
+The ticket schema and files-in-git approach are documented in `hive/HIVE.md` — that's the canonical reference, owned by Bot Hive and free to evolve.
 
 ---
 
@@ -55,7 +55,7 @@ hive/
     processed/       # archive of processed items
 ```
 
-Ticket files are markdown with YAML frontmatter. Reference the existing Horde of Bots schema for the field set; Hive extends it with `feature`, `requires`, `estimated-cost-usd`, `gate`, `touches`, `assignee`, `lease-expires`, `actual-cost-usd`, `completed-at`, `verified-by`.
+Ticket files are markdown with frontmatter as documented in `hive/HIVE.md`. The schema is owned by Bot Hive; planned extensions include `feature`, `requires`, `estimated-cost-usd`, `gate`, `touches`, `assignee`, `lease-expires`, `actual-cost-usd`, `completed-at`, `verified-by`.
 
 The state of a ticket is the folder it lives in. Hive parses the directory structure to determine state.
 

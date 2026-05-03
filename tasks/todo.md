@@ -14,7 +14,7 @@ Phase 1 only — channel adapters, billing, multi-user sharing all deferred.
 - **Hosting**: local dev only. No Render config yet.
 - **Repo folder Hive reads inside user repos**: `hive/`.
 - **Ticket ID prefix**: `HV-XXX` (no padding, no width limit).
-- **Format**: copy bot-horde verbatim — schema fields, body sections, kanban states (`backlog`, `in-progress`, `in-review`, `done`, `blocked`, `not-doing`), feature sets, acceptance loop, provenance commit trailers, design language (`#c4724a` accent, Big Shoulders Display + Atkinson Hyperlegible + Inter + JetBrains Mono).
+- **Format**: documented in `hive/HIVE.md` — schema fields, body sections, kanban states (`backlog`, `in-progress`, `in-review`, `done`, `blocked`, `not-doing`), feature sets, acceptance loop, provenance commit trailers, design language (`#c4724a` accent, Anton + Atkinson Hyperlegible + Inter + JetBrains Mono).
 - **Pricing rule (for later — not in Phase 1)**: ≤2 active bots per repo free; 3rd bot requires credit card; $19/mo for 3–30 bots; enterprise above. Two laptops with same Claude account count as 2 distinct bots.
 - **Deletion model (for later — not in Phase 1)**: "disconnect repo ABC" with confirm dialog warning data wipe is irreversible (the GitHub repo itself is untouched).
 - **Cost-tracking fields, `autonomy.ts`, `humans.yaml`, `agents/`, `log/*.jsonl`**: dropped from spec.
@@ -114,7 +114,7 @@ Files:
 - `src/app/projects/new/page.tsx` — "Install Hive on a repo" button that links to GitHub's install URL.
 - `src/app/projects/install/callback/route.ts` — handles `?installation_id=X&setup_action=install`, writes the project row, kicks off initial sync.
 - `src/lib/sync.ts` — `initialSync(projectId)`: lists files under `hive/` via GitHub Contents API, parses each ticket file (gray-matter for frontmatter + markdown body), upserts into `tickets`/`features`, records `last_sync_sha`.
-- `src/lib/parse.ts` — pure functions: `parseTicket(content): Ticket`, `parseFeatureSet(content): Feature`. Reuses bot-horde field/section names exactly.
+- `src/lib/parse.ts` — pure functions: `parseTicket(content): Ticket`, `parseFeatureSet(content): Feature`. Reuses the field/section names defined in `hive/HIVE.md`.
 
 Verification: install the app on a test repo with a `hive/` folder containing a few tickets; click "Connect"; rows appear in `tickets` table within 30s; `sync_state.last_sha` matches the repo's HEAD.
 
@@ -142,12 +142,12 @@ Files:
 - `src/app/projects/[id]/board.client.tsx` — client component that subscribes to SSE and refreshes on event.
 - `src/app/api/projects/[id]/stream/route.ts` — SSE endpoint.
 - `src/lib/broadcast.ts` — in-memory pub/sub (Map<projectId, Set<writer>>). Restart-tolerant because clients auto-reconnect.
-- `src/styles/board.css` — port of `bot-horde/board.html` styles (dark theme, accent `#c4724a`, fonts via Google Fonts, square borders, mono small-caps labels, 5-column grid).
-- `src/components/ticket-card.tsx` — single card; matches bot-horde's card design (ID + title, priority/effort badges, feature-set badge, status border style).
+- `src/styles/board.css` — board styles (dark theme, accent `#c4724a`, fonts via `next/font/google`, square borders, mono small-caps labels, 5-column grid).
+- `src/components/ticket-card.tsx` — single card (ID + title, priority/effort badges, feature-set badge, status border style).
 
 Layout:
 - 5 main columns (backlog, in-progress, in-review, done, blocked) + optional 6th (not-doing) toggleable.
-- Filter bar above (priority, effort, feature set, "ready only" — same as bot-horde).
+- Filter bar above (priority, effort, feature set, "ready only" — same as hive).
 - Cards expand on click to show the full ticket body.
 
 Verification: board renders with seeded data; pushing a commit to the test repo moves a card across columns within ~5s without manual refresh; expanded card shows Goal/Why/Done when/etc. correctly.
@@ -162,7 +162,7 @@ Verification: board renders with seeded data; pushing a commit to the test repo 
 - [ ] Push events update the board within 10 seconds.
 - [ ] Webhook is idempotent (re-delivery is a no-op).
 - [ ] SSE updates work without manual refresh.
-- [ ] Board visually matches `bot-horde/board.html` (dark theme, terracotta accent, mono small-caps).
+- [ ] Board visually matches the canonical Bot Hive design (dark theme, terracotta accent, mono small-caps).
 - [ ] At least one realistic test repo has been driven through the full lifecycle (backlog → in-progress → in-review → done).
 
 ---

@@ -86,6 +86,27 @@
   width: 100%;
 }
 
+/* Crumb (back link above tabs) */
+
+.crumb {
+  margin-bottom: 12px;
+}
+
+.crumbLink {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.crumbLink:hover {
+  color: var(--accent);
+}
+
 /* Subnav (tabs) */
 
 .subnav {
@@ -302,7 +323,7 @@
   background: var(--bg-2);
 }
 
-/* State-conditional borders — exact match to bot-horde demo */
+/* State-conditional borders */
 
 .card[data-state="backlog"] {
   border: 1px solid var(--ink-dimmer);
@@ -359,7 +380,7 @@
   outline-offset: -3px;
 }
 
-/* Card content (matches bot-horde layout: top row → fs → title → footer) */
+/* Card content (top row → fs → title → footer) */
 
 .cardTop {
   display: flex;
