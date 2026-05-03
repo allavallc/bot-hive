@@ -19,7 +19,12 @@ export function HeroSwarm() {
           className={`${styles.bot} ${styles[bot.floatClass]}`}
         />
       ))}
-      <RobotMascot name="jess" className={`${styles.bot} ${styles.crosser}`} />
+      <div className={styles.crosserTrack}>
+        <div className={styles.crosserBot}>
+          <RobotMascot name="jess" className={styles.crosserMascot} />
+          <span className={styles.crate} aria-hidden="true" />
+        </div>
+      </div>
     </div>
   );
 }

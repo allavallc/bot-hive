@@ -15,40 +15,123 @@
 .float1 {
   top: 12%;
   left: 22%;
-  animation: floatA 6s ease-in-out infinite;
+  animation: floatA 4.5s ease-in-out infinite;
 }
 
 .float2 {
   top: 60%;
   left: 30%;
-  animation: floatB 8s ease-in-out infinite;
+  animation: floatB 6s ease-in-out infinite;
 }
 
 .float3 {
   top: 35%;
   left: 65%;
-  animation: floatC 5s ease-in-out infinite;
+  animation: floatC 3.5s ease-in-out infinite;
 }
 
 .float4 {
   top: 75%;
   left: 70%;
-  animation: floatA 7s ease-in-out infinite reverse;
+  animation: floatA 5s ease-in-out infinite reverse;
 }
 
 .float5 {
   top: 22%;
   left: 50%;
-  animation: floatB 9s ease-in-out infinite reverse;
+  animation: floatB 6.5s ease-in-out infinite reverse;
 }
 
-.crosser {
+/* Crosser — bot carrying a crate left-to-right, dropping it, returning empty */
+
+.crosserTrack {
   position: absolute;
-  width: 28px;
-  height: 28px;
-  top: 48%;
+  top: 50%;
   left: 0;
-  animation: cross 14s linear infinite;
+  right: 0;
+  height: 32px;
+  margin-top: -16px;
+  pointer-events: none;
+}
+
+.crosserBot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  animation: carryCycle 8s ease-in-out infinite;
+}
+
+.crosserMascot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.crate {
+  position: absolute;
+  left: 30px;
+  top: 12px;
+  width: 9px;
+  height: 9px;
+  background: var(--accent);
+  border: 1px solid var(--bg);
+  animation: crateCycle 8s ease-in-out infinite;
+}
+
+@keyframes carryCycle {
+  /* outbound: face right, carry to the far edge */
+  0% {
+    left: 0;
+    transform: scaleX(1);
+  }
+  45% {
+    left: calc(100% - 32px);
+    transform: scaleX(1);
+  }
+  /* drop + turn around */
+  50% {
+    left: calc(100% - 32px);
+    transform: scaleX(-1);
+  }
+  /* return: face left, no crate */
+  95% {
+    left: 0;
+    transform: scaleX(-1);
+  }
+  /* turn back to face right, pick up next crate */
+  100% {
+    left: 0;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes crateCycle {
+  /* visible while being carried */
+  0%,
+  44% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* drop motion */
+  46% {
+    opacity: 1;
+    transform: translateY(8px);
+  }
+  /* gone during return */
+  48%,
+  96% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  /* fresh crate at the start */
+  98%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes floatA {
@@ -84,28 +167,14 @@
   }
 }
 
-@keyframes cross {
-  0% {
-    transform: translateX(-40px) translateY(0);
-    opacity: 0;
-  }
-  10%,
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(calc(100% + 40px)) translateY(-12px);
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .float1,
   .float2,
   .float3,
   .float4,
   .float5,
-  .crosser {
+  .crosserBot,
+  .crate {
     animation: none;
   }
 }
