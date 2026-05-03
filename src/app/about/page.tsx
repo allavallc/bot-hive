@@ -15,7 +15,7 @@ export default async function AboutPage() {
       </p>
 
       <section className={ui.numberedSection}>
-        <span className={ui.sectionNumber}>01</span>
+        <span className={ui.sectionNumber}>1</span>
         <div>
           <h2 className={ui.sectionHeading}>Bot count is the scaling axis, not team size.</h2>
           <p className={ui.sectionBody}>
@@ -30,7 +30,7 @@ export default async function AboutPage() {
       </section>
 
       <section className={ui.numberedSection}>
-        <span className={ui.sectionNumber}>02</span>
+        <span className={ui.sectionNumber}>2</span>
         <div>
           <h2 className={ui.sectionHeading}>
             The future of software development is managing bots, not managing humans.
@@ -47,7 +47,7 @@ export default async function AboutPage() {
       </section>
 
       <section className={ui.numberedSection}>
-        <span className={ui.sectionNumber}>03</span>
+        <span className={ui.sectionNumber}>3</span>
         <div>
           <h2 className={ui.sectionHeading}>How it works.</h2>
           <p className={ui.sectionBody}>
