@@ -164,13 +164,17 @@
   border: 1px solid var(--bg);
 }
 
-/* All carriers share the same 9s cycle (constant speed) — only the
-   path shape differs per bot. Negative animation-delay desyncs them. */
+/* offset-path traces an SVG curve at literal constant speed (per arc
+   length). All carriers run the same 9s linear traverse animation;
+   only the SVG path shape and starting top differ per bot. Negative
+   animation-delay desyncs them. */
 
 .bot1 {
   top: 18%;
   left: 0;
-  animation: path1 9s linear infinite;
+  offset-path: path("M 0,0 Q 220,-50 440,0 Q 220,80 0,0");
+  offset-rotate: 0deg;
+  animation: traverse 9s linear infinite;
 }
 .crate1 {
   animation: cratePhase 9s ease-in-out infinite;
@@ -179,7 +183,9 @@
 .bot2 {
   top: 70%;
   left: 0;
-  animation: path2 9s linear infinite;
+  offset-path: path("M 0,0 Q 220,60 440,0 Q 220,-90 0,0");
+  offset-rotate: 0deg;
+  animation: traverse 9s linear infinite;
   animation-delay: -3s;
 }
 .crate2 {
@@ -190,7 +196,9 @@
 .bot3 {
   top: 42%;
   left: 0;
-  animation: path3 9s linear infinite;
+  offset-path: path("M 0,0 C 110,-60 220,50 330,-30 L 440,0 Q 220,90 0,0");
+  offset-rotate: 0deg;
+  animation: traverse 9s linear infinite;
   animation-delay: -5s;
 }
 .crate3 {
@@ -201,7 +209,9 @@
 .bot4 {
   top: 28%;
   left: 0;
-  animation: path4 9s linear infinite;
+  offset-path: path("M 0,0 Q 100,80 220,90 Q 340,60 440,0 Q 220,-80 0,0");
+  offset-rotate: 0deg;
+  animation: traverse 9s linear infinite;
   animation-delay: -2s;
 }
 .crate4 {
@@ -212,7 +222,9 @@
 .bot5 {
   top: 82%;
   left: 0;
-  animation: path5 9s linear infinite;
+  offset-path: path("M 0,0 Q 220,-110 440,-60 Q 220,40 0,0");
+  offset-rotate: 0deg;
+  animation: traverse 9s linear infinite;
   animation-delay: -7s;
 }
 .crate5 {
@@ -223,12 +235,23 @@
 .bot6 {
   top: 56%;
   left: 0;
-  animation: path6 9s linear infinite;
+  offset-path: path("M 0,0 C 80,-40 160,40 240,-30 C 320,40 400,-20 440,0 Q 220,90 0,0");
+  offset-rotate: 0deg;
+  animation: traverse 9s linear infinite;
   animation-delay: -1.5s;
 }
 .crate6 {
   animation: cratePhase 9s ease-in-out infinite;
   animation-delay: -1.5s;
+}
+
+@keyframes traverse {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
 }
 
 /* Curved out-and-back paths. Drop points pushed across the swarm
