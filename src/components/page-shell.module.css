@@ -1,0 +1,298 @@
+/* Layout chrome */
+
+.root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 64px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--ink);
+  transition: opacity 0.2s ease;
+}
+
+.brand:hover {
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+.mastheadMeta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.main {
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 48px 32px;
+  flex: 1;
+}
+
+.subnav {
+  margin-bottom: 32px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.crumb {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-decoration: none;
+}
+
+.crumb:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Reusable primitives — shared across login / dashboard / new / others */
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.kicker::before {
+  content: "";
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: var(--accent);
+  margin-right: 12px;
+}
+
+.pageTitle {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: 16px;
+}
+
+.lede {
+  font-family: var(--read);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--ink-dim);
+  max-width: 560px;
+  margin-bottom: 32px;
+}
+
+/* Outlined CTA button — bot-horde style */
+
+.btnOut {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  padding: 14px 28px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btnOut:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  text-decoration: none;
+}
+
+/* Ghost / secondary button */
+
+.btnGhost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.btnGhost:hover {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+
+/* List item — repo / project row */
+
+.list {
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.listItem {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+  transition: padding-left 0.2s ease;
+}
+
+.listItem:hover {
+  padding-left: 16px;
+  text-decoration: none;
+}
+
+.listItem:hover .listItemTitle {
+  color: var(--accent);
+}
+
+.listItemNumber {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  color: var(--ink-dimmer);
+}
+
+.listItemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.listItemTitle {
+  font-family: var(--read);
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--ink);
+  transition: color 0.2s ease;
+}
+
+.listItemMeta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.listItemStatus {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+}
+
+.listItemStatus[data-status="active"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.listItemStatus[data-status="failed"] {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+
+/* Hero / centered card layout (used by login) */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 0;
+}
+
+/* Inline hint banner (used by HV-011) */
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--line);
+  padding: 14px 18px;
+  margin-bottom: 32px;
+  font-family: var(--read);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.hint p {
+  flex: 1;
+}
+
+.hint a {
+  color: var(--accent);
+  border-bottom: 1px solid var(--accent);
+}
+
+.hint a:hover {
+  opacity: 0.8;
+  text-decoration: none;
+}
+
+@media (max-width: 700px) {
+  .masthead,
+  .main {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .listItem {
+    grid-template-columns: 32px 1fr;
+  }
+
+  .listItemStatus {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

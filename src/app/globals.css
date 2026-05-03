@@ -1,3 +1,18 @@
+:root {
+  --bg: #0a0a0a;
+  --bg-2: #111111;
+  --ink: #f2f1ee;
+  --ink-soft: #d5d3cf;
+  --ink-dim: #8a8680;
+  --ink-dimmer: #55514c;
+  --line: #1f1d1b;
+  --accent: #c4724a;
+  --display: var(--font-display), "Inter", sans-serif;
+  --read: var(--font-body), var(--font-sans), sans-serif;
+  --sans: var(--font-sans), sans-serif;
+  --mono: var(--font-mono), ui-monospace, monospace;
+}
+
 *,
 *::before,
 *::after {
@@ -8,13 +23,30 @@
 
 html,
 body {
-  background: #0a0a0a;
-  color: #f2f1ee;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 body {
   min-height: 100vh;
   overflow-x: hidden;
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
 }

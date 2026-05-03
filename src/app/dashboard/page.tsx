@@ -1,8 +1,10 @@
+import { PageShell, SignOutForm, pageShellStyles as ui } from "@/components/page-shell";
 import { db } from "@/db";
 import { account, projects } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { and, desc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 async function revokeGithubGrant(userId: string) {
@@ -57,27 +59,39 @@ export default async function DashboardPage() {
     .orderBy(desc(projects.createdAt));
 
   return (
-    <main>
-      <h1>Welcome, {session.user.name}.</h1>
-      <h2>Your projects</h2>
+    <PageShell rightSlot={<SignOutForm action={signOut} />}>
+      <span className={ui.kicker}>Dashboard / {session.user.name}</span>
+      <h1 className={ui.pageTitle}>Your projects</h1>
+      <p className={ui.lede}>
+        Each row is a GitHub repo connected to Bot Hive. Click a repo to open its live board.
+      </p>
+
       {userProjects.length === 0 ? (
-        <p>No projects yet.</p>
+        <p className={ui.lede}>No projects yet.</p>
       ) : (
-        <ul>
-          {userProjects.map((p) => (
+        <ul className={ui.list}>
+          {userProjects.map((p, i) => (
             <li key={p.id}>
-              <a href={`/projects/${p.id}`}>{p.displayName}</a> — <code>{p.githubRepo}</code> —{" "}
-              {p.status}
+              <Link href={`/projects/${p.id}`} className={ui.listItem}>
+                <span className={ui.listItemNumber}>{String(i + 1).padStart(2, "0")}</span>
+                <span className={ui.listItemBody}>
+                  <span className={ui.listItemTitle}>{p.displayName}</span>
+                  <span className={ui.listItemMeta}>{p.githubRepo}</span>
+                </span>
+                <span className={ui.listItemStatus} data-status={p.status}>
+                  {p.status}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>
       )}
-      <p>
-        <a href="/projects/new">Connect another repo</a>
+
+      <p style={{ marginTop: 32 }}>
+        <Link href="/projects/new" className={ui.btnOut}>
+          Connect another repo →
+        </Link>
       </p>
-      <form action={signOut}>
-        <button type="submit">Sign out</button>
-      </form>
-    </main>
+    </PageShell>
   );
 }
