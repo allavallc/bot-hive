@@ -6,6 +6,143 @@
   overflow: hidden;
 }
 
+/* Dock — destination on the right where bots drop their crates */
+
+.dock {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 70px;
+  border: 1px solid var(--accent);
+  border-right: none;
+  background: rgba(196, 114, 74, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  pointer-events: none;
+}
+
+.dockLabel {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+.dockPile {
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border: 1px solid var(--bg);
+  animation: dockPilePulse 8s linear infinite;
+}
+
+@keyframes dockPilePulse {
+  /* pile grows as bots drop, then resets when worker collects */
+  0%,
+  20% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  35% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  /* worker arrives ~70%, pile clears */
+  72% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  78% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+/* Worker — comes in from off-screen right, picks up at dock, exits right */
+
+.worker {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  animation: workerCycle 8s linear infinite;
+}
+
+.workerMascot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.workerCrate {
+  position: absolute;
+  left: -12px;
+  top: 12px;
+  width: 9px;
+  height: 9px;
+  background: var(--accent);
+  border: 1px solid var(--bg);
+  animation: workerCrateCycle 8s linear infinite;
+}
+
+@keyframes workerCycle {
+  /* off-screen right, waiting */
+  0%,
+  60% {
+    transform: translateX(60px) scaleX(-1);
+  }
+  /* enter — moving left */
+  72% {
+    transform: translateX(-44px) scaleX(-1);
+  }
+  /* pickup pause + flip to face right */
+  76% {
+    transform: translateX(-44px) scaleX(1);
+  }
+  /* exit right */
+  92% {
+    transform: translateX(80px) scaleX(1);
+  }
+  /* off-screen, reset to left-facing for next cycle */
+  100% {
+    transform: translateX(80px) scaleX(1);
+  }
+}
+
+@keyframes workerCrateCycle {
+  /* invisible while approaching empty */
+  0%,
+  74% {
+    opacity: 0;
+  }
+  /* appears when worker picks up at dock */
+  77%,
+  92% {
+    opacity: 1;
+  }
+  /* gone after exit */
+  93%,
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Each carrier holds the bot + its crate; the carrier translates,
    the crate inside it has its own opacity/drop animation. */
 

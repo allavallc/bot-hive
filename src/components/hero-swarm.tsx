@@ -13,12 +13,22 @@ const SWARM = [
 export function HeroSwarm() {
   return (
     <div className={styles.swarm} aria-hidden="true">
+      <div className={styles.dock}>
+        <span className={styles.dockLabel}>DOCK</span>
+        <span className={styles.dockPile} />
+      </div>
+
       {SWARM.map((bot) => (
         <div key={bot.name} className={`${styles.carrier} ${styles[bot.botClass]}`}>
           <RobotMascot name={bot.name} className={styles.carrierMascot} />
           <span className={`${styles.crate} ${styles[bot.crateClass]}`} aria-hidden="true" />
         </div>
       ))}
+
+      <div className={styles.worker}>
+        <RobotMascot name="boss" className={styles.workerMascot} />
+        <span className={styles.workerCrate} aria-hidden="true" />
+      </div>
     </div>
   );
 }
