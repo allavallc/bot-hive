@@ -6,64 +6,16 @@
   overflow: hidden;
 }
 
-.bot {
+/* Each carrier holds the bot + its crate; the carrier translates,
+   the crate inside it has its own opacity/drop animation. */
+
+.carrier {
   position: absolute;
   width: 32px;
   height: 32px;
 }
 
-.float1 {
-  top: 12%;
-  left: 22%;
-  animation: floatA 4.5s ease-in-out infinite;
-}
-
-.float2 {
-  top: 60%;
-  left: 30%;
-  animation: floatB 6s ease-in-out infinite;
-}
-
-.float3 {
-  top: 35%;
-  left: 65%;
-  animation: floatC 3.5s ease-in-out infinite;
-}
-
-.float4 {
-  top: 75%;
-  left: 70%;
-  animation: floatA 5s ease-in-out infinite reverse;
-}
-
-.float5 {
-  top: 22%;
-  left: 50%;
-  animation: floatB 6.5s ease-in-out infinite reverse;
-}
-
-/* Crosser — bot carrying a crate left-to-right, dropping it, returning empty */
-
-.crosserTrack {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 32px;
-  margin-top: -16px;
-  pointer-events: none;
-}
-
-.crosserBot {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 32px;
-  height: 32px;
-  animation: carryCycle 8s ease-in-out infinite;
-}
-
-.crosserMascot {
+.carrierMascot {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -78,55 +30,264 @@
   height: 9px;
   background: var(--accent);
   border: 1px solid var(--bg);
-  animation: crateCycle 8s ease-in-out infinite;
 }
 
-@keyframes carryCycle {
-  /* outbound: face right, carry to the far edge */
+/* Per-bot starting position + path animation. Each bot has a
+   distinct curved keyframe so no two trace the same line.
+   animation-delay desyncs them so the swarm always has bots
+   at different points in their cycle. */
+
+.bot1 {
+  top: 8%;
+  left: 0;
+  animation: path1 8s ease-in-out infinite;
+}
+.crate1 {
+  animation: cratePhase 8s ease-in-out infinite;
+}
+
+.bot2 {
+  top: 70%;
+  left: 0;
+  animation: path2 10s ease-in-out infinite;
+  animation-delay: -3s;
+}
+.crate2 {
+  animation: cratePhase 10s ease-in-out infinite;
+  animation-delay: -3s;
+}
+
+.bot3 {
+  top: 38%;
+  left: 0;
+  animation: path3 9s ease-in-out infinite;
+  animation-delay: -5s;
+}
+.crate3 {
+  animation: cratePhase 9s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+.bot4 {
+  top: 18%;
+  left: 0;
+  animation: path4 11s ease-in-out infinite;
+  animation-delay: -2s;
+}
+.crate4 {
+  animation: cratePhase 11s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+.bot5 {
+  top: 82%;
+  left: 0;
+  animation: path5 7s ease-in-out infinite;
+  animation-delay: -7s;
+}
+.crate5 {
+  animation: cratePhase 7s ease-in-out infinite;
+  animation-delay: -7s;
+}
+
+.bot6 {
+  top: 52%;
+  left: 0;
+  animation: path6 8.5s ease-in-out infinite;
+  animation-delay: -1.5s;
+}
+.crate6 {
+  animation: cratePhase 8.5s ease-in-out infinite;
+  animation-delay: -1.5s;
+}
+
+/* Curved out-and-back paths — each picks a crate up at the start,
+   carries it rightward along a curve, drops at ~50%, returns
+   along a different curve, picks up a fresh crate. */
+
+@keyframes path1 {
   0% {
-    left: 0;
-    transform: scaleX(1);
+    transform: translate(0, 0) scaleX(1);
+  }
+  20% {
+    transform: translate(80px, -30px) scaleX(1);
+  }
+  40% {
+    transform: translate(220px, -50px) scaleX(1);
+  }
+  48% {
+    transform: translate(340px, -20px) scaleX(1);
+  }
+  55% {
+    transform: translate(340px, 30px) scaleX(-1);
+  }
+  75% {
+    transform: translate(200px, 70px) scaleX(-1);
+  }
+  90% {
+    transform: translate(80px, 40px) scaleX(-1);
+  }
+  100% {
+    transform: translate(0, 0) scaleX(1);
+  }
+}
+
+@keyframes path2 {
+  0% {
+    transform: translate(0, 0) scaleX(1);
+  }
+  18% {
+    transform: translate(70px, 20px) scaleX(1);
+  }
+  35% {
+    transform: translate(180px, 40px) scaleX(1);
+  }
+  48% {
+    transform: translate(330px, 10px) scaleX(1);
+  }
+  55% {
+    transform: translate(330px, -40px) scaleX(-1);
+  }
+  72% {
+    transform: translate(180px, -90px) scaleX(-1);
+  }
+  88% {
+    transform: translate(60px, -50px) scaleX(-1);
+  }
+  100% {
+    transform: translate(0, 0) scaleX(1);
+  }
+}
+
+@keyframes path3 {
+  0% {
+    transform: translate(0, 0) scaleX(1);
+  }
+  15% {
+    transform: translate(50px, -40px) scaleX(1);
+  }
+  30% {
+    transform: translate(130px, 30px) scaleX(1);
   }
   45% {
-    left: calc(100% - 32px);
-    transform: scaleX(1);
+    transform: translate(260px, -20px) scaleX(1);
   }
-  /* drop + turn around */
   50% {
-    left: calc(100% - 32px);
-    transform: scaleX(-1);
+    transform: translate(340px, 10px) scaleX(1);
   }
-  /* return: face left, no crate */
-  95% {
-    left: 0;
-    transform: scaleX(-1);
+  58% {
+    transform: translate(340px, 50px) scaleX(-1);
   }
-  /* turn back to face right, pick up next crate */
+  72% {
+    transform: translate(200px, 80px) scaleX(-1);
+  }
+  88% {
+    transform: translate(70px, 90px) scaleX(-1);
+  }
   100% {
-    left: 0;
-    transform: scaleX(1);
+    transform: translate(0, 0) scaleX(1);
   }
 }
 
-@keyframes crateCycle {
-  /* visible while being carried */
+@keyframes path4 {
+  0% {
+    transform: translate(0, 0) scaleX(1);
+  }
+  18% {
+    transform: translate(60px, 60px) scaleX(1);
+  }
+  35% {
+    transform: translate(150px, 110px) scaleX(1);
+  }
+  48% {
+    transform: translate(330px, 50px) scaleX(1);
+  }
+  55% {
+    transform: translate(330px, -10px) scaleX(-1);
+  }
+  72% {
+    transform: translate(200px, -60px) scaleX(-1);
+  }
+  88% {
+    transform: translate(70px, -40px) scaleX(-1);
+  }
+  100% {
+    transform: translate(0, 0) scaleX(1);
+  }
+}
+
+@keyframes path5 {
+  0% {
+    transform: translate(0, 0) scaleX(1);
+  }
+  20% {
+    transform: translate(70px, -50px) scaleX(1);
+  }
+  40% {
+    transform: translate(200px, -90px) scaleX(1);
+  }
+  50% {
+    transform: translate(340px, -100px) scaleX(1);
+  }
+  58% {
+    transform: translate(340px, -50px) scaleX(-1);
+  }
+  78% {
+    transform: translate(200px, 30px) scaleX(-1);
+  }
+  92% {
+    transform: translate(70px, 20px) scaleX(-1);
+  }
+  100% {
+    transform: translate(0, 0) scaleX(1);
+  }
+}
+
+@keyframes path6 {
+  0% {
+    transform: translate(0, 0) scaleX(1);
+  }
+  12% {
+    transform: translate(40px, -20px) scaleX(1);
+  }
+  25% {
+    transform: translate(100px, 20px) scaleX(1);
+  }
+  38% {
+    transform: translate(190px, -30px) scaleX(1);
+  }
+  50% {
+    transform: translate(340px, 0) scaleX(1);
+  }
+  58% {
+    transform: translate(340px, 30px) scaleX(-1);
+  }
+  72% {
+    transform: translate(200px, 50px) scaleX(-1);
+  }
+  86% {
+    transform: translate(80px, -10px) scaleX(-1);
+  }
+  100% {
+    transform: translate(0, 0) scaleX(1);
+  }
+}
+
+@keyframes cratePhase {
   0%,
-  44% {
+  47% {
     opacity: 1;
     transform: translateY(0);
   }
-  /* drop motion */
-  46% {
+  49% {
     opacity: 1;
     transform: translateY(8px);
   }
-  /* gone during return */
-  48%,
+  51%,
   96% {
     opacity: 0;
     transform: translateY(8px);
   }
-  /* fresh crate at the start */
   98%,
   100% {
     opacity: 1;
@@ -134,47 +295,19 @@
   }
 }
 
-@keyframes floatA {
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(-4deg);
-  }
-  50% {
-    transform: translate(8px, -16px) rotate(4deg);
-  }
-}
-
-@keyframes floatB {
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-  50% {
-    transform: translate(-12px, -10px) rotate(-6deg);
-  }
-}
-
-@keyframes floatC {
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-  33% {
-    transform: translate(10px, 8px) rotate(8deg);
-  }
-  66% {
-    transform: translate(-6px, -12px) rotate(-8deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .float1,
-  .float2,
-  .float3,
-  .float4,
-  .float5,
-  .crosserBot,
-  .crate {
+  .bot1,
+  .bot2,
+  .bot3,
+  .bot4,
+  .bot5,
+  .bot6,
+  .crate1,
+  .crate2,
+  .crate3,
+  .crate4,
+  .crate5,
+  .crate6 {
     animation: none;
   }
 }
