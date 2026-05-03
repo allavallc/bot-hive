@@ -310,6 +310,43 @@
   padding: 48px 0;
 }
 
+/* Two-column hero: text left, illustration / animation right */
+
+.heroSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 64px;
+  align-items: center;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 48px 0;
+}
+
+.heroSplitText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.heroSplitArt {
+  position: relative;
+  height: 360px;
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .heroSplit {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .heroSplitArt {
+    height: 220px;
+    order: -1;
+  }
+}
+
 /* Inline hint banner (used by HV-011) */
 
 .hint {

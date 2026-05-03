@@ -8,11 +8,12 @@ export default async function PricingPage() {
   return (
     <PageShell signedIn={!!session}>
       <span className={ui.kicker}>Pricing</span>
-      <h1 className={ui.pageTitle}>Free until you have a horde.</h1>
+      <h1 className={ui.pageTitle}>Pay when the horde grows.</h1>
       <p className={ui.lede}>
-        Up to 2 active bots per repo: free forever. Beyond that: $19/month for 3–30 bots, custom
-        enterprise pricing above 30. Pricing isn't live yet — Phase 1 is local-only and every
-        connected repo is on the house.
+        <strong>Free</strong> for up to 2 bots on a repo. <strong>$15/month</strong> per repo once
+        you go past 2. <strong>Enterprise</strong> pricing exists for the odd case — reach out at{" "}
+        <a href="/contact">allavallc@gmail.com</a> if you have a different shape in mind and we'll
+        figure something out.
       </p>
     </PageShell>
   );
