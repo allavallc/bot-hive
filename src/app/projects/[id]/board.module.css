@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@500;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap");
-
 .root {
   --bg: #0a0a0a;
   --bg-2: #111111;
@@ -8,9 +6,9 @@
   --ink-dimmer: #55514c;
   --line: #1f1d1b;
   --accent: #c4724a;
-  --display: "Big Shoulders Display", "Inter", sans-serif;
-  --body: "Atkinson Hyperlegible", "Inter", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --display: var(--font-display), "Inter", sans-serif;
+  --body: var(--font-body), var(--font-sans), sans-serif;
+  --mono: var(--font-mono), ui-monospace, monospace;
 
   min-height: 100vh;
   background: var(--bg);
@@ -203,9 +201,7 @@
 .card {
   border: 1px solid var(--ink-dimmer);
   background: var(--bg);
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .card:hover {
