@@ -94,7 +94,7 @@
 
 .pageTitle {
   font-family: var(--display);
-  font-weight: 900;
+  font-weight: 400;
   font-size: clamp(2rem, 5vw, 3.25rem);
   line-height: 0.95;
   letter-spacing: -0.01em;
