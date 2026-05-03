@@ -164,23 +164,26 @@
   border: 1px solid var(--bg);
 }
 
+/* All carriers share the same 9s cycle (constant speed) — only the
+   path shape differs per bot. Negative animation-delay desyncs them. */
+
 .bot1 {
   top: 18%;
   left: 0;
-  animation: path1 8s linear infinite;
+  animation: path1 9s linear infinite;
 }
 .crate1 {
-  animation: cratePhase 8s ease-in-out infinite;
+  animation: cratePhase 9s ease-in-out infinite;
 }
 
 .bot2 {
   top: 70%;
   left: 0;
-  animation: path2 10s linear infinite;
+  animation: path2 9s linear infinite;
   animation-delay: -3s;
 }
 .crate2 {
-  animation: cratePhase 10s ease-in-out infinite;
+  animation: cratePhase 9s ease-in-out infinite;
   animation-delay: -3s;
 }
 
@@ -198,33 +201,33 @@
 .bot4 {
   top: 28%;
   left: 0;
-  animation: path4 11s linear infinite;
+  animation: path4 9s linear infinite;
   animation-delay: -2s;
 }
 .crate4 {
-  animation: cratePhase 11s ease-in-out infinite;
+  animation: cratePhase 9s ease-in-out infinite;
   animation-delay: -2s;
 }
 
 .bot5 {
   top: 82%;
   left: 0;
-  animation: path5 7s linear infinite;
+  animation: path5 9s linear infinite;
   animation-delay: -7s;
 }
 .crate5 {
-  animation: cratePhase 7s ease-in-out infinite;
+  animation: cratePhase 9s ease-in-out infinite;
   animation-delay: -7s;
 }
 
 .bot6 {
   top: 56%;
   left: 0;
-  animation: path6 8.5s linear infinite;
+  animation: path6 9s linear infinite;
   animation-delay: -1.5s;
 }
 .crate6 {
-  animation: cratePhase 8.5s ease-in-out infinite;
+  animation: cratePhase 9s ease-in-out infinite;
   animation-delay: -1.5s;
 }
 
