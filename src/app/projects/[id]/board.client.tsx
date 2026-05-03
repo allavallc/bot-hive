@@ -56,10 +56,11 @@ export function Board({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showNotDoing, setShowNotDoing] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<Date>(new Date());
 
-  const filterPriority = params.get("priority");
-  const filterEffort = params.get("effort");
-  const filterFeature = params.get("feature");
+  const filterPriority = params.get("priority") ?? "";
+  const filterEffort = params.get("effort") ?? "";
+  const filterFeature = params.get("feature") ?? "";
   const readyOnly = params.get("ready") === "1";
 
   function setFilter(key: string, value: string | null) {
@@ -80,6 +81,7 @@ export function Board({
         const data = await res.json();
         setTickets(data.tickets);
         setFeatures(data.features);
+        setGeneratedAt(new Date());
       }
     };
     return () => es.close();
@@ -116,72 +118,56 @@ export function Board({
   return (
     <main className={styles.root}>
       <header className={styles.masthead}>
-        <div className={styles.mastheadInner}>
-          <a href="/dashboard" className={styles.crumb}>
-            ← Dashboard
-          </a>
-          <div className={styles.titleBlock}>
-            <span className={styles.kicker}>Project / {project.githubRepo}</span>
-            <h1 className={styles.title}>{project.displayName}</h1>
-          </div>
-          <div className={styles.connState} data-on={connected}>
+        <div className={styles.brand}>
+          <span className={styles.brandPrimary}>Bot</span>
+          <span className={styles.brandAccent}>Hive</span>
+        </div>
+        <div className={styles.mastheadMeta}>
+          <span className={styles.connState} data-on={connected}>
             {connected ? "● live" : "○ reconnecting"}
-          </div>
+          </span>
+          <span className={styles.generatedAt}>Generated {generatedAt.toLocaleString()}</span>
         </div>
       </header>
 
+      <nav className={styles.subnav}>
+        <a href={`/projects/${project.id}`} className={styles.subnavActive}>
+          Board
+        </a>
+        <a href="/dashboard" className={styles.subnavLink}>
+          ← Dashboard
+        </a>
+        <span className={styles.subnavRepo}>{project.githubRepo}</span>
+      </nav>
+
       <section className={styles.filters}>
-        <FilterGroup label="Priority">
-          <FilterChip active={!filterPriority} onClick={() => setFilter("priority", null)}>
-            All
-          </FilterChip>
-          {PRIORITIES.map((p) => (
-            <FilterChip
-              key={p}
-              active={filterPriority === p}
-              onClick={() => setFilter("priority", p)}
-            >
-              {p}
-            </FilterChip>
-          ))}
-        </FilterGroup>
-
-        <FilterGroup label="Effort">
-          <FilterChip active={!filterEffort} onClick={() => setFilter("effort", null)}>
-            All
-          </FilterChip>
-          {EFFORTS.map((e) => (
-            <FilterChip key={e} active={filterEffort === e} onClick={() => setFilter("effort", e)}>
-              {e}
-            </FilterChip>
-          ))}
-        </FilterGroup>
-
-        {features.length > 0 && (
-          <FilterGroup label="Feature set">
-            <FilterChip active={!filterFeature} onClick={() => setFilter("feature", null)}>
-              All
-            </FilterChip>
-            {features.map((f) => (
-              <FilterChip
-                key={f.fsId}
-                active={filterFeature === f.fsId}
-                onClick={() => setFilter("feature", f.fsId)}
-              >
-                {f.fsId.replace(/^feature-set-/, "fs-")}
-              </FilterChip>
-            ))}
-          </FilterGroup>
-        )}
-
-        <FilterGroup label="">
-          <FilterChip active={readyOnly} onClick={() => setFilter("ready", readyOnly ? null : "1")}>
-            Ready only
-          </FilterChip>
-          <FilterChip active={showNotDoing} onClick={() => setShowNotDoing((v) => !v)}>
-            Show not-doing
-          </FilterChip>
-        </FilterGroup>
+        <FilterSelect
+          label="Priority"
+          value={filterPriority}
+          options={PRIORITIES}
+          onChange={(v) => setFilter("priority", v || null)}
+        />
+        <FilterSelect
+          label="Effort"
+          value={filterEffort}
+          options={EFFORTS}
+          onChange={(v) => setFilter("effort", v || null)}
+        />
+        <FilterSelect
+          label="Feature set"
+          value={filterFeature}
+          options={features.map((f) => ({
+            value: f.fsId,
+            label: f.fsId.replace(/^feature-set-/, "fs-"),
+          }))}
+          onChange={(v) => setFilter("feature", v || null)}
+        />
+        <FilterToggle
+          label="Ready only"
+          active={readyOnly}
+          onChange={(v) => setFilter("ready", v ? "1" : null)}
+        />
+        <FilterToggle label="Show not-doing" active={showNotDoing} onChange={setShowNotDoing} />
       </section>
 
       <section
@@ -197,15 +183,19 @@ export function Board({
                 <span className={styles.columnCount}>{items.length}</span>
               </div>
               <div className={styles.cards}>
-                {items.map((t) => (
-                  <Card
-                    key={t.id}
-                    ticket={t}
-                    features={features}
-                    expanded={expandedId === t.id}
-                    onToggle={() => setExpandedId((curr) => (curr === t.id ? null : t.id))}
-                  />
-                ))}
+                {items.length === 0 ? (
+                  <div className={styles.empty}>No tickets</div>
+                ) : (
+                  items.map((t) => (
+                    <Card
+                      key={t.id}
+                      ticket={t}
+                      features={features}
+                      expanded={expandedId === t.id}
+                      onToggle={() => setExpandedId((curr) => (curr === t.id ? null : t.id))}
+                    />
+                  ))
+                )}
               </div>
             </div>
           );
@@ -215,34 +205,61 @@ export function Board({
   );
 }
 
-function FilterGroup({
+function FilterSelect({
   label,
-  children,
+  value,
+  options,
+  onChange,
 }: {
   label: string;
-  children: React.ReactNode;
+  value: string;
+  options: Array<string | { value: string; label: string }>;
+  onChange: (v: string) => void;
 }) {
   return (
-    <div className={styles.filterGroup}>
-      {label && <span className={styles.filterLabel}>{label}</span>}
-      <div className={styles.filterChips}>{children}</div>
-    </div>
+    <label className={styles.filterField}>
+      <span className={styles.filterLabel}>{label}</span>
+      <select
+        className={styles.filterSelect}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">All</option>
+        {options.map((opt) => {
+          const v = typeof opt === "string" ? opt : opt.value;
+          const l = typeof opt === "string" ? opt : opt.label;
+          return (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          );
+        })}
+      </select>
+    </label>
   );
 }
 
-function FilterChip({
+function FilterToggle({
+  label,
   active,
-  onClick,
-  children,
+  onChange,
 }: {
+  label: string;
   active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  onChange: (v: boolean) => void;
 }) {
   return (
-    <button type="button" className={styles.chip} data-active={active} onClick={onClick}>
-      {children}
-    </button>
+    <div className={styles.filterField}>
+      <span className={styles.filterLabel}>&nbsp;</span>
+      <button
+        type="button"
+        className={styles.filterToggle}
+        data-active={active}
+        onClick={() => onChange(!active)}
+      >
+        {label}
+      </button>
+    </div>
   );
 }
 
@@ -260,9 +277,15 @@ function Card({
   const fm = ticket.frontmatter;
   const fsId = fm["Feature set"];
   const fs = fsId ? features.find((f) => f.fsId === fsId) : null;
+  const assignee = fm["Assigned to"];
 
   return (
-    <article className={styles.card} data-expanded={expanded} data-priority={fm.Priority}>
+    <article
+      className={styles.card}
+      data-expanded={expanded}
+      data-priority={fm.Priority}
+      data-state={ticket.state}
+    >
       <button
         type="button"
         className={styles.cardButton}
@@ -274,19 +297,25 @@ function Card({
           }
         }}
       >
-        <span className={styles.cardTop}>
+        {fs && (
+          <span className={styles.cardFsBadge}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>
+        )}
+        <span className={styles.cardIdRow}>
           <span className={styles.cardId}>{ticket.hvId}</span>
-          <span className={styles.cardTitle}>{ticket.title}</span>
-        </span>
-        <span className={styles.cardMeta}>
-          {fm.Priority && <span className={styles.metaBadge}>{fm.Priority}</span>}
-          {fm.Effort && <span className={styles.metaBadge}>{fm.Effort}</span>}
-          {fs && (
-            <span className={styles.metaBadgeAccent}>
-              {fs.fsId.replace(/^feature-set-/, "fs-")}
+          {fm.Priority && (
+            <span className={styles.cardBadge} data-priority={fm.Priority}>
+              {fm.Priority}
             </span>
           )}
+          {fm.Effort && <span className={styles.cardBadge}>{fm.Effort}</span>}
         </span>
+        <span className={styles.cardTitle}>{ticket.title}</span>
+        {assignee && (
+          <span className={styles.cardAssignee}>
+            <span className={styles.cardAssigneeDot} aria-hidden="true" />
+            {assignee}
+          </span>
+        )}
       </button>
       {expanded && (
         <div className={styles.cardBody}>
