@@ -12,11 +12,24 @@ function expandHome(p: string): string {
 }
 
 function loadPrivateKey(): string {
-  const path = process.env.GITHUB_APP_PRIVATE_KEY_PATH;
-  if (!path) {
-    throw new Error("GITHUB_APP_PRIVATE_KEY_PATH is not set");
+  // Prefer the inline env var (the canonical pattern for serverless / Render).
+  const inline = process.env.GITHUB_APP_PRIVATE_KEY;
+  if (inline) {
+    // Accept either real newlines or escaped \n (common when pasting into
+    // a single-line env-var UI).
+    return inline.includes("\\n") ? inline.replace(/\\n/g, "\n") : inline;
   }
-  return readFileSync(expandHome(path), "utf8");
+
+  // Fall back to a filesystem path (convenient for local dev where the
+  // PEM lives in ~/.github-app-keys/).
+  const path = process.env.GITHUB_APP_PRIVATE_KEY_PATH;
+  if (path) {
+    return readFileSync(expandHome(path), "utf8");
+  }
+
+  throw new Error(
+    "GitHub App private key missing — set GITHUB_APP_PRIVATE_KEY (env var contents) or GITHUB_APP_PRIVATE_KEY_PATH (file path).",
+  );
 }
 
 let appInstance: App | null = null;
