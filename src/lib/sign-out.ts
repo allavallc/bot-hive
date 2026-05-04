@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { account } from "@/db/schema";
+import { invalidateUserCache } from "@/lib/access";
 import { auth } from "@/lib/auth";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
@@ -39,6 +40,7 @@ export async function signOutAction() {
   const reqHeaders = await headers();
   const session = await auth.api.getSession({ headers: reqHeaders });
   if (session?.user) {
+    invalidateUserCache(session.user.id);
     await revokeGithubGrant(session.user.id);
   }
   await auth.api.signOut({ headers: reqHeaders });
