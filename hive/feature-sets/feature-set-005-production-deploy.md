@@ -1,13 +1,17 @@
 # [feature-set-005] Production deploy
 
 ## Goal
-Run Bot Hive on a public production host with a real domain so the live board has a URL anyone can visit.
+Run Bot Hive on Render with managed Postgres, a public URL, and Sentry error monitoring — turning the local dev v1 into a deployed product anyone can sign into.
 
 ## Rationale
-Bot Hive runs only on a local dev machine today. Demoing to anyone who isn't sitting next to you requires a real deploy — host choice, env wiring, managed Postgres, GitHub App webhook URL update, and DNS. Bundling these concerns into one feature set keeps deploy work from leaking into product tickets.
+Bot Hive runs only on a local dev machine today. Demoing or letting a second person actually use it requires a real deploy — host setup, env wiring, managed Postgres, GitHub App webhook URL update, plus prod-grade observability. Render is the chosen host (long-lived SSE works natively, managed Postgres on the same platform, simple Node deploys). Bundling these into one feature set keeps deploy concerns from leaking into product tickets.
 
 ## Tickets
-_To be drafted._
+- HV-022 — Load GitHub App private key from env var contents (not file path)
+- HV-023 — Provision Render Web Service + Render Postgres + first deploy
+- HV-024 — Wire prod URLs into GitHub OAuth App + GitHub App (callback + webhook)
+- HV-025 — Production smoke test (sign-in, connect repo, live board, HV-019 multi-account)
+- HV-026 — Sentry error monitoring on prod
 
 ## Status
-Planned
+In progress
