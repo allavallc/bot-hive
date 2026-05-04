@@ -1,0 +1,74 @@
+# Render Blueprint — Bot Hive (HV-023)
+#
+# What this provisions:
+#   1. A managed Postgres (basic plan; persistent, ~$7/mo).
+#   2. A Web Service running the Next.js app, auto-deploying from main.
+#
+# Secrets (sync: false) are NOT in this file — set them in the Render
+# dashboard after the first deploy attempt. The Blueprint stops the deploy
+# until they're filled.
+#
+# To use:
+#   1. Push this file to main.
+#   2. In Render: New + → Blueprint → connect the bot-hive repo.
+#   3. Confirm the resources (1 database, 1 service). Click Apply.
+#   4. Fill in the secret env vars in the dashboard. Trigger redeploy.
+#   5. Once live, run HV-024 to point GitHub OAuth + App at the new URL.
+
+databases:
+  - name: bot-hive-db
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: bot-hive
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run db:migrate && npm run start
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      # Auto-injected from the linked Postgres above.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bot-hive-db
+          property: connectionString
+
+      # Render auto-generates a strong random value the first time.
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+
+      # Set in dashboard once the *.onrender.com URL is assigned (or after
+      # custom domain is configured). Should match the URL users hit.
+      - key: BETTER_AUTH_URL
+        sync: false
+
+      # GitHub OAuth App (sign-in) — paste from github.com OAuth App settings.
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+
+      # GitHub App (repo access + webhooks).
+      - key: GITHUB_APP_ID
+        sync: false
+      # Paste the FULL PEM contents (multi-line OK in Render's UI).
+      # Per HV-022 the loader prefers this over GITHUB_APP_PRIVATE_KEY_PATH.
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_APP_WEBHOOK_SECRET
+        sync: false
+
+      # Contact form (Gmail App Password). Leave blank to disable the form
+      # in prod (it returns the "missing creds" error gracefully).
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: CONTACT_TO
+        sync: false
