@@ -1,5 +1,6 @@
 "use client";
 
+import { authClient } from "@/lib/auth-client";
 import { signOutAction } from "@/lib/sign-out";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -42,9 +43,18 @@ export function PageNav({ signedIn }: { signedIn: boolean }) {
           </button>
         </form>
       ) : (
-        <Link href="/login" className={styles.navAuth}>
+        <button
+          type="button"
+          className={styles.navAuth}
+          onClick={() =>
+            authClient.signIn.social({
+              provider: "github",
+              callbackURL: "/dashboard",
+            })
+          }
+        >
           Sign in
-        </Link>
+        </button>
       )}
     </nav>
   );

@@ -44,5 +44,5 @@ export async function signOutAction() {
     await revokeGithubGrant(session.user.id);
   }
   await auth.api.signOut({ headers: reqHeaders });
-  redirect("/login");
+  redirect("/");
 }
