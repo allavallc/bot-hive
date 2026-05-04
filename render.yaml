@@ -48,6 +48,13 @@ services:
       - key: BETTER_AUTH_URL
         sync: false
 
+      # Same value as BETTER_AUTH_URL, but as a NEXT_PUBLIC_ var so it gets
+      # baked into the client bundle at build time. The auth-client uses
+      # this for its baseURL — if missing, the bundle defaults to localhost
+      # and sign-in fails with CORS errors on prod.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+
       # GitHub OAuth App (sign-in) — paste from github.com OAuth App settings.
       - key: GITHUB_CLIENT_ID
         sync: false
