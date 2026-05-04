@@ -40,11 +40,7 @@ export async function GET(req: NextRequest) {
       .select()
       .from(projects)
       .where(
-        and(
-          eq(projects.billingOwnerId, session.user.id),
-          eq(projects.githubRepo, repoData.full_name),
-          eq(projects.installId, installationId),
-        ),
+        and(eq(projects.githubRepo, repoData.full_name), eq(projects.installId, installationId)),
       )
       .limit(1);
 

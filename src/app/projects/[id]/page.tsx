@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { features as featuresTable, projects, tickets } from "@/db/schema";
+import { features as featuresTable, tickets } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { and, asc, eq } from "drizzle-orm";
+import { getProjectForUser } from "@/lib/projects";
+import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Board } from "./board.client";
@@ -17,11 +18,7 @@ export default async function ProjectBoardPage({
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.billingOwnerId, session.user.id)))
-    .limit(1);
+  const project = await getProjectForUser(session.user.id, projectId);
   if (!project) notFound();
 
   const ticketRows = await db

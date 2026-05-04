@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { features as featuresTable, projects, tickets } from "@/db/schema";
+import { features as featuresTable, tickets } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { and, asc, eq } from "drizzle-orm";
+import { getProjectForUser } from "@/lib/projects";
+import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -14,11 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.billingOwnerId, session.user.id)))
-    .limit(1);
+  const project = await getProjectForUser(session.user.id, projectId);
   if (!project) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

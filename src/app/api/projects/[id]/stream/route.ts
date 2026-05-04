@@ -1,8 +1,6 @@
-import { db } from "@/db";
-import { projects } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { type BroadcastEvent, subscribe } from "@/lib/broadcast";
-import { and, eq } from "drizzle-orm";
+import { getProjectForUser } from "@/lib/projects";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -15,11 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.billingOwnerId, session.user.id)))
-    .limit(1);
+  const project = await getProjectForUser(session.user.id, projectId);
   if (!project) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
