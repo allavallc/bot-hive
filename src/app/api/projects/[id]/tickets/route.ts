@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.ownerId, session.user.id)))
+    .where(and(eq(projects.id, projectId), eq(projects.billingOwnerId, session.user.id)))
     .limit(1);
   if (!project) {
     return NextResponse.json({ error: "not found" }, { status: 404 });

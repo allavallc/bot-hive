@@ -85,7 +85,7 @@ export const projects = pgTable(
   "projects",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ownerId: text("owner_id")
+    billingOwnerId: text("billing_owner_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     githubRepo: text("github_repo").notNull(),
@@ -97,13 +97,8 @@ export const projects = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    ownerRepoInstallUnique: unique("projects_owner_repo_install_unique").on(
-      t.ownerId,
-      t.githubRepo,
-      t.installId,
-    ),
-    ownerIdx: index("projects_owner_idx").on(t.ownerId),
-    installRepoIdx: index("projects_install_repo_idx").on(t.installId, t.githubRepo),
+    installRepoUnique: unique("projects_install_repo_unique").on(t.installId, t.githubRepo),
+    billingOwnerIdx: index("projects_billing_owner_idx").on(t.billingOwnerId),
   }),
 );
 

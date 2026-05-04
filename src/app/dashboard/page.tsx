@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   const userProjects = await db
     .select()
     .from(projects)
-    .where(eq(projects.ownerId, session.user.id))
+    .where(eq(projects.billingOwnerId, session.user.id))
     .orderBy(desc(projects.createdAt));
 
   return (

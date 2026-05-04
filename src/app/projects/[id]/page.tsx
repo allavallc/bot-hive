@@ -20,7 +20,7 @@ export default async function ProjectBoardPage({
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.ownerId, session.user.id)))
+    .where(and(eq(projects.id, projectId), eq(projects.billingOwnerId, session.user.id)))
     .limit(1);
   if (!project) notFound();
 

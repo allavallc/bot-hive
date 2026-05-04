@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       .from(projects)
       .where(
         and(
-          eq(projects.ownerId, session.user.id),
+          eq(projects.billingOwnerId, session.user.id),
           eq(projects.githubRepo, repoData.full_name),
           eq(projects.installId, installationId),
         ),
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
       const [inserted] = await db
         .insert(projects)
         .values({
-          ownerId: session.user.id,
+          billingOwnerId: session.user.id,
           githubRepo: repoData.full_name,
           installId: installationId,
           displayName: repoData.name,
