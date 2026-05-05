@@ -4,7 +4,7 @@ import { RobotMascot, robotColor } from "@/components/robot-mascot";
 import { Wordmark } from "@/components/wordmark";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./board.module.css";
 
 type Ticket = {
@@ -59,8 +59,13 @@ export function Board({
   const [showNotDoing, setShowNotDoing] = useState(false);
   const [connected, setConnected] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date>(new Date());
+  const [animating, setAnimating] = useState<Map<string, "arrived" | "new" | "in-review">>(
+    new Map(),
+  );
 
   const openTriggerRef = useRef<HTMLElement | null>(null);
+  const prevTicketsRef = useRef<Ticket[]>(initialTickets);
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const filterPriority = params.get("priority") ?? "";
   const filterFeature = params.get("feature") ?? "";
@@ -73,6 +78,20 @@ export function Board({
     router.replace(qs ? `?${qs}` : "?", { scroll: false });
   }
 
+  const computeAnimations = useCallback((prev: Ticket[], next: Ticket[]) => {
+    const prevById = new Map(prev.map((t) => [t.id, t]));
+    const result = new Map<string, "arrived" | "new" | "in-review">();
+    for (const t of next) {
+      const old = prevById.get(t.id);
+      if (!old) {
+        result.set(t.id, "new");
+      } else if (old.state !== t.state) {
+        result.set(t.id, t.state === "in-review" ? "in-review" : "arrived");
+      }
+    }
+    return result;
+  }, []);
+
   useEffect(() => {
     const es = new EventSource(`/api/projects/${project.id}/stream`);
     es.onopen = () => setConnected(true);
@@ -81,13 +100,24 @@ export function Board({
       const res = await fetch(`/api/projects/${project.id}/tickets`);
       if (res.ok) {
         const data = await res.json();
-        setTickets(data.tickets);
+        const next: Ticket[] = data.tickets;
+        const anims = computeAnimations(prevTicketsRef.current, next);
+        prevTicketsRef.current = next;
+        setTickets(next);
         setFeatures(data.features);
         setGeneratedAt(new Date());
+        if (anims.size > 0) {
+          clearTimeout(animTimerRef.current);
+          setAnimating(anims);
+          animTimerRef.current = setTimeout(() => setAnimating(new Map()), 2500);
+        }
       }
     };
-    return () => es.close();
-  }, [project.id]);
+    return () => {
+      es.close();
+      clearTimeout(animTimerRef.current);
+    };
+  }, [project.id, computeAnimations]);
 
   const visible = useMemo(
     () =>
@@ -184,6 +214,7 @@ export function Board({
                         key={t.id}
                         ticket={t}
                         features={features}
+                        animState={animating.get(t.id)}
                         onOpen={(trigger) => handleCardOpen(t.id, trigger)}
                       />
                     ))
@@ -376,10 +407,12 @@ function WalkingRobot({ name }: { name?: string }) {
 function Card({
   ticket,
   features,
+  animState,
   onOpen,
 }: {
   ticket: Ticket;
   features: Feature[];
+  animState?: "arrived" | "new" | "in-review";
   onOpen: (trigger: HTMLElement) => void;
 }) {
   const fm = ticket.frontmatter;
@@ -389,7 +422,7 @@ function Card({
   const handle = extractHandle(assignee);
 
   return (
-    <article className={styles.card} data-state={ticket.state}>
+    <article className={styles.card} data-state={ticket.state} data-anim={animState}>
       {ticket.state === "in-progress" && <WalkingRobot name={assignee} />}
       {handle && (
         <span
