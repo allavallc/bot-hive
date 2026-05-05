@@ -7,10 +7,20 @@ import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 
+// On Render (and any reverse-proxied host) NextRequest's `req.url` reports the
+// internal upstream URL (e.g. http://localhost:10000) rather than the public
+// origin. Use BETTER_AUTH_URL — which is the canonical public origin of the
+// app — for any redirect target. Falls back to req.url for local dev where
+// BETTER_AUTH_URL might be unset.
+function publicUrl(req: NextRequest, path: string): URL {
+  const base = process.env.BETTER_AUTH_URL ?? new URL(req.url).origin;
+  return new URL(path, base);
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return NextResponse.redirect(publicUrl(req, "/login"));
   }
 
   const installationIdParam = req.nextUrl.searchParams.get("installation_id");
@@ -69,5 +79,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(new URL("/dashboard", req.url));
+  return NextResponse.redirect(publicUrl(req, "/dashboard"));
 }
