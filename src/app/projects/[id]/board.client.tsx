@@ -377,6 +377,14 @@ function Card({
   return (
     <article className={styles.card} data-expanded={expanded} data-state={ticket.state}>
       {ticket.state === "in-progress" && <WalkingRobot name={assignee} />}
+      {handle && (
+        <span
+          className={styles.cardBot}
+          style={{ color: robotColor(handle), borderColor: robotColor(handle) }}
+        >
+          {handle}
+        </span>
+      )}
       <button
         type="button"
         className={styles.cardButton}
@@ -400,17 +408,7 @@ function Card({
             {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
           </span>
         </span>
-        <span className={styles.cardMeta}>
-          {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
-          {handle && (
-            <span
-              className={styles.cardBot}
-              style={{ color: robotColor(handle), borderColor: robotColor(handle) }}
-            >
-              {handle}
-            </span>
-          )}
-        </span>
+        {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
         <span className={styles.cardTitle}>{ticket.title}</span>
       </button>
       {expanded && (

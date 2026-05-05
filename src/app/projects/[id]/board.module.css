@@ -316,6 +316,7 @@
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
   min-width: 0;
+  position: relative;
 }
 
 .card:hover {
@@ -444,14 +445,6 @@
   border-color: var(--line);
 }
 
-.cardMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
 .cardFs {
   display: inline-block;
   max-width: 100%;
@@ -463,18 +456,24 @@
   color: var(--ink-dim);
   border: 1px solid var(--line);
   padding: 2px 8px;
+  margin-bottom: 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .cardBot {
-  display: inline-block;
+  position: absolute;
+  top: 0;
+  left: 12px;
+  transform: translateY(-50%);
+  z-index: 1;
+  background: var(--bg);
+  padding: 1px 8px;
   font-family: var(--mono);
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  padding: 2px 8px;
   border: 1px solid currentColor;
   white-space: nowrap;
 }
