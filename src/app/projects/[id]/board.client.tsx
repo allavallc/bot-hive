@@ -4,7 +4,7 @@ import { RobotMascot, robotColor } from "@/components/robot-mascot";
 import { Wordmark } from "@/components/wordmark";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./board.module.css";
 
 type Ticket = {
@@ -55,10 +55,12 @@ export function Board({
 
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [features, setFeatures] = useState<Feature[]>(initialFeatures);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [showNotDoing, setShowNotDoing] = useState(false);
   const [connected, setConnected] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date>(new Date());
+
+  const openTriggerRef = useRef<HTMLElement | null>(null);
 
   const filterPriority = params.get("priority") ?? "";
   const filterFeature = params.get("feature") ?? "";
@@ -101,6 +103,19 @@ export function Board({
   const byColumn = new Map<string, Ticket[]>();
   for (const c of cols) byColumn.set(c.state, []);
   for (const t of visible) byColumn.get(t.state)?.push(t);
+
+  const openTicket = openTicketId ? (tickets.find((t) => t.id === openTicketId) ?? null) : null;
+
+  function handleCardOpen(ticketId: string, trigger: HTMLElement) {
+    openTriggerRef.current = trigger;
+    setOpenTicketId(ticketId);
+  }
+
+  function handleModalClose() {
+    setOpenTicketId(null);
+    openTriggerRef.current?.focus();
+    openTriggerRef.current = null;
+  }
 
   return (
     <div className={styles.root}>
@@ -169,8 +184,7 @@ export function Board({
                         key={t.id}
                         ticket={t}
                         features={features}
-                        expanded={expandedId === t.id}
-                        onToggle={() => setExpandedId((curr) => (curr === t.id ? null : t.id))}
+                        onOpen={(trigger) => handleCardOpen(t.id, trigger)}
                       />
                     ))
                   )}
@@ -180,6 +194,8 @@ export function Board({
           })}
         </section>
       </main>
+
+      <TicketModal ticket={openTicket} onClose={handleModalClose} />
     </div>
   );
 }
@@ -360,13 +376,11 @@ function WalkingRobot({ name }: { name?: string }) {
 function Card({
   ticket,
   features,
-  expanded,
-  onToggle,
+  onOpen,
 }: {
   ticket: Ticket;
   features: Feature[];
-  expanded: boolean;
-  onToggle: () => void;
+  onOpen: (trigger: HTMLElement) => void;
 }) {
   const fm = ticket.frontmatter;
   const fsId = fm["Feature set"];
@@ -375,7 +389,7 @@ function Card({
   const handle = extractHandle(assignee);
 
   return (
-    <article className={styles.card} data-expanded={expanded} data-state={ticket.state}>
+    <article className={styles.card} data-state={ticket.state}>
       {ticket.state === "in-progress" && <WalkingRobot name={assignee} />}
       {handle && (
         <span
@@ -385,17 +399,7 @@ function Card({
           {handle}
         </span>
       )}
-      <button
-        type="button"
-        className={styles.cardButton}
-        aria-expanded={expanded}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && expanded) {
-            onToggle();
-          }
-        }}
-      >
+      <button type="button" className={styles.cardButton} onClick={(e) => onOpen(e.currentTarget)}>
         <span className={styles.cardTop}>
           {fm.Type === "bug" && <BugIcon />}
           <span className={styles.cardId}>{ticket.hvId}</span>
@@ -411,11 +415,86 @@ function Card({
         {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
         <span className={styles.cardTitle}>{ticket.title}</span>
       </button>
-      {expanded && (
-        <div className={styles.cardBody}>
-          <pre className={styles.bodyText}>{ticket.body}</pre>
-        </div>
-      )}
     </article>
+  );
+}
+
+function TicketModal({
+  ticket,
+  onClose,
+}: {
+  ticket: Ticket | null;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      onCloseRef.current();
+    };
+    dialog.addEventListener("cancel", handleCancel);
+    return () => dialog.removeEventListener("cancel", handleCancel);
+  }, []);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (ticket) {
+      if (!dialog.open) dialog.showModal();
+    } else {
+      if (dialog.open) dialog.close();
+    }
+  }, [ticket]);
+
+  function handleBackdropClick(e: React.MouseEvent<HTMLDialogElement>) {
+    if (e.target === dialogRef.current) onClose();
+  }
+
+  const fm = ticket?.frontmatter ?? {};
+  const metaEntries = Object.entries(fm).filter(([, v]) => v);
+
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: <dialog> handles Escape via the cancel event listener above
+    <dialog
+      ref={dialogRef}
+      className={styles.modal}
+      onClick={handleBackdropClick}
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div className={styles.modalInner}>
+        <div className={styles.modalHeader}>
+          <h2 id="modal-title" className={styles.modalTitle}>
+            <span className={styles.modalHvId}>{ticket?.hvId}</span>
+            {ticket?.title}
+          </h2>
+          <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div className={styles.modalBody}>
+          {ticket && (
+            <>
+              <dl className={styles.modalMeta}>
+                {metaEntries.map(([k, v]) => (
+                  <div key={k} className={styles.modalMetaRow}>
+                    <dt className={styles.modalMetaKey}>{k}</dt>
+                    <dd className={styles.modalMetaVal}>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <pre className={styles.bodyText}>{ticket.body}</pre>
+            </>
+          )}
+        </div>
+      </div>
+    </dialog>
   );
 }
