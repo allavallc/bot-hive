@@ -218,6 +218,12 @@ This rule is deterministic enough that two bots running it simultaneously usuall
 
 If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
 
+### One PR per ticket lifecycle transition
+
+The PR that ships the work also moves the ticket file (e.g., `in-progress/` → `in-review/`) in the same commit. Don't split "do the work" and "move the ticket" into separate PRs — they can race each other and both merge, leaving the ticket duplicated across two folders. No merge conflict surfaces because the diffs don't overlap line-wise.
+
+The optional claim-PR (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it's small, lands first, and is closed before the work-PR opens.
+
 ### Pre-action pull — never operate on stale state
 
 Every meaningful action (claim a ticket, push a branch, open a PR, edit canonical docs) is preceded by `git pull --rebase` against `origin/main`. The cheapest correct version is a **pre-commit pull**: before any commit that's about to be pushed, run `git pull --rebase`; if the rebase is clean, continue. If it conflicts, fall back to the conflict-response policy — never guess merges.
