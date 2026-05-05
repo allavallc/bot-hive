@@ -148,9 +148,40 @@ There is no separate lock registry. The git push *is* the lock: the agent that s
 
 ---
 
+## Bot identity
+
+Each bot session declares a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model.
+
+**Setting your handle (per machine, once):**
+
+```
+git config bot-hive.handle CC1
+```
+
+Handles are short, ASCII, no spaces, max ~20 chars. Examples: `CC1`, `CC2`, `scout`, `forager-3`, `tony-laptop`. Pick something memorable; case-sensitive but normalized on display.
+
+**Reading your handle on session start:**
+
+```
+git config --get bot-hive.handle
+```
+
+If unset, the bot stops and asks the user to set it before claiming any ticket. A bot without a handle is anonymous; anonymous bots aren't allowed in the swarm because audit attribution breaks.
+
+**Where the handle appears:**
+
+- **`Assigned to:` ticket field** — the handle, optionally with the model in parens for self-contained ticket files. Both formats are accepted: `CC1` or `CC1 (claude-opus-4-7)`.
+- **`Bot:` commit trailer** — alongside `Model:` and `Trigger:` (see below).
+- **Live board UI** — rendered as a visible badge on each ticket card.
+- **`hive/events.log`** entries (when that convention is in effect — see HV-031 in feature-set-007) — every event line is suffixed with the originating handle.
+
+**Why this matters:** in nature, every ant carries colony scent but is otherwise indistinguishable. In a software swarm, individual identity is cheap and worth surfacing — it lets humans spot a misbehaving bot at a glance, attribute work for audit, and build trust by seeing who did what.
+
+---
+
 ## Provenance trailers
 
-Bot commits for ticket-lifecycle actions carry two trailers in the commit message body so the audit trail lives in `git log` without any new infrastructure:
+Bot commits for ticket-lifecycle actions carry trailers in the commit message body so the audit trail lives in `git log` without any new infrastructure:
 
 ```
 HV-XXX: <action>
@@ -158,6 +189,7 @@ HV-XXX: <action>
 <short body explaining what changed>
 
 Model: claude-opus-4-7
+Bot: CC1
 Trigger: HV-XXX <action>
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
@@ -165,6 +197,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 **Trailer format:**
 
 - `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`, `gpt-5-codex`).
+- `Bot:` — the bot's handle from `git config bot-hive.handle` (e.g. `CC1`, `CC2`, `scout`). Required when the handle is set; omit only if the convention isn't yet adopted in the repo.
 - `Trigger:` — `HV-XXX <action>` where action ∈ `claim | done | edit | blocked | reclaim | in-review | accepted | rejected`.
 - `Co-Authored-By:` — existing convention, unchanged.
 
@@ -197,6 +230,7 @@ Trigger: HV-090 rejected
 ```bash
 git log --grep "Trigger: HV-074"        # full lifecycle of one ticket
 git log --grep "Model: claude-"         # everything done by Claude models
+git log --grep "Bot: CC1"               # everything done by a specific bot session
 git log --grep "Trigger: .* done"       # all completion events
 git log --grep "Trigger: .* accepted"   # tester sign-offs (loop output)
 git log --grep "Trigger: .* rejected"   # rejected work — what came back
