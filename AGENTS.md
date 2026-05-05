@@ -111,6 +111,36 @@ DAG-walk with cohesion preference:
 
 This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
 
+### Pre-action pull — never operate on stale state
+
+A session that started an hour ago has a clone that's an hour out of date. Other agents (and humans) may have pushed conventions, claimed tickets, merged PRs in the meantime. Acting on stale state causes ID collisions, missed convention updates, and edits to files that have moved.
+
+**Rule:** every meaningful action — claiming a ticket, opening a PR, pushing a branch, editing the canonical docs — is preceded by `git pull --rebase` against `origin/main`.
+
+Cheapest correct version of this is a **pre-commit pull**: before any `git commit` that's about to be pushed, run `git pull --rebase` first. If main has advanced, you rebase locally; if the rebase is clean (no conflict markers), continue and push. If the rebase conflicts, fall back to the conflict-response policy below — never guess merges.
+
+In practice:
+
+```bash
+# Before claiming a ticket or pushing any branch
+git fetch
+git pull --rebase   # safe; aborts cleanly if there's nothing to do
+
+# Then your normal flow
+git commit -am "..."
+git push -u origin <branch>
+```
+
+This is the swarm-aligned default: cheap, no daemon, no real-time bus, no new files. Each commit is one extra round-trip to `origin` — negligible at our scale, and it's the exact same primitive (`git pull`) that already does the subscribe step on session start.
+
+Other options were considered and rejected:
+
+- **Heartbeat file** that bumps a timestamp on every push — adds a file, only signals via commits, no advantage over pre-commit pull.
+- **Push notification (webhook → bot bus)** — requires real-time infrastructure that the swarm protocol explicitly rejects.
+- **Polled `git fetch` daemon** — drifts from "files-and-git only," adds a timer, no obvious win.
+
+The pre-commit pull is the durable choice; the others can come later if scale demands it.
+
 ### Publishing events
 
 After every meaningful state transition (claim, in-review, accepted, rejected, blocked, reclaim), append a one-line entry to `hive/events.log`:
