@@ -154,14 +154,29 @@ Bot Hive is built for swarms, not solo developers. The whole point is that multi
 
 The mental model: **git is a pub/sub system.** Pushing is publishing, pulling is subscribing, the directory tree is the topic structure. No central coordinator, no broker daemon, no point-to-point messaging between bots. Each agent is autonomous; coordination emerges from a few simple rules and the shared environment.
 
-### The two-lane commit model
+### All commits flow through PR + auto-merge
 
-| Lane | What | Where it lands |
+When the host enforces branch protection (recommended; for Bot Hive this is configured per `docs/BRANCH_PROTECTION.md`), direct pushes to `main` are rejected. **Every change — source code, hive/ ticket moves, doc edits, anything — goes through a PR.** A `ci` status check gates merge; auto-merge fires the moment CI goes green.
+
+```bash
+git checkout -b hv-XXX-<slug>
+# ... edit files ...
+git commit -am "..."
+git push -u origin hv-XXX-<slug>
+gh pr create --title "..." --body "..."
+gh pr merge --auto --squash --delete-branch
+```
+
+The mental split between coordination metadata (small atomic ticket moves) and source code (substantive work that needs CI) is still useful — it tells you what the change is *about*. But both lanes ride the same merge mechanism:
+
+| Kind of work | Files | What CI does |
 |---|---|---|
-| **Coordination metadata** | `hive/` ticket files, `hive/HIVE.md`, `hive/focus.md`, `hive/events.log`, feature-set docs, project-root `CLAUDE.md`, `README.md` | Direct to `main`. Tiny atomic commits, ordered by the git push lock. |
-| **Source code** | Anything in `src/`, `tests/`, `migrations/`, configs, `package.json`, `.github/` | Feature branch named `hv-XXX-<slug>`, opened as a PR, merged after CI passes. |
+| Coordination metadata | `hive/`, project root coordination docs (`CLAUDE.md`, `README.md`, `docs/`) | Runs the full suite, passes trivially since no source changed. |
+| Source code | `src/`, tests, configs, build infra | Substantive gate — typecheck/lint/test/build all must pass. |
 
-Source code goes through PR + CI because parallel bots will collide on the same source files; CI is the safety net. Coordination metadata stays main-direct because tickets are small atomic moves and the push lock orders them naturally.
+The unified PR-and-CI flow is the cost of having branch protection enforce the rules — GitHub branch protection is all-or-nothing on a branch; there's no native "block source pushes, allow hive/ pushes." Trade-off: ~2-3 min of CI per ticket move (waste, but bounded). Benefit: no source change can ever bypass CI; bots literally cannot ship broken code.
+
+If a host doesn't have branch protection (e.g., a self-hosted setup, or a fork without the protection set up yet), the rules are advisory; bots SHOULD follow the same flow but the host won't enforce it.
 
 ### `hive/focus.md` — alignment signal
 

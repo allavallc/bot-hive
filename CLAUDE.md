@@ -50,18 +50,37 @@ Full convention discussion: see `hive/HIVE.md` "Bot identity" section.
 
 ---
 
-## Where work goes
+## Where work goes — all commits via PR + auto-merge
 
-The repo splits commits into two lanes:
+**Once branch protection (HV-033) is applied**, GitHub rejects direct pushes to `main` for any change. Every commit — source code, `hive/` ticket moves, doc edits, anything — flows through a PR gated by the `ci` status check.
 
-| Kind of work | Where |
-|---|---|
-| Coordination metadata: `hive/` ticket files, `hive/HIVE.md`, `hive/focus.md`, `hive/events.log`, `hive/questions-for-human.md`, this `CLAUDE.md`, the `README.md` | Direct to `main`. Tiny atomic commits, ordered by the git push lock. |
-| Source code: anything in `src/`, `tests/`, `migrations/`, configs, `package.json`, `.github/` | Feature branch named `hv-XXX-<slug>`, opened as a PR, merged after CI passes. |
+The unified flow:
 
-The reason for the split: source code can collide between bots (same file, different changes), and CI gates the merge. Coordination metadata is small, atomic, and the push lock handles ordering.
+```bash
+git checkout -b hv-XXX-<slug>
+# ... edit files ...
+git commit -am "..."
+git push -u origin hv-XXX-<slug>
+gh pr create --title "..." --body "..."
+gh pr merge --auto --squash --delete-branch
+```
 
-When branch protection lands (HV-033), this split is enforced by GitHub. Until then, follow it by convention.
+`--auto` queues the merge and fires it the moment CI goes green. No manual step. Total ceremony per change: ~2-3 min of wall time (CI run), ~5s of bot interaction.
+
+### Conceptually: still two lanes
+
+The mental split between coordination metadata and source code is still useful — it determines what the change is *about*, even though both flow through PRs:
+
+| Kind of work | Files | What CI does |
+|---|---|---|
+| Coordination metadata | `hive/`, this `CLAUDE.md`, `README.md`, `docs/` | CI runs the full suite, passes trivially (~2 min) since no source changed. |
+| Source code | `src/`, `tests/`, `migrations/`, configs, `package.json`, `.github/` | CI is the substantive gate — typecheck/lint/test/build must all pass. |
+
+If CI minutes ever become a concern, we can `paths-ignore` filter the workflow to skip hive-only PRs. Not worth the complexity today.
+
+### Setup details
+
+See `docs/BRANCH_PROTECTION.md` for the exact GitHub settings, the `gh api` automation script, and the verification checklist.
 
 ---
 
