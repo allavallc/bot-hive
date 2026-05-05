@@ -1,0 +1,12 @@
+# Enforce LF line endings across the repo. Eliminates Windows CRLF churn
+# that was breaking `biome check` (formatter expects LF).
+* text=auto eol=lf
+
+# Binary files — let git handle as-is
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

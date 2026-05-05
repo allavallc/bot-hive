@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { db } from "@/db";
 import { projects, user } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { test } from "@/lib/test-db";
+import { describe, expect, vi } from "vitest";
 
 const { mockListUserRepos, mockUserHasRepoAccess } = vi.hoisted(() => ({
   mockListUserRepos: vi.fn(),
@@ -16,72 +15,135 @@ vi.mock("@/lib/access", () => ({
 
 import { getProjectForUser, getProjectsForUser } from "./projects";
 
-describe("project access helpers", () => {
-  let testUserId: string;
-  let testProjectId: string;
-  let testGithubRepo: string;
+// Per-test transactional rollback (src/lib/test-db.ts) provides isolation.
+// We pass `tx` to production functions so reads see the test's uncommitted
+// writes. Test data uses fixed IDs (no Date.now()/Math.random()) — collision
+// is impossible because writes never commit.
 
-  beforeEach(async () => {
-    testUserId = `vitest-${randomUUID()}`;
-    testGithubRepo = `vitest/${testUserId.slice(0, 8)}`;
-    await db.insert(user).values({
+describe("project access helpers", () => {
+  test("getProjectsForUser returns projects whose repo is in the user's list", async ({ tx }) => {
+    const testUserId = `vitest-${randomUUID()}`;
+    const testGithubRepo = `vitest/${testUserId.slice(0, 8)}`;
+    await tx.insert(user).values({
       id: testUserId,
       name: "vitest",
       email: `${testUserId}@example.invalid`,
     });
-    const [project] = await db
+    const [project] = await tx
       .insert(projects)
       .values({
         billingOwnerId: testUserId,
         githubRepo: testGithubRepo,
-        installId: Date.now(),
+        installId: 100,
         displayName: "vitest",
       })
       .returning();
-    testProjectId = project.id;
 
     mockListUserRepos.mockReset();
-    mockUserHasRepoAccess.mockReset();
-  });
-
-  afterEach(async () => {
-    await db.delete(user).where(eq(user.id, testUserId));
-  });
-
-  test("getProjectsForUser returns projects whose repo is in the user's list", async () => {
     mockListUserRepos.mockResolvedValue([testGithubRepo]);
-    const result = await getProjectsForUser(testUserId);
+
+    const result = await getProjectsForUser(testUserId, tx);
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(testProjectId);
+    expect(result[0].id).toBe(project.id);
   });
 
-  test("getProjectsForUser returns empty when user has no repos", async () => {
+  test("getProjectsForUser returns empty when user has no repos", async ({ tx }) => {
+    const testUserId = `vitest-${randomUUID()}`;
+    await tx.insert(user).values({
+      id: testUserId,
+      name: "vitest",
+      email: `${testUserId}@example.invalid`,
+    });
+    await tx.insert(projects).values({
+      billingOwnerId: testUserId,
+      githubRepo: `vitest/${testUserId.slice(0, 8)}`,
+      installId: 100,
+      displayName: "vitest",
+    });
+
+    mockListUserRepos.mockReset();
     mockListUserRepos.mockResolvedValue([]);
-    const result = await getProjectsForUser(testUserId);
+
+    const result = await getProjectsForUser(testUserId, tx);
     expect(result).toEqual([]);
   });
 
-  test("getProjectsForUser excludes projects on repos the user can't access", async () => {
+  test("getProjectsForUser excludes projects on repos the user can't access", async ({ tx }) => {
+    const testUserId = `vitest-${randomUUID()}`;
+    await tx.insert(user).values({
+      id: testUserId,
+      name: "vitest",
+      email: `${testUserId}@example.invalid`,
+    });
+    await tx.insert(projects).values({
+      billingOwnerId: testUserId,
+      githubRepo: `vitest/${testUserId.slice(0, 8)}`,
+      installId: 100,
+      displayName: "vitest",
+    });
+
+    mockListUserRepos.mockReset();
     mockListUserRepos.mockResolvedValue(["other/repo"]);
-    const result = await getProjectsForUser(testUserId);
+
+    const result = await getProjectsForUser(testUserId, tx);
     expect(result).toEqual([]);
   });
 
-  test("getProjectForUser returns the project when user has access", async () => {
+  test("getProjectForUser returns the project when user has access", async ({ tx }) => {
+    const testUserId = `vitest-${randomUUID()}`;
+    await tx.insert(user).values({
+      id: testUserId,
+      name: "vitest",
+      email: `${testUserId}@example.invalid`,
+    });
+    const [project] = await tx
+      .insert(projects)
+      .values({
+        billingOwnerId: testUserId,
+        githubRepo: `vitest/${testUserId.slice(0, 8)}`,
+        installId: 100,
+        displayName: "vitest",
+      })
+      .returning();
+
+    mockUserHasRepoAccess.mockReset();
     mockUserHasRepoAccess.mockResolvedValue(true);
-    const result = await getProjectForUser(testUserId, testProjectId);
-    expect(result?.id).toBe(testProjectId);
+
+    const result = await getProjectForUser(testUserId, project.id, tx);
+    expect(result?.id).toBe(project.id);
   });
 
-  test("getProjectForUser returns null when user lacks access", async () => {
+  test("getProjectForUser returns null when user lacks access", async ({ tx }) => {
+    const testUserId = `vitest-${randomUUID()}`;
+    await tx.insert(user).values({
+      id: testUserId,
+      name: "vitest",
+      email: `${testUserId}@example.invalid`,
+    });
+    const [project] = await tx
+      .insert(projects)
+      .values({
+        billingOwnerId: testUserId,
+        githubRepo: `vitest/${testUserId.slice(0, 8)}`,
+        installId: 100,
+        displayName: "vitest",
+      })
+      .returning();
+
+    mockUserHasRepoAccess.mockReset();
     mockUserHasRepoAccess.mockResolvedValue(false);
-    const result = await getProjectForUser(testUserId, testProjectId);
+
+    const result = await getProjectForUser(testUserId, project.id, tx);
     expect(result).toBeNull();
   });
 
-  test("getProjectForUser returns null when project does not exist", async () => {
+  test("getProjectForUser returns null when project does not exist", async ({ tx }) => {
+    const testUserId = `vitest-${randomUUID()}`;
+
+    mockUserHasRepoAccess.mockReset();
     mockUserHasRepoAccess.mockResolvedValue(true);
-    const result = await getProjectForUser(testUserId, randomUUID());
+
+    const result = await getProjectForUser(testUserId, randomUUID(), tx);
     expect(result).toBeNull();
   });
 });

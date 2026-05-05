@@ -1,11 +1,14 @@
-import { db } from "@/db";
+import { type DbHandle, db as defaultDb } from "@/db";
 import { projects } from "@/db/schema";
 import { listUserRepos, userHasRepoAccess } from "@/lib/access";
 import { desc, eq, inArray } from "drizzle-orm";
 
 export type ProjectRow = typeof projects.$inferSelect;
 
-export async function getProjectsForUser(userId: string): Promise<ProjectRow[]> {
+export async function getProjectsForUser(
+  userId: string,
+  db: DbHandle = defaultDb,
+): Promise<ProjectRow[]> {
   const userRepos = await listUserRepos(userId);
   if (userRepos.length === 0) return [];
   return db
@@ -18,6 +21,7 @@ export async function getProjectsForUser(userId: string): Promise<ProjectRow[]> 
 export async function getProjectForUser(
   userId: string,
   projectId: string,
+  db: DbHandle = defaultDb,
 ): Promise<ProjectRow | null> {
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
   if (!project) return null;
