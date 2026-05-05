@@ -8,6 +8,7 @@ Bot Hive's git-lock protocol, SSE broadcast, and board merge behaviour have only
 
 ## Tickets
 - HV-038 — Dummy CC2 ticket
+- HV-042 — Dummy 2 CC2 Ticket
 
 ## Status
 In progress
