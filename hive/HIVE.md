@@ -247,6 +247,28 @@ Bots tail `events.log` on session start (`git pull` then read the last ~50 lines
 
 The log is append-only; bots never edit or delete past entries. Audit-grade.
 
+### Per-FS architecture & decisions log
+
+Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture & decisions`** section. Bots and humans append entries as design choices accumulate; future agents working in that FS read the section on session start as institutional memory and avoid re-litigating settled questions.
+
+Entry format (compact ADR-style):
+
+```markdown
+### YYYY-MM-DD — <one-line headline> (<bot-handle>)
+
+**Choice:** <what we picked>
+
+**Rejected:** <what we considered and why we didn't pick it>
+
+**Why:** <substrate-portable rationale>
+
+**Implications:** <what now changes in the code or convention>
+
+**Reference:** <HV-XXX / PR #N>
+```
+
+Append an entry on any non-trivial design choice — anything a senior reviewer would debate. Read the section on session start *after* `focus.md` and `events.log`. **Append-only** by convention: never edit or delete past entries.
+
 ### `hive/questions-for-human.md` — async escalation
 
 When a bot needs a human decision (ambiguity, scope question, conflict it can't resolve), it appends to this file rather than blocking on chat. Human reads on their cadence, answers in chat or by editing the file.

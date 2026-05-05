@@ -125,6 +125,32 @@ Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <handle>`. The 
 
 Every commit an agent makes against an in-progress ticket also updates the ticket's `**Last touched:**` field with the current ISO timestamp. If an agent looks at an in-progress ticket and `Last touched:` is older than **2 hours**, the ticket is stale — that agent may reclaim it (move back to `backlog/` with a `Reclaim reason:`) or take it over (update `Assigned to:`, refresh `Last touched:`). Append the reclaim to `events.log`.
 
+### Per-FS architecture & decisions log
+
+Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture & decisions`** section that bots and humans append to as design choices accumulate. It's the swarm's institutional memory for that feature set — captures the *why*, not just the *what*. Future agents working in that FS read it on session start and don't re-litigate settled questions.
+
+**Entry format** (compact ADR-style; ~10 lines per decision):
+
+```markdown
+### YYYY-MM-DD — <one-line headline> (<bot-handle>)
+
+**Choice:** <what we picked>
+
+**Rejected:** <what we considered and why we didn't pick it>
+
+**Why:** <substrate-portable rationale>
+
+**Implications:** <what now changes in the code or convention>
+
+**Reference:** <HV-XXX / PR #N>
+```
+
+**Append** an entry whenever you make a non-trivial design choice in an FS. "Non-trivial" = anything you'd debate in a senior code review; pure mechanical edits don't qualify.
+
+**Read** the relevant FS's section on session start, **after** `focus.md` and `events.log`. If `focus.md` names an FS, that FS's decisions are mandatory pre-reading.
+
+**Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
+
 ### When you need to ask the human
 
 Append to `hive/questions-for-human.md` rather than blocking on chat. Format: dated heading + question. The human reads on their cadence.

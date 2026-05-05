@@ -24,3 +24,83 @@ The conventions are **substrate-portable**: today they live on git, tomorrow if 
 
 ## Status
 Open
+
+## Architecture & decisions
+
+Append-only ADR log for this feature set. Entries are added when non-trivial design choices are made; entries are never edited or deleted. New agents working in FS-007 read this section first to avoid re-litigating settled questions.
+
+### 2026-05-05 — Per-test transactional isolation, not `Date.now()` patches (nectar)
+
+**Choice:** Wrap every DB-backed test in a Drizzle transaction; force rollback at end. Tests pass `tx` to production functions via an optional `db: DbHandle` parameter.
+
+**Rejected:** Replacing `Date.now()` with a deterministic counter. Papers over the symptom; doesn't address state leaks between tests, parallelism collisions, or the underlying "test data depends on non-deterministic sources" antipattern.
+
+**Why:** Substrate-portable across Postgres/MySQL/SQLite. Scales identically from 20 to 20,000 tests with no code changes. Industry-standard pattern (Drizzle, Prisma, Sequelize all support this). Eliminates an entire class of "rare flake under high concurrency" issues structurally.
+
+**Implications:** Production functions touching the DB now accept `db: DbHandle = defaultDb`. New `src/lib/test-db.ts` fixture. CLAUDE.md / AGENTS.md add a "Testing rules" section. CI can crank parallelism without inheriting flakiness.
+
+**Reference:** HV-037 / PR #3.
+
+### 2026-05-05 — Canonical protocol in AGENTS.md, not CLAUDE.md (nectar)
+
+**Choice:** Move all swarm coordination rules from `CLAUDE.md` to a new `AGENTS.md`. `CLAUDE.md` becomes a thin pointer that says "see AGENTS.md."
+
+**Rejected:** Keeping the canonical content in `CLAUDE.md`. Two failure modes: (a) `CLAUDE.md` is a Claude Code-specific filename — other Claude Code users have their own `CLAUDE.md` and would have it overwritten on pull; (b) other agents (Codex, Cursor, Aider, Gemini) don't read `CLAUDE.md` at all and would miss the protocol entirely.
+
+**Why:** The conventions are agent-neutral; the file they live in must be too. AGENTS.md is an emerging convention some tools auto-load. Future agent shim files (`.cursor/rules`, `.aider.conf.yml`) follow the same pattern: thin pointer at AGENTS.md.
+
+**Implications:** Multi-agent friendly. README.md "Working with bots" leads with AGENTS.md. HIVE.md references updated. Future agent additions = one shim file each.
+
+**Reference:** HV-031 round 2 / PR #10.
+
+### 2026-05-05 — Per-session unique handles, not per-machine (nectar)
+
+**Choice:** Bot handles are picked fresh on each session start (random from a curated list, with collision detection against recent commits + in-progress tickets). Held in memory only — no `git config` persistence. `BOT_HIVE_HANDLE` env var overrides for explicit naming.
+
+**Rejected:** `git config bot-hive.handle <name>` per machine (the original HV-036 design). Two sessions on one laptop would read the same value and end up with identical handles — indistinguishable in audit. Defeats the whole purpose.
+
+**Why:** Per-session identity matches how Claude Code (and similar agents) actually run — each session is a new instance with a new context. The right primitive is "session," not "machine." Same machine running two sessions produces two distinct identities, which is the use case humans actually have.
+
+**Implications:** Auto-pick logic with collision check on session start. `git config bot-hive.handle` values are deprecated but harmless (bots ignore them). Audit trail attribution works at the session level.
+
+**Reference:** HV-041 / PR (HV-041 in-review batch).
+
+### 2026-05-05 — All commits via PR + auto-merge (nectar)
+
+**Choice:** Every commit — source code, hive/ ticket moves, doc edits, anything — flows through a PR gated by the `ci` status check. `gh pr merge --auto --squash --delete-branch` queues auto-merge.
+
+**Rejected:** "hive/ direct to main, source via PR" (the original HV-031 framing). GitHub branch protection is all-or-nothing on a branch — there's no native way to allow `hive/` direct pushes while blocking source pushes. Either everything goes through PRs or nothing does. The "everything" option is the one that gives us safety guarantees.
+
+**Why:** Uniform enforcement. No source change can ever bypass CI. The cost is ~2 min of CI per hive-only PR (waste, but bounded). Trade-off accepted in exchange for "bots literally cannot ship broken code."
+
+**Implications:** Mental "two-lane" split between coordination metadata and source code stays as a *kind* distinction (CI runs trivially for hive-only PRs), but both ride the same merge mechanism. If CI minutes become a real concern, `paths-ignore` filtering is a follow-up optimization.
+
+**Reference:** HV-033 / PR #11 (FS-007 batch accept).
+
+### 2026-05-05 — Public repo + proprietary LICENSE for branch protection on free tier (nectar)
+
+**Choice:** Make the repo public; add an explicit "all rights reserved, no use without consent" LICENSE file. Branch protection is now available on the free GitHub tier.
+
+**Rejected:** GitHub Pro ($4/mo per user) on a private repo. Explicit cost without operational benefit at this stage; the proprietary license achieves the same legal protection.
+
+**Why:** The repo's source is public-visible, but the code is legally protected (LICENSE explicitly forbids any use, copy, modify, or distribute). For a pre-launch product without external collaborators, public-source-with-license is operationally equivalent to private-source. Saves the Pro subscription until there's a real reason for it.
+
+**Implications:** Anyone can read the source on github.com but cannot legally use it. License recognized by GitHub as "Other" (NOASSERTION). README.md license section updated.
+
+**Reference:** HV-033 / commit `4fabdda`.
+
+### 2026-05-05 — Skip Render preview deploys (nectar)
+
+**Choice:** Permanent staging environment (HV-035, future) rather than per-PR Render preview deploys.
+
+**Rejected:** Render's per-PR Service Previews. Each preview gets a new `*.onrender.com` URL; OAuth Apps allow exactly one callback URL (lesson L4); so OAuth would be broken on every preview unless we provision per-preview apps. High setup complexity for marginal benefit.
+
+**Why:** Permanent staging (one URL, one OAuth App pair, one DB) is simpler and matches the pattern that works in prod. Free or near-free on Render's Pro plan. PR review gates merge to main; testing happens on staging after merge to a `staging` branch (not yet implemented — HV-035 future).
+
+**Implications:** Until HV-035 lands, prod is the only deploy target. Acceptable pre-launch (zero users); revisit before any real launch.
+
+**Reference:** HV-035 (filed; pending Render free-tier verification).
+
+## Implementation note
+
+This Architecture & decisions section was added retroactively as a worked example for the convention installed in HV-044. From HV-044 onward, decision entries are appended in real time as choices are made. The retroactive entries above are concise summaries — full context lives in their referenced tickets/PRs.
