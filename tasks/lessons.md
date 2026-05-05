@@ -57,3 +57,17 @@ When the user is following a multi-credential / multi-platform setup, dripping o
 Pattern: lead with a single comprehensive **map** (table or list of "every credential, every source, every destination"). Then walk through it step by step, one at a time, marking off each. The map is the safety net they refer back to when they get lost.
 
 Used this in HV-024 *only after* the user explicitly asked for it. Should be the default for any deploy / setup / multi-step credential walkthrough.
+
+## L8 — Don't split a ticket's lifecycle moves across multiple PRs
+
+Caught during the first parallel-bot dogfood (CC2 working HV-039, 2026-05-05). CC2 made two PRs:
+- PR #19: source-code work for the modal feature (branch based on stale main; HV-039 file in `in-progress/` per CC2's branch)
+- PR #20: ticket move from in-progress to in-review (premature — opened while #19 was still in CI)
+
+When PR #20 merged first and PR #19 merged second (auto-rebased), the squash-merged diff added the *new* `in-review` copy of the file without deleting the *old* `in-progress` copy. Result: HV-039 ended up in **both folders** on main, with no merge conflict surfaced. The board would render it twice.
+
+**Rule:** a single ticket's lifecycle should live in one PR. The PR that ships the work also performs the ticket move (e.g., `in-progress` → `in-review`). Don't split "do the work" and "move the ticket" into separate PRs that race each other.
+
+If the work spans multiple PRs (rare; mostly for very large features with intermediate milestones), keep the ticket file motionless until the final PR — don't move it back-and-forth from PR to PR.
+
+Recovery (this case): one extra small PR to delete the duplicate file, append the lesson here, file HV-046 to capture the rejection-flow gap that surfaced from the same review cycle.
