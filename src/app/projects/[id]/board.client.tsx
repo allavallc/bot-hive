@@ -340,10 +340,14 @@ function BugIcon() {
   );
 }
 
+const MODEL_ID_PREFIX_RE = /^(claude|gpt|gemini|llama|mistral|qwen|grok)\b/i;
+
 function extractHandle(assignedTo?: string): string | undefined {
   if (!assignedTo) return undefined;
   const trimmed = assignedTo.split(/\s*\(/)[0].trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  if (trimmed.length === 0) return undefined;
+  if (MODEL_ID_PREFIX_RE.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 function WalkingRobot({ name }: { name?: string }) {
