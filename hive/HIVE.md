@@ -218,6 +218,12 @@ This rule is deterministic enough that two bots running it simultaneously usuall
 
 If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
 
+### Pre-action pull — never operate on stale state
+
+Every meaningful action (claim a ticket, push a branch, open a PR, edit canonical docs) is preceded by `git pull --rebase` against `origin/main`. The cheapest correct version is a **pre-commit pull**: before any commit that's about to be pushed, run `git pull --rebase`; if the rebase is clean, continue. If it conflicts, fall back to the conflict-response policy — never guess merges.
+
+This is the swarm-aligned default — cheap, no daemon, no new files, same primitive (`git pull`) that already does the subscribe step on session start. Heartbeat files, webhook bus, polled-fetch daemons were considered and rejected: extra infrastructure with no current win.
+
 ### `**Last touched:**` ticket field — stigmergic timestamp
 
 Every commit a bot makes against an in-progress ticket also updates the ticket file's `**Last touched:**` field with an ISO timestamp. Healthy bots refresh this on every commit; dead bots don't.

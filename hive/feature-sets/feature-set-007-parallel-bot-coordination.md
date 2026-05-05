@@ -89,6 +89,18 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-033 / commit `4fabdda`.
 
+### 2026-05-05 — Pre-commit pull as the freshness signal (nectar)
+
+**Choice:** Bots run `git pull --rebase` immediately before every commit that's about to be pushed. If the rebase is clean, continue and push. If it conflicts, fall back to the conflict-response policy.
+
+**Rejected:** (1) Heartbeat file — adds a file, signals only on commits, no advantage. (2) Webhook → real-time bot bus — requires real-time infrastructure the swarm protocol explicitly rejects. (3) Polled `git fetch` daemon — drifts from "files-and-git only," adds a timer.
+
+**Why:** Same primitive (`git pull`) that already does the subscribe step on session start. One extra round-trip to origin per commit — negligible at our scale. No new files, no daemon, no broker. Substrate-portable: the rule survives any storage migration because git is just the current substrate.
+
+**Implications:** Documented in AGENTS.md and HIVE.md as a "Pre-action pull" rule. Bot session loop changes from "pull once on start" to "pull before every action that touches main or opens a PR."
+
+**Reference:** HV-043 / PR (this PR).
+
 ### 2026-05-05 — Skip Render preview deploys (nectar)
 
 **Choice:** Permanent staging environment (HV-035, future) rather than per-PR Render preview deploys.
