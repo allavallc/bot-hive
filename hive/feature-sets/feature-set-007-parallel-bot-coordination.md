@@ -19,7 +19,7 @@ The conventions are **substrate-portable**: today they live on git, tomorrow if 
 - HV-031 — Swarm coordination protocol: rules, conventions, conflict policy, doc updates
 - HV-032 — GitHub Actions CI on PRs (typecheck + lint + tests + build, with Postgres service)
 - HV-033 — Branch protection on `main` + bot self-merge config (doc + checklist for human to apply)
-- HV-034 — Permanent staging environment (separate ticket — pending Render Pro free-tier check)
+- HV-035 — Permanent staging environment (separate ticket — pending Render Pro free-tier check; HV-034 was claimed by CC2 for the multi-agent testing harness in feature-set-008)
 
 ## Status
 Open
