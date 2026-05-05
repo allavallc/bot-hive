@@ -150,15 +150,7 @@ There is no separate lock registry. The git push *is* the lock: the agent that s
 
 ## Bot identity
 
-Each bot session declares a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model.
-
-**Setting your handle (per machine, once):**
-
-```
-git config bot-hive.handle CC1
-```
-
-Handles are short, ASCII, no spaces, max ~20 chars. Examples: `CC1`, `CC2`, `scout`, `forager-3`, `tony-laptop`. Pick something memorable; case-sensitive but normalized on display.
+Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model.
 
 **Reading your handle on session start:**
 
@@ -166,7 +158,31 @@ Handles are short, ASCII, no spaces, max ~20 chars. Examples: `CC1`, `CC2`, `sco
 git config --get bot-hive.handle
 ```
 
-If unset, the bot stops and asks the user to set it before claiming any ticket. A bot without a handle is anonymous; anonymous bots aren't allowed in the swarm because audit attribution breaks.
+**If unset, auto-pick one from the curated list and save it:**
+
+```
+buzz, scout, forager, drone, comb, pollen, nectar, waggle,
+sparrow, finch, robin, wren, fox, otter, badger, mole,
+squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
+falcon, tern, jay
+```
+
+Bot logic: `git config --get bot-hive.handle` → if empty, pick a random word from the list above, run `git config bot-hive.handle <name>`, then announce "I'm <name>" to the user. The handle persists across sessions on this machine.
+
+**The user can override anytime:**
+
+```
+git config bot-hive.handle billy
+```
+
+Anything goes — the curated list is just for auto-naming; explicit choices win.
+
+**Rules:**
+
+- Short, ASCII, no spaces, max ~20 chars.
+- Case-sensitive in storage; lowercase on display in the badge UI.
+- Handles are per-machine, not per-repo (one bot, many repos).
+- A bot that fails to set/read its handle stops and asks the user — no anonymous commits.
 
 **Where the handle appears:**
 

@@ -6,24 +6,31 @@ This file is read by every Claude session that opens the bot-hive repo. It encod
 
 ## Identity (read first)
 
-Every bot session in this repo must declare a unique handle.
+Every bot session in this repo has a unique handle.
 
-```
-git config bot-hive.handle CC1
-```
-
-Pick a short, memorable handle (`CC1`, `CC2`, `scout`, `forager-3`). Read it on session start:
+**On session start:**
 
 ```
 git config --get bot-hive.handle
 ```
 
-If unset, **stop and ask the user to set it before claiming any ticket**. Anonymous bots aren't allowed in the swarm — every commit and ticket move needs to be attributable.
+**If empty, auto-pick from this list and save it:**
 
-The handle goes in:
+```
+buzz, scout, forager, drone, comb, pollen, nectar, waggle,
+sparrow, finch, robin, wren, fox, otter, badger, mole,
+squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
+falcon, tern, jay
+```
+
+Pick randomly, then `git config bot-hive.handle <name>`, then announce "I'm <name>" to the user. The handle persists across sessions on this machine.
+
+The user can override anytime: `git config bot-hive.handle billy` — explicit choices win.
+
+The handle appears in:
 - `Assigned to:` ticket field
 - `Bot:` commit trailer (alongside `Model:` and `Trigger:`)
-- The live board UI
+- The live board UI as a colored badge on each ticket card
 
 Full convention: see `hive/HIVE.md` "Bot identity" section.
 
