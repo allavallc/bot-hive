@@ -181,6 +181,12 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
 
+### Reporting status — don't recite the done list
+
+Status updates focus on **open**, **in-progress**, or **in-flight** work — that's what the user can act on. Once a ticket is accepted/done, mention it once at acceptance and then stop re-listing it. The done list grows long; recasting it every status update is noise, not signal.
+
+If the user asks "what did we ship?" or "show me the done list," then surface it. Otherwise, status reports look forward.
+
 ### When you need to ask the human
 
 Append to `hive/questions-for-human.md` rather than blocking on chat. Format: dated heading + question. The human reads on their cadence.

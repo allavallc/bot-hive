@@ -275,6 +275,10 @@ Entry format (compact ADR-style):
 
 Append an entry on any non-trivial design choice — anything a senior reviewer would debate. Read the section on session start *after* `focus.md` and `events.log`. **Append-only** by convention: never edit or delete past entries.
 
+### Reporting status
+
+Status updates focus on **open**, **in-progress**, or **in-flight** work. Once a ticket is accepted, mention it once at acceptance and stop re-listing it in future updates. Done is recall-on-demand: surface it only when the human asks "what did we ship?"
+
 ### `hive/questions-for-human.md` — async escalation
 
 When a bot needs a human decision (ambiguity, scope question, conflict it can't resolve), it appends to this file rather than blocking on chat. Human reads on their cadence, answers in chat or by editing the file.
