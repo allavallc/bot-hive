@@ -111,6 +111,18 @@ DAG-walk with cohesion preference:
 
 This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
 
+### One PR per ticket lifecycle transition
+
+The PR that ships the work also performs the ticket-folder move (e.g., `in-progress` → `in-review`). **Don't split "do the work" and "move the ticket" into two separate PRs** — they can race each other, both merge, and end up with the ticket file duplicated across two folders (no merge conflict surfaces because the diffs don't overlap line-wise). The board then renders the same ticket twice, in two different states.
+
+Concretely:
+
+- The PR that lands `src/` changes also moves the ticket from `in-progress/` to `in-review/` in the same commit.
+- The PR that ships a doc-only ticket also moves that ticket file in the same commit.
+- The optional **claim-PR** (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it lands first, is small, and is closed cleanly before the work-PR opens. The work-PR is then based on a main where the ticket is already in `in-progress/`.
+
+If you find yourself writing two PRs whose net effect could equally be one PR — collapse them. Race conditions are the failure mode.
+
 ### Pre-action pull — never operate on stale state
 
 A session that started an hour ago has a clone that's an hour out of date. Other agents (and humans) may have pushed conventions, claimed tickets, merged PRs in the meantime. Acting on stale state causes ID collisions, missed convention updates, and edits to files that have moved.
