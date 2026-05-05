@@ -1,55 +1,52 @@
-# bot-hive — Claude Code context
+# Bot Hive — project rules for Claude sessions
 
-## Project
-A live kanban board over GitHub-hosted ticket files. Next.js 15 · React 19 · TypeScript · Drizzle ORM + Postgres · Better Auth · GitHub Apps.
+This file is read by every Claude session that opens the bot-hive repo. It encodes the rules specific to *this* project — how we develop bot-hive, not how users use bot-hive in their own repos. Format-neutral guidance for the hive workflow itself lives in `hive/HIVE.md`.
 
-## Where we left off (2026-05-05)
+Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-state.md` — never in this file.
 
-Local dev environment is partially set up. Here's what's done and what still needs doing:
+---
 
-### Done
-- Git, Node.js v24, GitHub CLI installed and up to date
-- Repo cloned to `C:\Users\anthony\projects\bot-hive`
-- PostgreSQL 17 installed and running (service: `postgresql-x64-17`, password: `postgres`)
-- Database `bot_hive` created
-- `.env` file created — DATABASE_URL and BETTER_AUTH_SECRET are filled in
+## Identity (read first)
 
-### Still needed (start here)
-1. **npm install** — run `npm install --legacy-peer-deps` (there's a drizzle-kit/better-auth peer dep conflict that requires the flag)
-2. **Register a GitHub OAuth App** (for sign-in) and fill in `.env`:
-   - `GITHUB_CLIENT_ID`
-   - `GITHUB_CLIENT_SECRET`
-   - Callback URL: `http://localhost:3000/api/auth/callback/github`
-3. **Register a GitHub App** (for repo access + webhooks) and fill in `.env`:
-   - `GITHUB_APP_ID`
-   - `GITHUB_APP_PRIVATE_KEY_PATH` (or `GITHUB_APP_PRIVATE_KEY`)
-   - `GITHUB_APP_WEBHOOK_SECRET`
-4. **Run DB migration**: `npm run db:migrate`
-5. **Start dev server**: `npm run dev` → http://localhost:3000
+Every bot session has a unique handle. **Two sessions on the same machine get different handles** — identity is per-session, not per-machine.
 
-```
-git config --get bot-hive.handle
-```
+### On session start
 
-**If empty, auto-pick from this list and save it:**
+1. **Auto-pick a handle from the curated list** (random selection):
 
-```
-buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-sparrow, finch, robin, wren, fox, otter, badger, mole,
-squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-falcon, tern, jay
-```
+   ```
+   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
+   sparrow, finch, robin, wren, fox, otter, badger, mole,
+   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
+   falcon, tern, jay
+   ```
 
-Pick randomly, then `git config bot-hive.handle <name>`, then announce "I'm <name>" to the user. The handle persists across sessions on this machine.
+2. **Check for collisions** with handles already in active use:
+   - Scan recent commit trailers: `git log --grep "Bot: " -n 50` — extract the `Bot: <handle>` values
+   - Scan in-progress tickets: read every `hive/in-progress/*.md` and extract the `Assigned to:` field's handle
+   - If your random pick appears in either set, **re-pick**. Repeat up to 10 times.
+   - If 10 rolls all collide (extremely unlikely), append a numeric suffix: `scout-2`.
 
-The user can override anytime: `git config bot-hive.handle billy` — explicit choices win.
+3. **Hold the handle in memory** for the session. **Do not** persist it to `git config` or any file. Each session is a fresh roll.
 
-The handle appears in:
-- `Assigned to:` ticket field
+4. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
+
+### Override
+
+If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`), use that value verbatim — skip the random pick and the collision check. Lets the human lock a session to a specific name.
+
+### Where the handle appears
+
+- `Assigned to:` ticket field (e.g., `Assigned to: nectar (claude-opus-4-7)`)
 - `Bot:` commit trailer (alongside `Model:` and `Trigger:`)
-- The live board UI as a colored badge on each ticket card
+- `hive/events.log` entries
+- Live board UI as a colored badge on each ticket card (color is deterministic via `robotColor(handle)`)
 
-Full convention: see `hive/HIVE.md` "Bot identity" section.
+### Existing `git config bot-hive.handle` values
+
+Handles set under the prior convention (`git config bot-hive.handle <name>`) are **deprecated but harmless**. Bots should ignore them. The user can run `git config --unset bot-hive.handle` to clean up if desired — not required.
+
+Full convention discussion: see `hive/HIVE.md` "Bot identity" section.
 
 ---
 
@@ -70,14 +67,14 @@ When branch protection lands (HV-033), this split is enforced by GitHub. Until t
 
 ## Working in parallel — the swarm protocol
 
-Multiple bots (CC1, CC2, future CC3) and humans work this repo at once. Coordination is **not** centralized — there's no coordinator service. Each agent reads the shared environment (the git tree) and follows local rules. Coordination emerges.
+Multiple bots (and humans) work this repo at once. Coordination is **not** centralized — there's no coordinator service. Each agent reads the shared environment (the git tree) and follows local rules. Coordination emerges.
 
 ### On every session start
 
 1. `git pull` (subscribe).
 2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
 3. Tail the last ~50 lines of `hive/events.log` to see what other bots have done recently.
-4. If `git config --get bot-hive.handle` is empty, auto-pick one (per the Identity section) and announce it.
+4. Auto-pick a handle (per the Identity section above). Announce it.
 
 ### When the human says "do FS-X" or "work on HV-X"
 
@@ -103,7 +100,7 @@ After every meaningful state transition (claim, in-review, accepted, rejected, b
 2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
 ```
 
-Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <bot-handle>`. The unblocked-list is comma-separated ticket IDs that just became available (Blocked-by completed). Other bots tail this on session start to catch handoffs without re-walking the DAG.
+Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <bot-handle>`. The unblocked-list is comma-separated ticket IDs that just became available. Other bots tail this on session start to catch handoffs without re-walking the DAG.
 
 ### Stale claims
 
@@ -113,56 +110,34 @@ Every commit a bot makes against an in-progress ticket also updates the ticket's
 
 Append to `hive/questions-for-human.md` rather than blocking on chat. Format: dated heading + question. The human reads on their cadence.
 
-```markdown
-## 2026-05-05T15:30 (nectar) — HV-031
-
-Should the events.log live at hive/events.log or hive/feature-sets/events.log?
-```
-
 ### Conflict response
 
 | Failure | Action |
 |---|---|
-| Push to main rejected | `git pull --rebase`, retry. |
-| `git rebase main` clean | `git push --force-with-lease`, let CI re-run. |
-| `git rebase main` real conflict markers | **Stop. Don't guess.** Move ticket to `blocked/`, `Failure mode: merge-conflict`, comment PR, append to `events.log`, surface to human. |
-| CI fails on PR | Fix and push. **Two attempts max.** Then `blocked/` with `Failure mode: failed-tests`. |
+| Push to main rejected (non-fast-forward) | `git pull --rebase`, retry. |
+| Branch rebase against main produces no conflict markers | `git push --force-with-lease`, let CI re-run. |
+| Branch rebase produces real conflict markers | **Stop. Don't guess.** Move ticket to `blocked/`, `Failure mode: merge-conflict`, comment PR, append to `events.log`, surface to human. |
+| CI fails on PR | Read CI output, attempt fix, push fix, wait. **Two attempts max.** Then `blocked/` with `Failure mode: failed-tests`. |
 | Stale claim (`Last touched:` > 2h) | Reclaim per the rule above. |
 | ID collision (two bots picked same `HV-N`) | Loser-by-push-time renumbers. The one whose work is shipped or further-along keeps the ID. |
+| **Doc collision** (two bots edited same coordination doc) | Reconcile by structural correctness — keep the file's documented heading hierarchy and conventions; merge useful content from the conflicting edit into the appropriate place. Never silently lose work. |
 
 The hard rule across all failures: **bots auto-resolve trivial git mechanics, but escalate substantive conflicts to humans.** Bots NEVER attempt to merge or guess code resolution.
 
----
-
-## Always pull before claiming or committing to main
+### Always pull before claiming or committing to main
 
 Stale local main = guaranteed push conflict + collision risk. The `git pull` is the subscribe step in our pub/sub model — it's how you find out what other bots have done.
-
-If a push is rejected non-fast-forward, do NOT show raw git output. `git pull --rebase`, retry once. If it conflicts on rebase, see the conflict-response policy in `hive/HIVE.md`.
-
----
-
-## Conflict response
-
-| Failure | Action |
-|---|---|
-| Push to main rejected (non-fast-forward) | `git pull --rebase` and retry. |
-| Branch rebase against main produces no conflict markers | `git push --force-with-lease`, let CI re-run. |
-| Branch rebase produces real conflict markers | **Stop. Never guess code merges.** Move ticket to `hive/blocked/`, set `Failure mode: merge-conflict`, comment the PR, surface to the user. |
-| CI fails on PR | Read CI output, attempt fix, push fix, wait. Two attempts max — then `Failure mode: failed-tests`. |
-| In-progress ticket with `Last touched:` older than 2 hours (when convention lands) | May reclaim — move back to backlog with `**Reclaim reason:**`. |
-
-The hard rule: **bots auto-resolve trivial git mechanics, but escalate substantive conflicts to humans.**
 
 ---
 
 ## Local dev
 
-- Postgres 16 native on port 5432 (no Docker — see global rules).
+- Postgres 16+ native on port 5432 (no Docker — see global rules).
 - `npm run dev` starts the Next.js dev server.
 - `npm run typecheck && npm run lint && npm run test` before any PR.
 - Migrations: `npm run db:migrate` against local DB.
 - See `README.md` for full setup.
+- Per-machine in-progress setup state lives in `tasks/local-dev-state.md`.
 
 ---
 
@@ -187,6 +162,10 @@ The hard rule: **bots auto-resolve trivial git mechanics, but escalate substanti
 ## Pointers
 
 - `hive/HIVE.md` — the format spec. Read this if you're touching the hive workflow itself.
+- `hive/focus.md` — current standing order from the human (one line).
+- `hive/events.log` — append-only event log. Tail on session start.
+- `hive/questions-for-human.md` — async escalation channel for blocking questions.
 - `hive/feature-sets/` — current feature sets and their goals.
 - `tasks/lessons.md` — self-correction log. Read at session start; append after corrections.
+- `tasks/local-dev-state.md` — per-machine setup snapshots.
 - `README.md` — project overview, quickstart for humans.

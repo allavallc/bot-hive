@@ -269,39 +269,54 @@ The **substrate** (git as the broker, file system as topics, pull-based polling)
 
 ## Bot identity
 
-Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model.
+Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model **on the same machine**.
 
-**Reading your handle on session start:**
+**Identity is per-session, not per-machine.** Two Claude Code sessions on the same laptop get different handles. Each session is a fresh roll on start.
 
-```
-git config --get bot-hive.handle
-```
+### On session start
 
-**If unset, auto-pick one from the curated list and save it:**
+1. **Auto-pick** a random handle from the curated list:
 
-```
-buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-sparrow, finch, robin, wren, fox, otter, badger, mole,
-squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-falcon, tern, jay
-```
+   ```
+   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
+   sparrow, finch, robin, wren, fox, otter, badger, mole,
+   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
+   falcon, tern, jay
+   ```
 
-Bot logic: `git config --get bot-hive.handle` → if empty, pick a random word from the list above, run `git config bot-hive.handle <name>`, then announce "I'm <name>" to the user. The handle persists across sessions on this machine.
+2. **Check the environment for collisions:**
+   - Recent commit trailers: `git log --grep "Bot: " -n 50` — extract `Bot: <handle>` values.
+   - In-progress tickets: read each `hive/in-progress/*.md` file's `Assigned to:` field.
+   - If your roll matches any handle in either set, **re-pick**. Repeat up to 10 times.
+   - If 10 rolls all collide, append a numeric suffix: `scout-2`.
 
-**The user can override anytime:**
+3. **Hold the handle in memory** for this session only. **Do not** persist to `git config` or any file. Each session re-rolls.
 
-```
-git config bot-hive.handle billy
-```
+4. **Announce** "I'm `<handle>`" to the user.
 
-Anything goes — the curated list is just for auto-naming; explicit choices win.
+### Override
 
-**Rules:**
+`BOT_HIVE_HANDLE=billy` in the environment overrides the auto-pick. Use when you want a session to have a specific name (demos, tests, named bots).
+
+### Where the handle appears
+
+- `Assigned to:` ticket field — `Assigned to: nectar (claude-opus-4-7)`
+- `Bot:` commit trailer — alongside `Model:` and `Trigger:`
+- `hive/events.log` entries — every event line ends with the originating handle
+- The live board UI — colored badge on each ticket card (color via `robotColor(handle)`)
+
+### Why per-session, not per-machine
+
+The earlier convention (`git config bot-hive.handle <name>` once per machine) failed the "two sessions on one laptop" case — both sessions read the same git config and ended up with identical handles, indistinguishable in audit. Per-session identity solves that case structurally: each Claude session is a fresh entity in the swarm.
+
+**Existing `git config bot-hive.handle` values are deprecated but harmless** — bots ignore them. The user can `git config --unset bot-hive.handle` to clean up; not required.
+
+### Rules
 
 - Short, ASCII, no spaces, max ~20 chars.
 - Case-sensitive in storage; lowercase on display in the badge UI.
-- Handles are per-machine, not per-repo (one bot, many repos).
-- A bot that fails to set/read its handle stops and asks the user — no anonymous commits.
+- A bot that fails to pick a handle (e.g., curated list missing) stops and asks the user — no anonymous commits.
+- Existing handles in the audit trail (`git log`, old tickets) stay as they are — audit honesty.
 
 **Where the handle appears:**
 
