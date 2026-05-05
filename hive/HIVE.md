@@ -148,6 +148,125 @@ There is no separate lock registry. The git push *is* the lock: the agent that s
 
 ---
 
+## Working in parallel
+
+Bot Hive is built for swarms, not solo developers. The whole point is that multiple bots (and humans) work on the same repo at once without stepping on each other. The conventions below are the protocol that makes that work — local rules each agent follows, with the git tree as the shared environment everyone reads and writes.
+
+The mental model: **git is a pub/sub system.** Pushing is publishing, pulling is subscribing, the directory tree is the topic structure. No central coordinator, no broker daemon, no point-to-point messaging between bots. Each agent is autonomous; coordination emerges from a few simple rules and the shared environment.
+
+### The two-lane commit model
+
+| Lane | What | Where it lands |
+|---|---|---|
+| **Coordination metadata** | `hive/` ticket files, `hive/HIVE.md`, `hive/focus.md`, `hive/events.log`, feature-set docs, project-root `CLAUDE.md`, `README.md` | Direct to `main`. Tiny atomic commits, ordered by the git push lock. |
+| **Source code** | Anything in `src/`, `tests/`, `migrations/`, configs, `package.json`, `.github/` | Feature branch named `hv-XXX-<slug>`, opened as a PR, merged after CI passes. |
+
+Source code goes through PR + CI because parallel bots will collide on the same source files; CI is the safety net. Coordination metadata stays main-direct because tickets are small atomic moves and the push lock orders them naturally.
+
+### `hive/focus.md` — alignment signal
+
+A one-line file the human edits to tell the swarm what to work on. Both bots read it on every session start and treat it as their working scope.
+
+```
+current = feature-set-007
+```
+
+Or:
+
+```
+current = HV-031
+```
+
+Or:
+
+```
+current = backlog
+```
+
+(Empty string or missing file = "anything in backlog is fair game.")
+
+When the human says "do FS-007" in chat, the bot they're chatting with **also updates `focus.md`** so the other bot picks up the same intent on its next session start. The chat message is a hint; the file is the source of truth.
+
+### DAG-walk with cohesion preference — work selection
+
+Every bot, on session start, after `git pull`:
+
+1. Read `hive/focus.md`.
+2. Collect every ticket in scope (the named FS, or named ticket, or all of `backlog/` if focus is empty).
+3. Filter out: tickets in `in-progress/`, tickets in `blocked/`, tickets with any unfinished `Blocked by:` (i.e., a blocker that isn't in `done/`).
+4. From the remaining "available leaves," pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
+5. Claim it via the standard "Checking out a ticket" flow.
+
+This rule is deterministic enough that two bots running it simultaneously usually pick different leaves (because two different tickets unblock different downstream sets). If they pick the same, the git push lock breaks the tie and the loser re-runs.
+
+If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
+
+### `**Last touched:**` ticket field — stigmergic timestamp
+
+Every commit a bot makes against an in-progress ticket also updates the ticket file's `**Last touched:**` field with an ISO timestamp. Healthy bots refresh this on every commit; dead bots don't.
+
+If a bot looks at an in-progress ticket whose `Last touched:` is older than **2 hours**, it may **reclaim** the ticket:
+
+- Move the file back to `backlog/` with a `**Reclaim reason:** stale claim from <handle>; last touched <timestamp>` field set.
+- Append an entry to `events.log` explaining the reclaim.
+
+OR take the ticket over by reassigning `Assigned to:` and refreshing `Last touched:` to now.
+
+This replaces a heartbeat daemon with a passive, environment-readable signal. No process required.
+
+### `hive/events.log` — append-only event topic
+
+Bots publish one-line events on lifecycle transitions. The log is durable history; other bots tail it on session start to catch up on what changed.
+
+Format: one event per line, ISO timestamp, ticket ID, action, optional unblocked-list, originating handle.
+
+```
+2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
+2026-05-05T15:50:12Z HV-034 in-review CC2
+2026-05-05T16:05:33Z HV-031 in-progress nectar
+```
+
+Bots tail `events.log` on session start (`git pull` then read the last ~50 lines). Catches handoffs ("HV-A done — HV-B unblocked, available for pickup") without re-computing the whole DAG.
+
+The log is append-only; bots never edit or delete past entries. Audit-grade.
+
+### `hive/questions-for-human.md` — async escalation
+
+When a bot needs a human decision (ambiguity, scope question, conflict it can't resolve), it appends to this file rather than blocking on chat. Human reads on their cadence, answers in chat or by editing the file.
+
+Format: dated heading + the question.
+
+```markdown
+## 2026-05-05T15:30 (nectar) — HV-031
+
+Should the events.log live at `hive/events.log` or `hive/feature-sets/events.log`?
+The former is simpler; the latter scopes events per FS.
+Leaning toward the former unless there's a reason to scope.
+```
+
+Keeps bot work flowing without spamming the chat channel.
+
+### Conflict-response policy
+
+| Failure case | Bot action |
+|---|---|
+| Push to main rejected (non-fast-forward) | `git pull --rebase`, retry. Standard. |
+| `git rebase main` on PR branch — no conflict markers | `git push --force-with-lease`, let CI re-run. |
+| `git rebase main` produces real conflict markers | **Stop. Never guess code merges.** Move ticket to `hive/blocked/`, set `Failure mode: merge-conflict`, comment the PR explaining what's blocking, append to `events.log`. Human resolves. |
+| CI fails on PR | Read CI output, attempt fix, push fix, wait. **Two attempts max.** Then move to `blocked/` with `Failure mode: failed-tests`. |
+| Stale claim discovered (`Last touched:` > 2h) | Reclaim per the rule above. |
+| ID collision (two bots independently picked same `HV-N`) | Loser-by-push-time renumbers to next free ID. The one whose work is shipped or further-along keeps the ID; the other moves. Document in commit message. |
+
+The hard rule across all cases: **bots auto-resolve trivial git mechanics, but escalate substantive conflicts to humans.** Bots NEVER attempt to merge or guess code resolution.
+
+### Substrate vs. conventions
+
+The **conventions** above (focus signal, DAG walk, stigmergic timestamps, events log, no central authority, failure-tolerance) are the long-term design. They're substrate-portable: the same rules work whether the underlying transport is git (current), Redis pub/sub (later), or a Postgres claim table (much later).
+
+The **substrate** (git as the broker, file system as topics, pull-based polling) is appropriate for current scale (~2-20 agents). At higher scale, the substrate evolves but the conventions stay the same. Future readers should not redesign the conventions when scaling — they should swap the substrate.
+
+---
+
 ## Bot identity
 
 Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model.
@@ -260,14 +379,20 @@ When the user picks a ticket from the backlog:
 
 1. **Check `Blocked by` first.** If the ticket lists any IDs in `**Blocked by**`, verify each is in `hive/done/`. If any blocker is unfinished, do not claim — surface the dependency to the user instead.
 2. Move the file from `hive/backlog/` to `hive/in-progress/` (keep the full filename including timestamp)
-3. Set `**Status**: in-progress`, `**Assigned to**: <agent-id>`, `**Started**: <YYYY-MM-DD>`
+3. Set `**Status**: in-progress`, `**Assigned to**: <bot-handle>`, `**Started**: <YYYY-MM-DD>`. (Use your handle from `git config bot-hive.handle` — see "Bot identity" below.)
 4. Run:
    ```
    git add hive/
    git commit -m "HV-XXX: in progress"
    git push
    ```
-5. If the push fails with a conflict, do not show raw git output. Instead say:
+5. **Append a one-line entry to `hive/events.log`:** `<ISO timestamp> HV-XXX in-progress <your-handle>`. Other bots tail this to see what's claimed.
+6. **If the ticket touches source code** (anything outside `hive/`), create a feature branch immediately for the source-code work:
+   ```
+   git checkout -b hv-XXX-<slug>
+   ```
+   The ticket's lifecycle (claim → in-progress → in-review → done) commits stay on `main`. The actual code changes live on the branch and merge via PR + CI. See "Working in parallel" above.
+7. If the push fails with a conflict, do not show raw git output. Instead say:
 
 ```
 ⚠️  HV-XXX was just picked up by someone else.

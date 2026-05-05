@@ -42,12 +42,78 @@ The repo splits commits into two lanes:
 
 | Kind of work | Where |
 |---|---|
-| Coordination metadata: `hive/` ticket files, `hive/HIVE.md`, this `CLAUDE.md`, the `README.md` | Direct to `main`. Tiny atomic commits, ordered by the git push lock. |
-| Source code: anything in `src/`, `tests/`, `migrations/`, configs, `package.json` | Feature branch named `hv-XXX-<slug>`, opened as a PR, merged after CI passes. |
+| Coordination metadata: `hive/` ticket files, `hive/HIVE.md`, `hive/focus.md`, `hive/events.log`, `hive/questions-for-human.md`, this `CLAUDE.md`, the `README.md` | Direct to `main`. Tiny atomic commits, ordered by the git push lock. |
+| Source code: anything in `src/`, `tests/`, `migrations/`, configs, `package.json`, `.github/` | Feature branch named `hv-XXX-<slug>`, opened as a PR, merged after CI passes. |
 
 The reason for the split: source code can collide between bots (same file, different changes), and CI gates the merge. Coordination metadata is small, atomic, and the push lock handles ordering.
 
 When branch protection lands (HV-033), this split is enforced by GitHub. Until then, follow it by convention.
+
+---
+
+## Working in parallel — the swarm protocol
+
+Multiple bots (CC1, CC2, future CC3) and humans work this repo at once. Coordination is **not** centralized — there's no coordinator service. Each agent reads the shared environment (the git tree) and follows local rules. Coordination emerges.
+
+### On every session start
+
+1. `git pull` (subscribe).
+2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
+3. Tail the last ~50 lines of `hive/events.log` to see what other bots have done recently.
+4. If `git config --get bot-hive.handle` is empty, auto-pick one (per the Identity section) and announce it.
+
+### When the human says "do FS-X" or "work on HV-X"
+
+The bot they're chatting with **also writes that to `hive/focus.md`** so the other bot picks up the same intent on its next session start. The chat message is a hint; `focus.md` is the source of truth across bots.
+
+### Picking what to claim
+
+DAG-walk with cohesion preference:
+
+1. Read `focus.md`.
+2. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
+3. Filter out: in-progress, blocked, anything with unfinished `Blocked by:`.
+4. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
+5. Claim it.
+
+This is deterministic enough that two bots usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
+
+### Publishing events
+
+After every meaningful state transition (claim, in-review, accepted, rejected, blocked, reclaim), append a one-line entry to `hive/events.log`:
+
+```
+2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
+```
+
+Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <bot-handle>`. The unblocked-list is comma-separated ticket IDs that just became available (Blocked-by completed). Other bots tail this on session start to catch handoffs without re-walking the DAG.
+
+### Stale claims
+
+Every commit a bot makes against an in-progress ticket also updates the ticket's `**Last touched:**` field with the current ISO timestamp. If a bot looks at an in-progress ticket and `Last touched:` is older than **2 hours**, the ticket is stale — that bot may reclaim it (move back to `backlog/` with a `Reclaim reason:`) or take it over (update `Assigned to:`, refresh `Last touched:`). Append the reclaim to `events.log`.
+
+### When you need to ask the human
+
+Append to `hive/questions-for-human.md` rather than blocking on chat. Format: dated heading + question. The human reads on their cadence.
+
+```markdown
+## 2026-05-05T15:30 (nectar) — HV-031
+
+Should the events.log live at hive/events.log or hive/feature-sets/events.log?
+```
+
+### Conflict response
+
+| Failure | Action |
+|---|---|
+| Push to main rejected | `git pull --rebase`, retry. |
+| `git rebase main` clean | `git push --force-with-lease`, let CI re-run. |
+| `git rebase main` real conflict markers | **Stop. Don't guess.** Move ticket to `blocked/`, `Failure mode: merge-conflict`, comment PR, append to `events.log`, surface to human. |
+| CI fails on PR | Fix and push. **Two attempts max.** Then `blocked/` with `Failure mode: failed-tests`. |
+| Stale claim (`Last touched:` > 2h) | Reclaim per the rule above. |
+| ID collision (two bots picked same `HV-N`) | Loser-by-push-time renumbers. The one whose work is shipped or further-along keeps the ID. |
+
+The hard rule across all failures: **bots auto-resolve trivial git mechanics, but escalate substantive conflicts to humans.** Bots NEVER attempt to merge or guess code resolution.
 
 ---
 

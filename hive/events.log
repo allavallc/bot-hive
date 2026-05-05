@@ -1,0 +1,4 @@
+# Append-only event log. One event per line.
+# Format: <ISO timestamp> <ticket-id> <action> [<unblocked-list>] <bot-handle>
+# See hive/HIVE.md "Working in parallel" section for the convention.
+2026-05-05T16:30:00Z HV-031 in-progress nectar

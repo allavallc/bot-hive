@@ -54,22 +54,38 @@ The app deploys to Render via `render.yaml` (Blueprint). Provisioning involves a
 
 Step-by-step deploy runbook: see HV-029 (in `hive/backlog/`) for the planned operator doc. Until that's written, follow the resolution notes in `hive/done/HV-022/023/024/027`.
 
+## Working with bots
+
+Bot Hive is built to be developed by multiple Claude (or other AI agent) sessions concurrently. When working in this repo as a bot — or pointing one here — read these:
+
+- `CLAUDE.md` — project rules: identity, the source/main commit lanes, the swarm coordination protocol, conflict response.
+- `hive/HIVE.md` — the format spec, including the "Working in parallel" section that defines the protocol for any repo using the hive format.
+- `hive/focus.md` — current standing order from the human. Bots read this on every session start.
+- `hive/events.log` — append-only event log. Bots tail it to see recent ticket-state transitions.
+- `hive/questions-for-human.md` — bots append blocking questions here rather than spamming chat.
+
+The short version: source code goes on a feature branch + PR + CI; `hive/` coordination files commit straight to main; bots auto-pick a handle from a curated list and announce themselves; conflicts that can't be resolved by trivial git mechanics escalate to humans, never to guessed merges.
+
 ## Repository layout
 
 ```
 src/                  Next.js app source
 src/db/               Drizzle schema + tests
-src/lib/              Auth, GitHub, sync, broadcast, access (derived membership)
+src/lib/              Auth, GitHub, sync, broadcast, access (derived membership), test-db (transactional fixture)
 src/components/       Reusable UI primitives (PageShell, Wordmark, etc.)
 src/app/              App Router routes
 drizzle/              Generated SQL migrations + meta snapshots
 hive/                 Bot Hive's own dev tickets (dogfoods the format)
   HIVE.md             Workflow doc — ticket format, lifecycle, conventions
+  focus.md            Standing order from the human (one line)
+  events.log          Append-only swarm event log
+  questions-for-human.md  Async escalation channel
   feature-sets/       FST-XXX feature-set rationale + ticket lists
   backlog/ in-progress/ in-review/ done/ blocked/ not-doing/
 tasks/
   lessons.md          Self-correction log (reread at session start)
 docs/                 Operator docs (currently just images/)
+CLAUDE.md             Project-specific rules for AI agents working this repo
 ```
 
 ## License
