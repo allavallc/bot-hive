@@ -1,14 +1,31 @@
-# Bot Hive — project rules for Claude sessions
+# bot-hive — Claude Code context
 
-This file is read by every Claude session that opens the bot-hive repo. It encodes the rules specific to *this* project — how we develop bot-hive, not how users use bot-hive in their own repos. Format-neutral guidance for the hive workflow itself lives in `hive/HIVE.md`.
+## Project
+A live kanban board over GitHub-hosted ticket files. Next.js 15 · React 19 · TypeScript · Drizzle ORM + Postgres · Better Auth · GitHub Apps.
 
----
+## Where we left off (2026-05-05)
 
-## Identity (read first)
+Local dev environment is partially set up. Here's what's done and what still needs doing:
 
-Every bot session in this repo has a unique handle.
+### Done
+- Git, Node.js v24, GitHub CLI installed and up to date
+- Repo cloned to `C:\Users\anthony\projects\bot-hive`
+- PostgreSQL 17 installed and running (service: `postgresql-x64-17`, password: `postgres`)
+- Database `bot_hive` created
+- `.env` file created — DATABASE_URL and BETTER_AUTH_SECRET are filled in
 
-**On session start:**
+### Still needed (start here)
+1. **npm install** — run `npm install --legacy-peer-deps` (there's a drizzle-kit/better-auth peer dep conflict that requires the flag)
+2. **Register a GitHub OAuth App** (for sign-in) and fill in `.env`:
+   - `GITHUB_CLIENT_ID`
+   - `GITHUB_CLIENT_SECRET`
+   - Callback URL: `http://localhost:3000/api/auth/callback/github`
+3. **Register a GitHub App** (for repo access + webhooks) and fill in `.env`:
+   - `GITHUB_APP_ID`
+   - `GITHUB_APP_PRIVATE_KEY_PATH` (or `GITHUB_APP_PRIVATE_KEY`)
+   - `GITHUB_APP_WEBHOOK_SECRET`
+4. **Run DB migration**: `npm run db:migrate`
+5. **Start dev server**: `npm run dev` → http://localhost:3000
 
 ```
 git config --get bot-hive.handle
