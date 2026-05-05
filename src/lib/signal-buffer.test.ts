@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
   MAX_SIGNALS_PER_PROJECT,
-  type Signal,
   SIGNAL_TTL_MS,
+  type Signal,
   __resetSignals,
   addSignal,
   getSignals,
