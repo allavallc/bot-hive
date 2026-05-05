@@ -39,5 +39,9 @@
 2026-05-05T23:35:00Z HV-047 filed nectar
 2026-05-05T23:35:00Z HV-048 filed nectar
 2026-05-05T23:35:00Z HV-049 filed nectar
+<<<<<<< HEAD
 2026-05-05T23:50:00Z HV-038 not-doing nectar
 2026-05-05T23:50:00Z HV-042 not-doing nectar
+=======
+2026-05-05T23:45:00Z HV-039 in-review tern
+>>>>>>> 2ba7da1 (HV-039: replace blocking modal with right-side detail panel)
