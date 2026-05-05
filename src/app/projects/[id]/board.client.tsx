@@ -1,6 +1,6 @@
 "use client";
 
-import { RobotMascot } from "@/components/robot-mascot";
+import { RobotMascot, robotColor } from "@/components/robot-mascot";
 import { Wordmark } from "@/components/wordmark";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -340,6 +340,12 @@ function BugIcon() {
   );
 }
 
+function extractHandle(assignedTo?: string): string | undefined {
+  if (!assignedTo) return undefined;
+  const trimmed = assignedTo.split(/\s*\(/)[0].trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function WalkingRobot({ name }: { name?: string }) {
   const delay = useMemo(() => -Math.random() * 12, []);
   return (
@@ -362,6 +368,7 @@ function Card({
   const fsId = fm["Feature set"];
   const fs = fsId ? features.find((f) => f.fsId === fsId) : null;
   const assignee = fm["Assigned to"];
+  const handle = extractHandle(assignee);
 
   return (
     <article className={styles.card} data-expanded={expanded} data-state={ticket.state}>
@@ -389,7 +396,17 @@ function Card({
             {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
           </span>
         </span>
-        {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
+        <span className={styles.cardMeta}>
+          {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
+          {handle && (
+            <span
+              className={styles.cardBot}
+              style={{ color: robotColor(handle), borderColor: robotColor(handle) }}
+            >
+              {handle}
+            </span>
+          )}
+        </span>
         <span className={styles.cardTitle}>{ticket.title}</span>
       </button>
       {expanded && (
