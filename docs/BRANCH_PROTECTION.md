@@ -186,7 +186,7 @@ If all four pass, branch protection + auto-merge are working end-to-end.
 
 ## If something goes wrong
 
-- **Bots get stuck on direct pushes after this lands.** Expected; the rule changed. Bots need to update to use the PR + auto-merge flow. The convention in `hive/HIVE.md` and `CLAUDE.md` is being updated in this same ticket to reflect that.
+- **Bots get stuck on direct pushes after this lands.** Expected; the rule changed. Bots need to update to use the PR + auto-merge flow. The convention in `hive/HIVE.md` and `AGENTS.md` is being updated in this same ticket to reflect that.
 - **Auto-merge isn't firing on green CI.** Double-check the per-repo "Allow auto-merge" toggle. Also check that the PR was opened with `gh pr merge --auto` (not just merged manually after).
 - **A bot is blocked, can't open a PR for some legitimate reason.** Use the normal "blocked ticket" flow: move ticket to `hive/blocked/` with `Failure mode`, surface to the human.
 - **You need to bypass for an emergency.** Toggle off "Do not allow bypassing the above settings," do the bypass push, toggle back on. **Document the bypass in `tasks/lessons.md`.** Bypasses should be rare and visible.

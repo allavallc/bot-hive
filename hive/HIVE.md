@@ -173,7 +173,7 @@ The mental split between coordination metadata (small atomic ticket moves) and s
 
 | Kind of work | Files | What CI does |
 |---|---|---|
-| Coordination metadata | `hive/`, project root coordination docs (`CLAUDE.md`, `README.md`, `docs/`) | Runs the full suite, passes trivially since no source changed. |
+| Coordination metadata | `hive/`, project root coordination docs (`AGENTS.md`, `README.md`, `docs/`, agent-shim files like `CLAUDE.md`) | Runs the full suite, passes trivially since no source changed. |
 | Source code | `src/`, tests, configs, build infra | Substantive gate — typecheck/lint/test/build all must pass. |
 
 The unified PR-and-CI flow is the cost of having branch protection enforce the rules — GitHub branch protection is all-or-nothing on a branch; there's no native "block source pushes, allow hive/ pushes." Trade-off: ~2-3 min of CI per ticket move (waste, but bounded). Benefit: no source change can ever bypass CI; bots literally cannot ship broken code.
