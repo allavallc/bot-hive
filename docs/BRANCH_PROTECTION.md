@@ -14,7 +14,7 @@ There are two GitHub-side changes — branch protection (per-branch rule) and au
 
 ### Path A — apply via `gh api` (recommended)
 
-Single command. Run from the repo directory.
+#### Bash / zsh
 
 ```bash
 gh api -X PUT repos/allavallc/bot-hive/branches/main/protection \
@@ -34,7 +34,55 @@ gh api -X PATCH repos/allavallc/bot-hive \
   -F delete_branch_on_merge=true
 ```
 
-The first call sets branch protection on `main`. The second enables auto-merge at the repo level.
+#### PowerShell
+
+Backtick line continuation (instead of bash's backslash):
+
+```powershell
+gh api -X PUT repos/allavallc/bot-hive/branches/main/protection `
+  -F required_status_checks.strict=true `
+  -F 'required_status_checks.contexts[]=ci' `
+  -F enforce_admins=true `
+  -F required_pull_request_reviews.required_approving_review_count=0 `
+  -F required_pull_request_reviews.dismiss_stale_reviews=false `
+  -F required_pull_request_reviews.require_code_owner_reviews=false `
+  -F required_linear_history=true `
+  -F allow_force_pushes=false `
+  -F allow_deletions=false `
+  -F restrictions=
+
+gh api -X PATCH repos/allavallc/bot-hive `
+  -F allow_auto_merge=true `
+  -F delete_branch_on_merge=true
+```
+
+#### PowerShell — JSON-input alternative (unambiguous fallback)
+
+If the inline `-F` flags fail on PowerShell (rare but possible due to PS parsing quirks with empty values like `-F restrictions=`), use this JSON-piped version:
+
+```powershell
+$protection = @{
+  required_status_checks = @{ strict = $true; contexts = @("ci") }
+  enforce_admins = $true
+  required_pull_request_reviews = @{
+    required_approving_review_count = 0
+    dismiss_stale_reviews = $false
+    require_code_owner_reviews = $false
+  }
+  required_linear_history = $true
+  allow_force_pushes = $false
+  allow_deletions = $false
+  restrictions = $null
+} | ConvertTo-Json -Depth 4
+
+$protection | gh api -X PUT repos/allavallc/bot-hive/branches/main/protection --input -
+
+gh api -X PATCH repos/allavallc/bot-hive `
+  -F allow_auto_merge=true `
+  -F delete_branch_on_merge=true
+```
+
+Either path: the first call sets branch protection on `main`. The second enables auto-merge at the repo level.
 
 ### Path B — apply via the GitHub web UI
 
