@@ -90,4 +90,4 @@ CLAUDE.md             Project-specific rules for AI agents working this repo
 
 ## License
 
-Proprietary. © allavallc. All rights reserved.
+Proprietary — all rights reserved. The repo is public for operational reasons (CI, branch protection, audit transparency); public visibility does **not** grant any right to use, copy, modify, or distribute the Software. See [`LICENSE`](./LICENSE) for the full terms.
