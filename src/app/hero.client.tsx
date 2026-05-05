@@ -3,22 +3,15 @@
 import { HeroSwarm } from "@/components/hero-swarm";
 import { pageShellStyles as ui } from "@/components/page-shell";
 import { authClient } from "@/lib/auth-client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-const DISMISS_KEY = "bot-hive:signout-hint-dismissed";
-
-export function Hero() {
-  const [showHint, setShowHint] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!localStorage.getItem(DISMISS_KEY)) {
-      setShowHint(true);
-    }
-  }, []);
+export function Hero({ signedOut = false }: { signedOut?: boolean }) {
+  const [showHint, setShowHint] = useState(signedOut);
 
   function dismiss() {
-    localStorage.setItem(DISMISS_KEY, "1");
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/");
+    }
     setShowHint(false);
   }
 
