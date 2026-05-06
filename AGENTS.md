@@ -64,13 +64,16 @@ Each Claude Code / Codex / Aider / etc. instance opens its own clone. Identity i
 
 ### Resume your previous work
 
-After resolving agent-id and picking a handle, find any tickets owned by your agent-id in `hive/in-progress/` and `hive/in-review/`:
+After resolving agent-id and picking a handle, run the helper:
 
 ```bash
-grep -l "^- \*\*Assigned to\*\*: <your-agent-id>" hive/in-progress/*.md hive/in-review/*.md 2>/dev/null
+./scripts/my-work.sh           # POSIX
+.\scripts\my-work.ps1          # PowerShell
 ```
 
-Surface the list to the human as "resuming: HV-X (in-progress), HV-Y (in-review)." This closes the gap where a session that crashes or restarts loses track of its own work.
+It resolves your agent-id and prints any tickets owned by it in `hive/in-progress/` and `hive/in-review/`, one per line. Use `--agent <id>` to inspect another agent's queue. Surface the list to the human as "resuming: HV-X (in-progress), HV-Y (in-review)." This closes the gap where a session that crashes or restarts loses track of its own work.
+
+(The script is just a wrapper around the obvious grep — `grep -l "^- \*\*Assigned to\*\*: <your-agent-id>" hive/in-progress/*.md hive/in-review/*.md` — but using the script keeps the convention consistent across agents.)
 
 ### Where each appears
 

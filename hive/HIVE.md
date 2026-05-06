@@ -431,11 +431,9 @@ If collision, re-pick (up to 10 attempts). If 10 collide, append a numeric suffi
 
 ### Resume your previous work
 
-After resolving agent-id and picking a handle, on session start, scan `in-progress/` and `in-review/` for tickets owned by your agent-id:
+After resolving agent-id and picking a handle, on session start, list any tickets currently owned by your agent-id in `in-progress/` and `in-review/`. The protocol is "scan the canonical owned-state files for your identifier"; the implementation can be a one-line grep or a host-provided helper script.
 
-```bash
-grep -l "^- \*\*Assigned to\*\*: <agent-id>" hive/in-progress/*.md hive/in-review/*.md 2>/dev/null
-```
+The Bot Hive reference implementation ships `scripts/my-work.sh` (and `.ps1`) — a wrapper around `grep -l "^- \*\*Assigned to\*\*: <agent-id>" hive/in-progress/*.md hive/in-review/*.md`. Other host implementations may use any equivalent: a CLI command, a dashboard endpoint, an IDE plugin.
 
 Surface the list to the human as "resuming: HV-X, HV-Y." This closes the gap where a crashed / restarted session forgets its own work.
 
