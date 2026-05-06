@@ -4,11 +4,12 @@ import { robotColor } from "@/components/robot-mascot";
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./swarm-panel.module.css";
 
-// The swarm panel is a real-time view of `hive/events.log` — the durable
-// coordination log every bot writes to. There is no separate signal channel,
-// no bot tokens, no API surface beyond the existing GitHub webhook → SSE
-// broadcast that already powers the live board. When a bot pushes a commit
-// that touches `hive/events.log`, the webhook fires, the panel re-fetches,
+// The swarm panel is a real-time view of the per-actor event logs at
+// `hive/events/<actor>.log` — the durable coordination logs every bot
+// writes to. There is no separate signal channel, no bot tokens, no API
+// surface beyond the existing GitHub webhook → SSE broadcast that already
+// powers the live board. When a bot pushes a commit that touches its
+// event log, the webhook fires, the panel re-fetches the merged view,
 // and the new lines render here within seconds.
 
 type EventEntry = {
@@ -21,7 +22,7 @@ type EventEntry = {
 
 const STORAGE_KEY = "bot-hive:swarm-panel:open";
 
-// `hive/events.log` lines look like:  <ISO ts>  <hv-id|tag>  <action>  [unblocked-list]  <actor>
+// Event lines look like:  <ISO ts>  <hv-id|tag>  <action>  [unblocked-list]  <actor>
 // Tolerant parser — preserves the full raw line so anything off-format still renders.
 function parseEntry(raw: string): EventEntry | null {
   const trimmed = raw.trim();
@@ -87,7 +88,7 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
-  // Subscribe to the project SSE; refetch events.log on every change broadcast.
+  // Subscribe to the project SSE; refetch the merged event view on every change broadcast.
   useEffect(() => {
     if (!open) return;
     refresh();
@@ -95,7 +96,7 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
     es.onmessage = () => {
-      // Any change broadcast — refresh events.log. Cheap, idempotent.
+      // Any change broadcast — refresh the merged event view. Cheap, idempotent.
       refresh();
     };
     return () => {
@@ -118,7 +119,7 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <aside className={styles.panel} aria-label="Swarm — events.log view">
+    <aside className={styles.panel} aria-label="Swarm — event log view">
       <header className={styles.panelHeader}>
         <span className={styles.title}>Swarm</span>
         <span className={styles.connState} data-on={connected} aria-live="polite">
@@ -138,7 +139,7 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
         {entries.length === 0 ? (
           <p className={styles.empty}>
             No events in the last 7 days. Activity appears here as agents push to{" "}
-            <code>hive/events.log</code>.
+            <code>hive/events/&lt;actor&gt;.log</code>.
           </p>
         ) : (
           entries.map((e) => (
