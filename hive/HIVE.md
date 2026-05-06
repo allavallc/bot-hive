@@ -457,7 +457,7 @@ Bot commits for ticket-lifecycle actions carry trailers in the commit message bo
 
 **Examples** — one trailer block per agent type, all interoperable:
 
-Claude Code session:
+Claude agent session:
 
 ```
 HV-074: in-review
