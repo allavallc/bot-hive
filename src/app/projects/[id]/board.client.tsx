@@ -523,7 +523,6 @@ function Card({
                 {fm.Priority}
               </span>
             )}
-            {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
           </span>
         </span>
         {pendingTransition && (
