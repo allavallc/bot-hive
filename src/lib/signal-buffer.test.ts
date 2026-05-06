@@ -91,6 +91,7 @@ describe("signal-buffer", () => {
     expect(isSignalType("handoff")).toBe(true);
     expect(isSignalType("accepted")).toBe(true);
     expect(isSignalType("rejected")).toBe(true);
+    expect(isSignalType("presence")).toBe(true);
     expect(isSignalType("unknown")).toBe(false);
     expect(isSignalType("")).toBe(false);
     expect(isSignalType(123)).toBe(false);

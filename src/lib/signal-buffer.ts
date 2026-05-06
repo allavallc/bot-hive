@@ -27,7 +27,8 @@ export type SignalType =
   | "note"
   | "handoff"
   | "accepted"
-  | "rejected";
+  | "rejected"
+  | "presence";
 
 export const SIGNAL_TYPES: readonly SignalType[] = [
   "claim",
@@ -38,6 +39,7 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   "handoff",
   "accepted",
   "rejected",
+  "presence",
 ] as const;
 
 export type Signal = {

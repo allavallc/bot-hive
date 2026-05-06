@@ -7,7 +7,16 @@ import styles from "./swarm-panel.module.css";
 type Signal = {
   id: string;
   timestamp: string;
-  type: "claim" | "done" | "blocked" | "question" | "note" | "handoff" | "accepted" | "rejected";
+  type:
+    | "claim"
+    | "done"
+    | "blocked"
+    | "question"
+    | "note"
+    | "handoff"
+    | "accepted"
+    | "rejected"
+    | "presence";
   message: string;
   bot?: string;
   user?: string;
@@ -25,6 +34,7 @@ const TYPE_GLYPH: Record<Signal["type"], string> = {
   handoff: "⇌",
   accepted: "✓",
   rejected: "↻",
+  presence: "●",
 };
 
 function ago(iso: string): string {
