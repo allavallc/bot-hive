@@ -416,11 +416,18 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 1. **Auto-pick** a random handle from the curated list:
 
    ```
-   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-   sparrow, finch, robin, wren, fox, otter, badger, mole,
-   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-   falcon, tern, jay
+   drone, finch, pilot,
+   comb, badger, crane,
+   robin, kestrel, jay,
+   buzz, mole, ranger,
+   forager, sparrow, wren,
+   hawk, cobalt, tern,
+   scout, lark, tide,
+   nectar, fox, squirrel
    ```
+
+   Each row maps to a distinct UI color (red → orange → yellow → green → cyan → blue → purple → pink),
+   so active bots always render in visually distinct colors on the board.
 
 2. **Check the environment for collisions:**
    - Recent commit trailers: `git log --grep "Bot: " -n 50` — extract `Bot: <handle>` values.
