@@ -1,0 +1,48 @@
+# Stale-PR watchdog (server-side backstop) — see AGENTS.md "Stale-PR watchdog".
+#
+# Runs every 10 minutes. Scans open non-draft PRs; calls `gh pr update-branch`
+# on any in BEHIND state. DIRTY PRs are skipped (real conflicts — humans
+# resolve via hive/questions-for-human.md).
+#
+# This complements HV-050's bot-side convention (active agents do the same
+# scan on session start + every 10 min). The cron handles the case where no
+# agents are online; the bot-side handles the case where agents are active.
+# Together they cover both regimes.
+
+name: update-stale-prs
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Update BEHIND PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          stale=$(gh pr list --repo ${{ github.repository }} \
+            --json number,mergeStateStatus,isDraft \
+            | jq -r '.[] | select(.isDraft == false) | select(.mergeStateStatus == "BEHIND") | .number')
+
+          if [ -z "$stale" ]; then
+            echo "No BEHIND PRs."
+            exit 0
+          fi
+
+          for n in $stale; do
+            echo "Updating PR #$n..."
+            if ! gh pr update-branch "$n" --repo ${{ github.repository }}; then
+              echo "  (couldn't update PR #$n — may have just become DIRTY)"
+            fi
+          done
