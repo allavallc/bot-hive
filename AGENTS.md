@@ -241,6 +241,21 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
 
+### Human rejection and acceptance via the board
+
+Rejections and acceptances happen on the live board — no manual file editing required.
+
+- **Accept**: open an `in-review` card, click **Accept**. The board commits the move to `done/` on the human's behalf via a PR with auto-merge.
+- **Reject**: open an `in-review` card, click **Reject**, type a reason, click Confirm. The board commits the move back to `in-progress/` with `Rejected by`, `Rejected`, and `Rejection reason` fields populated.
+
+Commits created by this flow use `Rejected-by: <github-username>` (no `Bot:` trailer — the actor is the human, not an agent).
+
+**Bot-side reaction to rejection**: a bot picking up a rejected ticket (status: in-progress, `Rejected by` populated) should:
+
+1. Read the `Rejection reason` carefully — it is the spec for the next iteration.
+2. Append to `events.log`: `<ISO> <hv-id> reclaimed-after-rejection <handle>`.
+3. Treat it as a normal in-progress ticket from there.
+
 ### Reporting status — don't recite the done list
 
 Status updates focus on **open**, **in-progress**, or **in-flight** work — that's what the user can act on. Once a ticket is accepted/done, mention it once at acceptance and then stop re-listing it. The done list grows long; recasting it every status update is noise, not signal.

@@ -445,6 +445,8 @@ Trigger: HV-090 rejected
 
 **Convention, not enforcement.** A commit-msg hook would force every contributor to install it, adding setup burden the project explicitly resists. Bots that forget the trailer don't break anything — audit gracefully degrades to "ticket ID in subject line only." Use the PM skill and the trailers populate by default.
 
+**Human-initiated commits** (accept/reject via the board UI) use `Rejected-by: <github-username>` instead of `Bot:` — the human is the actor, not an agent. The `Model:` and `Co-Authored-By:` trailers are omitted; only `Trigger:` and `Rejected-by:` appear:
+
 **Querying the audit:**
 
 ```bash
