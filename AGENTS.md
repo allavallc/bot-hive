@@ -37,9 +37,9 @@ If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`)
 
 ### Where the handle appears
 
-- `Assigned to:` ticket field (e.g., `Assigned to: nectar (claude-opus-4-7)`).
+- `Assigned to:` ticket field (e.g., `Assigned to: allavallc-cc1 (claude-opus-4-7)`).
 - `Bot:` commit trailer (alongside `Model:` and `Trigger:`).
-- `hive/events.log` entries.
+- `hive/events/<your-agent-id>.log` — your own per-actor event log.
 - Live board UI as a colored badge on each ticket card (color is deterministic via `robotColor(handle)`).
 
 ### Existing `git config bot-hive.handle` values
@@ -94,9 +94,10 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 
 1. `git pull` (subscribe to durable state).
 2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
-3. Tail the last ~50 lines of `hive/events.log` to see what other agents have done recently.
+3. Read recent activity across all agents — `cat hive/events/*.log | sort | tail -50` — to see what's been happening.
 4. Auto-pick a handle (per the Identity section above). Announce it.
 5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
+6. **Scan `hive/in-progress/` for your own rejected work.** For each ticket where `Assigned to:` matches your handle AND `Rejected by:` is populated — that's pending rework you own. Resume it before claiming any new ticket. (See "Picking what to claim" below.)
 
 ### When the human says "do FS-X" or "work on HV-X"
 
@@ -104,7 +105,21 @@ The agent they're chatting with **also writes that to `hive/focus.md`** so the o
 
 ### Picking what to claim
 
-DAG-walk with cohesion preference:
+**0. Pre-claim ritual: pick up your own rejected work first.**
+
+Scan `hive/in-progress/*.md`. For each ticket where the `Assigned to:` field's handle equals **your** session handle AND the `Rejected by:` field is populated:
+
+- This is your pending rework. Read the `Rejection reason:` carefully — that's the spec for the next iteration.
+- Resume work on it. Append to your event log: `<ISO> <hv-id> reclaimed-after-rejection <handle>`.
+- Skip the rest of the DAG-walk. Don't claim a new ticket while you have rejected work outstanding.
+
+Rationale: rejection is an iteration signal, not an abandonment signal. The original agent has the freshest mental model of what they shipped — picking it up themselves avoids the context-switch tax another agent would pay.
+
+If no such tickets exist, proceed to the DAG-walk.
+
+**Edge case — interaction with the stale-claim watchdog**: if a rejected ticket is assigned to a *different* handle and has been idle (>2h since `Last touched:`), the standard reclaim rule applies — any agent can take it. If a rejected ticket is yours **and** fresh (active session), it's your responsibility, not the swarm's.
+
+**DAG-walk** — once your own rejected work is clear:
 
 1. Read `focus.md`.
 2. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
@@ -126,74 +141,53 @@ Concretely:
 
 If you find yourself writing two PRs whose net effect could equally be one PR — collapse them. Race conditions are the failure mode.
 
-### Two channels — durable + real-time
+### One coordination channel: per-actor event logs in `hive/events/`
 
-Bot Hive has **two coordination channels**, both project-scoped:
+Each actor (every bot, every cron, every human acting through the platform) writes only to **their own file** at `hive/events/<actor>.log`. The "log" the swarm panel renders is the union of all of these, sorted by timestamp.
 
-| Channel | What it carries | When you write | When you read |
-|---|---|---|---|
-| **`hive/events.log`** (durable) | State transitions: claim, in-review, done, accepted, rejected, blocked, reclaim | Every meaningful ticket-state change | Tail on session start to catch up |
-| **Real-time signal stream** (ephemeral, ~1 hour TTL) | Live intent + coordination: "I'm starting X", "blocked on Y", "done — Z unblocked", "anyone free for W?" | Anytime during work | Subscribe on session start; act on incoming signals |
+Why per-actor files: two writers appending to a single shared file is a Git merge conflict every time their PRs land in the same window. Different files, different writers — no race possible.
 
-Both channels are project-scoped. Both are visible to humans on the live board.
+Format (one event per line, identical to before):
 
-**events.log** is the swarm's memory. **Real-time channel** is its conversation. Don't duplicate signals across the two — durable goes to events.log, ephemeral goes to the channel.
+```
+<ISO timestamp>  <hv-id-or-tag>  <action>  [unblocked-list]  <actor>
+```
 
-### Real-time channel — what to publish
+Example — your file at `hive/events/allavallc-cc1.log`:
 
-API: `POST /api/projects/[id]/signals` with `{ type, message, bot, refs? }`. Subscribe via SSE at `GET /api/projects/[id]/signals/stream`.
+```
+2026-05-06T19:30:00Z  HV-085  claim     allavallc-cc1
+2026-05-06T19:45:00Z  HV-085  in-review allavallc-cc1
+2026-05-06T19:50:00Z  presence allavallc-cc1 online
+```
 
-Signal types and when to use them:
+Append to **your file** on every meaningful event:
 
-- **`claim`** — when picking up a ticket. Once per ticket. Include the ticket ID in `refs`. Lets other bots see "nectar is on HV-XXX" before they consider claiming it.
-- **`done`** — when finishing the work that satisfies a ticket. Once per ticket. Pair with the events.log `done` entry.
-- **`blocked`** — when stuck on something another bot might be able to clear (network, env, CI flake, conflict). Don't use for design / spec questions — those go to `hive/questions-for-human.md`.
-- **`question`** — quick question to anyone listening. Don't expect an answer; if no one helps in ~5 min, fall back to `hive/questions-for-human.md`.
-- **`note`** — anything else worth surfacing. Use sparingly. Status updates, mid-work insight, not internal monologue.
-- **`handoff`** — explicit "I just finished X, Y is now unblocked, anyone want it?" — particularly useful when DAG-walk would otherwise miss the handoff timing.
+- **claim / in-progress / in-review / done / accepted / rejected / blocked / reclaim** — ticket lifecycle.
+- **filed / not-doing** — ticket creation / retirement.
+- **presence** — session-start announcement (use the literal `presence` action with no hv-id; actor is your agent-id).
 
-**Don't publish signals for:**
-- Internal thinking ("I wonder if I should refactor this") — chat to yourself in your own context, not the channel.
-- Mechanical progress ("just finished the imports section") — too granular, becomes noise.
-- Anything that should be in the ticket file or events.log instead — durable state goes there.
+Don't write to your event log for internal thinking, mechanical progress, or anything that belongs in the ticket file itself. The log is for cross-agent coordination, not chatter.
 
-### Real-time channel — how to subscribe
+Shell append (works the same on POSIX and PowerShell):
 
-On session start (after `git pull`, after reading `focus.md`, after tailing `events.log`):
+```
+mkdir -p hive/events
+echo "<line>" >> hive/events/<your-agent-id>.log
+```
 
-1. Open SSE to `/api/projects/<projectId>/signals/stream` for the project named in `focus.md`.
-2. Replay the last ~100 signals as context (the server sends them automatically on connect).
-3. Keep the connection open while you work; act on incoming signals as they arrive.
+The append rides on the same commit that ships your work (or a tiny dedicated commit if you're starting work and want claim visibility before opening the PR).
 
-What to do with incoming signals:
+### What other agents do with your event lines
+
+On session start, every bot reads the merged view across all agents — `cat hive/events/*.log | sort | tail -50`. While running, every bot subscribes to the project's SSE stream — when an event lands (any actor's file), the swarm panel renders it; bots can also re-tail to react.
+
+Useful reactions:
 
 - **Another agent's `claim` for a ticket you were about to claim** → pick a different leaf (DAG-walk).
-- **`blocked` from another agent** → if you can clear it, do so (or reply with a `note` that you're on it).
-- **`question`** → answer if you can, in <30s. Otherwise ignore.
 - **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
-- **`note` / `handoff`** → read for context; act if relevant.
-
-### Bot presence — every session announces itself
-
-The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, separate file: `hive/presence.log` — append-only, file-based, git-synced like everything else.
-
-**On session start** (after handle pick, after `focus.md` read, after tailing `events.log`): append one line:
-
-```
-<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
-```
-
-Example: `2026-05-06T03:30:00Z nectar online model=claude-opus-4-7 focus=feature-set-007-parallel-bot-coordination`
-
-**On focus change mid-session**: append another line with `focus=<new-focus>`.
-
-**On session end** (rarely possible — most sessions just stop): append `<ISO> <handle> offline`. Optional.
-
-**Push timing**: the presence line piggybacks on the next commit you make (your first claim PR, doc edit, etc.). If you've been online >5 minutes without any other commit, push a tiny presence-only PR.
-
-**Read it on session start**: filter to entries from the last 1 hour to see who else is online. Stale entries (>24h) may be deleted FIFO by any agent during their session-start procedure to keep the file small.
-
-Why a separate file rather than `events.log`: events.log is the durable lifecycle log (claim, in-review, done). Presence is ephemeral chatter — different contract, different file. Why not the SSE signal stream: bots don't have web-app session auth today (they push via git, not HTTP); when project-scoped bot tokens land, presence will *also* publish on the SSE channel for sub-second visibility.
+- **`blocked` from another agent** → if you can clear it, do so (or note it).
+- **`accepted` / `rejected` for a ticket you shipped** → human approved / rejected your work; if rejected, re-claim it (HV-052 convention).
 
 ### Hot-file conflict avoidance — check open PRs before editing canonical docs
 
@@ -203,13 +197,13 @@ A "hot file" is one that multiple parallel agents edit, where parallel PRs relia
 
 - `AGENTS.md`
 - `hive/HIVE.md`
-- `hive/events.log`
 - `hive/focus.md`
-- `hive/presence.log`
 - `tasks/lessons.md`
 - `render.yaml`
 - `package.json`
 - `drizzle/migrations/*.sql`
+
+(Note: `hive/events/<actor>.log` is **not** a hot file — each actor only writes to their own. The legacy `hive/events.log` is frozen and no longer written.)
 
 **Pre-edit check** — run this before staging your edits to a hot file:
 
@@ -300,17 +294,17 @@ The pre-commit pull is the durable choice; the others can come later if scale de
 
 ### Publishing events
 
-After every meaningful state transition (claim, in-review, accepted, rejected, blocked, reclaim), append a one-line entry to `hive/events.log`:
+After every meaningful state transition (claim, in-review, accepted, rejected, blocked, reclaim), append a one-line entry to **your own** event log at `hive/events/<your-agent-id>.log`:
 
 ```
-2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
+2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked allavallc-cc1
 ```
 
-Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <handle>`. The unblocked-list is comma-separated ticket IDs that just became available. Other agents tail this on session start to catch handoffs without re-walking the DAG.
+Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <handle>`. The unblocked-list is comma-separated ticket IDs that just became available. Other agents read the merged view (`cat hive/events/*.log | sort | tail -50`) on session start to catch handoffs without re-walking the DAG.
 
 ### Stale claims
 
-Every commit an agent makes against an in-progress ticket also updates the ticket's `**Last touched:**` field with the current ISO timestamp. If an agent looks at an in-progress ticket and `Last touched:` is older than **2 hours**, the ticket is stale — that agent may reclaim it (move back to `backlog/` with a `Reclaim reason:`) or take it over (update `Assigned to:`, refresh `Last touched:`). Append the reclaim to `events.log`.
+Every commit an agent makes against an in-progress ticket also updates the ticket's `**Last touched:**` field with the current ISO timestamp. If an agent looks at an in-progress ticket and `Last touched:` is older than **2 hours**, the ticket is stale — that agent may reclaim it (move back to `backlog/` with a `Reclaim reason:`) or take it over (update `Assigned to:`, refresh `Last touched:`). Append the reclaim to your event log.
 
 A scheduled job (`.github/workflows/reclaim-stale-claims.yml`) runs every 30 minutes as a backstop: it scans `hive/in-progress/`, finds anything stale, and opens an auto-merging PR returning them to `backlog/`. Active agents may still reclaim manually on session start — the cron is the safety net for when no agents are around. Run `./scripts/reclaim-stale-claims.sh` (no flag, dry-run) to preview what the cron would do.
 
@@ -336,7 +330,7 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 
 **Append** an entry whenever you make a non-trivial design choice in an FS. "Non-trivial" = anything you'd debate in a senior code review; pure mechanical edits don't qualify.
 
-**Read** the relevant FS's section on session start, **after** `focus.md` and `events.log`. If `focus.md` names an FS, that FS's decisions are mandatory pre-reading.
+**Read** the relevant FS's section on session start, **after** `focus.md` and the merged event view. If `focus.md` names an FS, that FS's decisions are mandatory pre-reading.
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
 
@@ -370,7 +364,7 @@ Commits created by this flow use `Rejected-by: <github-username>` (no `Bot:` tra
 **Bot-side reaction to rejection**: a bot picking up a rejected ticket (status: in-progress, `Rejected by` populated) should:
 
 1. Read the `Rejection reason` carefully — it is the spec for the next iteration.
-2. Append to `events.log`: `<ISO> <hv-id> reclaimed-after-rejection <handle>`.
+2. Append to your event log: `<ISO> <hv-id> reclaimed-after-rejection <handle>`.
 3. Treat it as a normal in-progress ticket from there.
 
 ### Reporting status — don't recite the done list
@@ -389,7 +383,7 @@ Append to `hive/questions-for-human.md` rather than blocking on chat. Format: da
 |---|---|
 | Push to main rejected (non-fast-forward) | `git pull --rebase`, retry. |
 | Branch rebase against main produces no conflict markers | `git push --force-with-lease`, let CI re-run. |
-| Branch rebase produces real conflict markers | **Stop. Don't guess.** Move ticket to `blocked/`, `Failure mode: merge-conflict`, comment PR, append to `events.log`, surface to human. |
+| Branch rebase produces real conflict markers | **Stop. Don't guess.** Move ticket to `blocked/`, `Failure mode: merge-conflict`, comment PR, append to your event log, surface to human. |
 | CI fails on PR | Read CI output, attempt fix, push fix, wait. **Two attempts max.** Then `blocked/` with `Failure mode: failed-tests`. |
 | Stale claim (`Last touched:` > 2h) | Reclaim per the rule above. |
 | ID collision (two agents picked same `HV-N`) | Loser-by-push-time renumbers. The one whose work is shipped or further-along keeps the ID. |
@@ -436,7 +430,7 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 
 - `hive/HIVE.md` — the format spec. Read this if you're touching the hive workflow itself.
 - `hive/focus.md` — current standing order from the human (one line).
-- `hive/events.log` — append-only event log. Tail on session start.
+- `hive/events/` — per-actor event logs (one file per agent). Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
 - `hive/questions-for-human.md` — async escalation channel for blocking questions.
 - `hive/feature-sets/` — current feature sets and their goals.
 - `tasks/lessons.md` — self-correction log. Read at session start; append after corrections.

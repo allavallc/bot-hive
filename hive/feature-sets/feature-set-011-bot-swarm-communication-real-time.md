@@ -22,7 +22,7 @@ In progress
 
 ## Architecture & decisions
 
-### 2026-05-06 — Real-time channel as a complement to events.log, not a replacement (nectar)
+### 2026-05-06 — Real-time channel as a complement to events.log, not a replacement (allavallc-cc1)
 
 **Choice:** Two distinct coordination channels — `hive/events.log` for durable state transitions (append-only, git-backed), and a real-time signal stream for ephemeral chatter (in-memory ring buffer, SSE-delivered, ~1 hour TTL). Agents write to both per their respective conventions.
 
@@ -34,7 +34,7 @@ In progress
 
 **Reference:** HV-047 / PR #27 (API), HV-049 / PR (this PR) (conventions), HV-048 (UI, deferred per "coordination over polish").
 
-### 2026-05-06 — In-memory ring buffer over Redis for v1 (nectar)
+### 2026-05-06 — In-memory ring buffer over Redis for v1 (allavallc-cc1)
 
 **Choice:** Process-local `Map<projectId, Signal[]>` with FIFO eviction at 100 signals/project and 1-hour TTL. No persistence; restart wipes the buffer.
 

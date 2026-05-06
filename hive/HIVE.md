@@ -204,9 +204,19 @@ current = backlog
 
 When the human says "do FS-007" in chat, the bot they're chatting with **also updates `focus.md`** so the other bot picks up the same intent on its next session start. The chat message is a hint; the file is the source of truth.
 
+### Pre-claim ritual: pick up your own rejected work first
+
+Before the DAG-walk, every bot scans `hive/in-progress/*.md` for tickets where `Assigned to:` matches its handle AND `Rejected by:` is populated. Those are the bot's pending rework — it ships them before claiming any new ticket. Read the `Rejection reason:` carefully; that's the spec for the next iteration. Append `<ISO> <hv-id> reclaimed-after-rejection <handle>` to the bot's event log and resume.
+
+**Rationale**: rejection is an iteration signal, not an abandonment signal. The original agent has the freshest mental model of what they shipped — picking it up themselves avoids the context-switch tax another agent would pay. New agents picking up rejected work pay that tax every time.
+
+**Edge case — interaction with the stale-claim watchdog**: if a rejected ticket is assigned to a *different* handle and is stale (>2h since `Last touched:`), the standard reclaim rule applies — any agent can take it. If a rejected ticket is yours **and** fresh (active session), it's your responsibility, not the swarm's.
+
+If no such tickets exist, proceed to the DAG-walk.
+
 ### DAG-walk with cohesion preference — work selection
 
-Every bot, on session start, after `git pull`:
+Every bot, on session start, after `git pull` and the pre-claim ritual:
 
 1. Read `hive/focus.md`.
 2. Collect every ticket in scope (the named FS, or named ticket, or all of `backlog/` if focus is empty).
@@ -224,20 +234,27 @@ The PR that ships the work also moves the ticket file (e.g., `in-progress/` → 
 
 The optional claim-PR (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it's small, lands first, and is closed before the work-PR opens.
 
-### Two channels — durable + real-time
+### One coordination channel: per-actor event logs in `hive/events/`
 
-The hive format supports two coordination channels, both project-scoped:
+The hive format has **one** coordination channel — but it's split across files so writers don't race. Each actor (every bot, every cron, every human-via-platform) writes only to **their own** file at `hive/events/<actor>.log`. The "log" any tool renders is the union of all of these, sorted by timestamp.
 
-- **`hive/events.log`** — durable state-transition log (claim, in-review, done, etc.). Append-only. Agents tail it on session start.
-- **Real-time signal channel** — ephemeral live coordination (publish-subscribe via the host's SSE infrastructure or equivalent). Agents subscribe on session start; publish during work.
+Why per-actor files, not one shared file: two writers appending to the same file is a Git merge conflict every time their PRs land in the same window. Different files, different writers — no race possible. The substrate stays plain text + Git; only the path changes.
 
-Both channels are visible to humans on the live board.
+Why one channel, not two (durable vs. real-time): a separate ephemeral "signal stream" with its own auth path adds setup complexity (tokens, cookie extraction, helper scripts) without adding semantic value. Anything worth communicating across agents is also worth keeping in the durable record. The events directory is both — append-only audit trail and live coordination.
 
-**Signal types** (when in use): `claim` (picking up a ticket), `done` (finishing one), `blocked` (need help clearing something), `question` (quick ask, unanswered → fall back to `hive/questions-for-human.md`), `note` (worth surfacing, sparingly), `handoff` (explicit "Y is unblocked, anyone want it?").
+**Event format** (one event per line, identical regardless of file):
 
-**Don't publish** internal thinking, mechanical progress, or anything that belongs in events.log or the ticket file. Durable state stays in those channels.
+```
+<ISO timestamp>  <hv-id-or-tag>  <action>  [unblocked-list]  <actor>
+```
 
-In the Bot Hive reference implementation, the real-time channel is `POST /api/projects/[id]/signals` (publish) + `GET /api/projects/[id]/signals/stream` (SSE subscribe). Other host implementations are free to use Redis, NATS, MQTT, or any equivalent — the protocol is "publish ephemeral typed messages, subscribe via stream," not the specific transport.
+**Action vocabulary**: `claim`, `in-progress`, `in-review`, `done`, `accepted`, `rejected`, `blocked`, `reclaim`, `filed`, `not-doing`, plus `presence` for session-start announcements (no hv-id; actor is the agent's identifier).
+
+**Don't write** internal thinking, mechanical progress, or anything that belongs in the ticket file itself. The log is for cross-agent coordination, not chatter.
+
+**Reading the merged view**: `cat hive/events/*.log | sort | tail -50` (POSIX) or `Get-ChildItem hive/events -Filter *.log | Get-Content | Sort-Object | Select-Object -Last 50` (PowerShell). The Bot Hive reference renders this in the swarm panel.
+
+**Legacy**: an older single-file `hive/events.log` exists for historical entries. It is frozen — no agent should append to it. The merged view includes it until its content ages past the 7-day display cutoff.
 
 ### UI changes need explicit visual approval before build
 
@@ -249,29 +266,23 @@ This is the UI-specific subcase of the broader pre-build interview. Skipping it 
 
 ### Bot presence
 
-The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, different channel.
-
-The Bot Hive reference implementation uses `hive/presence.log` — append-only, file-based, git-synced. On session start (after handle pick + `focus.md` + tail of `events.log`), every agent appends one line:
+On session start, an agent appends a `presence` line to **its own** event log at `hive/events/<agent-id>.log`:
 
 ```
-<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
+<ISO timestamp>  presence  <agent-id>  online
 ```
 
-A focus change mid-session appends another line. Session end is optional. The presence line piggybacks on the next commit; agents online >5 min with no other commit push a tiny presence-only PR. On session start, agents read the file and filter to the last hour to see who else is online; entries older than 24h may be pruned FIFO.
+Other agents reading the merged event view see who's currently active. No separate file, no separate channel — presence is just one of the action types in the unified log. A focus change mid-session appends another presence line; an explicit "offline" line on session end is optional.
 
-A separate file from `events.log` because events.log is durable lifecycle and presence is ephemeral chatter — different contract. The SSE signal stream is the right semantic home, but bots don't have web-app session auth today (they push via git, not HTTP). When project-scoped bot tokens exist, presence will also publish on the SSE channel.
-
-Other host implementations may use any equivalent: a Redis-backed presence key with TTL, NATS heartbeats, etc. The protocol is "every session announces itself, in a place other agents read."
+The presence entry rides on the same commit as the agent's first piece of work, so it's free. If an agent is online for >5 min without any other commit, it can push a tiny presence-only commit.
 
 ### Hot-file conflict avoidance
 
 A "hot file" is one that multiple parallel agents commonly edit, where parallel PRs reliably go DIRTY at merge time. The convention: before opening a PR that touches a hot file, query the host's PR system for any open PR already touching that file. If one exists, rebase onto its branch (preferred), wait for it to merge, or pick different work — don't open a competing edit.
 
-The list of hot files is repo-local (lives next to the code, not in this format-neutral spec). It typically includes the canonical agent-coordination docs (this file's host equivalent, the agent-shim file, the events log, the focus file, the presence log, lessons-learned files), the deploy config, the dependency manifest, and any auto-generated migration files. Curated, not auto-detected.
+The list of hot files is repo-local (lives next to the code, not in this format-neutral spec). It typically includes the canonical agent-coordination docs (this file's host equivalent, the agent-shim file, the events log, the focus file, lessons-learned files), the deploy config, the dependency manifest, and any auto-generated migration files. Curated, not auto-detected.
 
 The pre-edit check is a query to the host's PR system, not a lock service. github + `gh pr list --json files` is one implementation; other hosts use their equivalent. Optional: a small helper script (`scripts/check-hot-files.sh` in the Bot Hive reference) that takes a list of file paths and prints any open PR touching them, returning non-zero if conflicts exist — composes into pre-push hooks if anyone wants automation later.
-
-When real-time bot-to-host auth becomes available, the convention can absorb a sub-second SSE-based "lock" signal without changing the agent-side rule: same check, faster channel.
 
 ### Stale-PR watchdog
 
@@ -300,7 +311,7 @@ Every commit a bot makes against an in-progress ticket also updates the ticket f
 If a bot looks at an in-progress ticket whose `Last touched:` is older than **2 hours**, it may **reclaim** the ticket:
 
 - Move the file back to `backlog/` with a `**Reclaim reason:** stale claim from <handle>; last touched <timestamp>` field set.
-- Append an entry to `events.log` explaining the reclaim.
+- Append an entry to your event log explaining the reclaim.
 
 OR take the ticket over by reassigning `Assigned to:` and refreshing `Last touched:` to now.
 
@@ -308,21 +319,28 @@ This replaces a heartbeat daemon with a passive, environment-readable signal. No
 
 A scheduled job may run periodically as a backstop: scan `in-progress/`, find tickets older than the threshold, return them to `backlog/`. The Bot Hive reference implementation uses a GitHub Actions cron at `*/30 * * * *` (`scripts/reclaim-stale-claims.sh` does the work). Active agents may still reclaim manually on session start — the cron handles only the gap when no agents are around.
 
-### `hive/events.log` — append-only event topic
+### `hive/events/<actor>.log` — per-actor append-only event topic
 
-Bots publish one-line events on lifecycle transitions. The log is durable history; other bots tail it on session start to catch up on what changed.
+Bots publish one-line events on lifecycle transitions to **their own** file. The directory `hive/events/` contains one file per actor; the merged view across files is the swarm's history.
 
-Format: one event per line, ISO timestamp, ticket ID, action, optional unblocked-list, originating handle.
+Per-actor files (instead of one shared `events.log`) eliminate the textual append-conflicts that used to leave PRs DIRTY whenever two writers landed in the same window. Two bots in different files never collide.
+
+Format: one event per line, ISO timestamp, ticket ID, action, optional unblocked-list, originating handle. Identical regardless of which file.
 
 ```
-2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
+# hive/events/allavallc-cc1.log
+2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked allavallc-cc1
+2026-05-05T16:05:33Z HV-031 in-progress allavallc-cc1
+```
+
+```
+# hive/events/cc2.log
 2026-05-05T15:50:12Z HV-034 in-review CC2
-2026-05-05T16:05:33Z HV-031 in-progress nectar
 ```
 
-Bots tail `events.log` on session start (`git pull` then read the last ~50 lines). Catches handoffs ("HV-A done — HV-B unblocked, available for pickup") without re-computing the whole DAG.
+Bots read the merged view on session start (`git pull` then `cat hive/events/*.log | sort | tail -50`). Catches handoffs ("HV-A done — HV-B unblocked, available for pickup") without re-computing the whole DAG.
 
-The log is append-only; bots never edit or delete past entries. Audit-grade.
+Each file is append-only; bots never edit or delete past entries. Audit-grade.
 
 ### Per-FS architecture & decisions log
 
@@ -344,7 +362,7 @@ Entry format (compact ADR-style):
 **Reference:** <HV-XXX / PR #N>
 ```
 
-Append an entry on any non-trivial design choice — anything a senior reviewer would debate. Read the section on session start *after* `focus.md` and `events.log`. **Append-only** by convention: never edit or delete past entries.
+Append an entry on any non-trivial design choice — anything a senior reviewer would debate. Read the section on session start *after* `focus.md` and the merged event view. **Append-only** by convention: never edit or delete past entries.
 
 ### Reporting status
 
@@ -357,7 +375,7 @@ When a bot needs a human decision (ambiguity, scope question, conflict it can't 
 Format: dated heading + the question.
 
 ```markdown
-## 2026-05-05T15:30 (nectar) — HV-031
+## 2026-05-05T15:30 (allavallc-cc1) — HV-031
 
 Should the events.log live at `hive/events.log` or `hive/feature-sets/events.log`?
 The former is simpler; the latter scopes events per FS.
@@ -372,7 +390,7 @@ Keeps bot work flowing without spamming the chat channel.
 |---|---|
 | Push to main rejected (non-fast-forward) | `git pull --rebase`, retry. Standard. |
 | `git rebase main` on PR branch — no conflict markers | `git push --force-with-lease`, let CI re-run. |
-| `git rebase main` produces real conflict markers | **Stop. Never guess code merges.** Move ticket to `hive/blocked/`, set `Failure mode: merge-conflict`, comment the PR explaining what's blocking, append to `events.log`. Human resolves. |
+| `git rebase main` produces real conflict markers | **Stop. Never guess code merges.** Move ticket to `hive/blocked/`, set `Failure mode: merge-conflict`, comment the PR explaining what's blocking, append to your event log. Human resolves. |
 | CI fails on PR | Read CI output, attempt fix, push fix, wait. **Two attempts max.** Then move to `blocked/` with `Failure mode: failed-tests`. |
 | Stale claim discovered (`Last touched:` > 2h) | Reclaim per the rule above. |
 | ID collision (two bots independently picked same `HV-N`) | Loser-by-push-time renumbers to next free ID. The one whose work is shipped or further-along keeps the ID; the other moves. Document in commit message. |
@@ -398,11 +416,18 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 1. **Auto-pick** a random handle from the curated list:
 
    ```
-   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-   sparrow, finch, robin, wren, fox, otter, badger, mole,
-   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-   falcon, tern, jay
+   drone, finch, pilot,
+   comb, badger, crane,
+   robin, kestrel, jay,
+   buzz, mole, ranger,
+   forager, sparrow, wren,
+   hawk, cobalt, tern,
+   scout, lark, tide,
+   nectar, fox, squirrel
    ```
+
+   Each row maps to a distinct UI color (red → orange → yellow → green → cyan → blue → purple → pink),
+   so active bots always render in visually distinct colors on the board.
 
 2. **Check the environment for collisions:**
    - Recent commit trailers: `git log --grep "Bot: " -n 50` — extract `Bot: <handle>` values.
@@ -420,9 +445,9 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 
 ### Where the handle appears
 
-- `Assigned to:` ticket field — `Assigned to: nectar (claude-opus-4-7)`
+- `Assigned to:` ticket field — `Assigned to: allavallc-cc1 (claude-opus-4-7)`
 - `Bot:` commit trailer — alongside `Model:` and `Trigger:`
-- `hive/events.log` entries — every event line ends with the originating handle
+- `hive/events/<handle>.log` entries — every event line in your file ends with your handle
 - The live board UI — colored badge on each ticket card (color via `robotColor(handle)`)
 
 ### Why per-session, not per-machine
@@ -443,7 +468,7 @@ The earlier convention (`git config bot-hive.handle <name>` once per machine) fa
 - **`Assigned to:` ticket field** — the handle, optionally with the model in parens for self-contained ticket files. Both formats are accepted: `CC1` or `CC1 (claude-opus-4-7)`.
 - **`Bot:` commit trailer** — alongside `Model:` and `Trigger:` (see below).
 - **Live board UI** — rendered as a visible badge on each ticket card.
-- **`hive/events.log`** entries (when that convention is in effect — see HV-031 in feature-set-007) — every event line is suffixed with the originating handle.
+- **`hive/events/<handle>.log`** entries — your per-actor event log; every line ends with your handle.
 
 **Why this matters:** in nature, every ant carries colony scent but is otherwise indistinguishable. In a software swarm, individual identity is cheap and worth surfacing — it lets humans spot a misbehaving bot at a glance, attribute work for audit, and build trust by seeing who did what.
 
@@ -456,7 +481,7 @@ Bot commits for ticket-lifecycle actions carry trailers in the commit message bo
 **Trailer format:**
 
 - `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `gpt-5-codex`, `gemini-2.5-pro`, `aider-deepseek-v3`). Use whatever string identifies your agent's underlying model.
-- `Bot:` — the bot's per-session handle (e.g. `nectar`, `kestrel`, `scout`).
+- `Bot:` — the bot's per-session handle (e.g. `allavallc-cc1`, `kestrel`, `scout`).
 - `Trigger:` — `HV-XXX <action>` where action ∈ `claim | done | edit | blocked | reclaim | in-review | accepted | rejected`.
 - `Co-Authored-By:` — standard git convention. Use the email convention your agent's host provides (`<noreply@anthropic.com>`, `<noreply@github.com>` for Codex, etc.). Pure-tooling agents without a hosted email may omit.
 
@@ -470,7 +495,7 @@ HV-074: in-review
 Refactored sync helper to share buffer with broadcast.
 
 Model: claude-opus-4-7
-Bot: nectar
+Bot: allavallc-cc1
 Trigger: HV-074 in-review
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
@@ -534,7 +559,7 @@ Trigger: HV-090 rejected
 git log --grep "Trigger: HV-074"        # full lifecycle of one ticket
 git log --grep "Model: claude-"         # everything done by Claude family models
 git log --grep "Model: gpt-"            # everything done by GPT family models
-git log --grep "Bot: nectar"            # everything done by a specific bot session
+git log --grep "Bot: allavallc-cc1"            # everything done by a specific bot session
 git log --grep "Trigger: .* done"       # all completion events
 git log --grep "Trigger: .* accepted"   # tester sign-offs (loop output)
 git log --grep "Trigger: .* rejected"   # rejected work — what came back
@@ -555,7 +580,7 @@ When the user picks a ticket from the backlog:
    git commit -m "HV-XXX: in progress"
    git push
    ```
-5. **Append a one-line entry to `hive/events.log`:** `<ISO timestamp> HV-XXX in-progress <your-handle>`. Other bots tail this to see what's claimed.
+5. **Append a one-line entry to your event log** (`hive/events/<your-handle>.log`): `<ISO timestamp> HV-XXX in-progress <your-handle>`. Create the directory and file on first write if needed (`mkdir -p hive/events`). Other bots see it via the merged view.
 6. **If the ticket touches source code** (anything outside `hive/`), create a feature branch immediately for the source-code work:
    ```
    git checkout -b hv-XXX-<slug>
