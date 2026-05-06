@@ -97,6 +97,7 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 3. Read recent activity across all agents — `cat hive/events/*.log | sort | tail -50` — to see what's been happening.
 4. Auto-pick a handle (per the Identity section above). Announce it.
 5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
+6. **Scan `hive/in-progress/` for your own rejected work.** For each ticket where `Assigned to:` matches your handle AND `Rejected by:` is populated — that's pending rework you own. Resume it before claiming any new ticket. (See "Picking what to claim" below.)
 
 ### When the human says "do FS-X" or "work on HV-X"
 
@@ -104,7 +105,21 @@ The agent they're chatting with **also writes that to `hive/focus.md`** so the o
 
 ### Picking what to claim
 
-DAG-walk with cohesion preference:
+**0. Pre-claim ritual: pick up your own rejected work first.**
+
+Scan `hive/in-progress/*.md`. For each ticket where the `Assigned to:` field's handle equals **your** session handle AND the `Rejected by:` field is populated:
+
+- This is your pending rework. Read the `Rejection reason:` carefully — that's the spec for the next iteration.
+- Resume work on it. Append to your event log: `<ISO> <hv-id> reclaimed-after-rejection <handle>`.
+- Skip the rest of the DAG-walk. Don't claim a new ticket while you have rejected work outstanding.
+
+Rationale: rejection is an iteration signal, not an abandonment signal. The original agent has the freshest mental model of what they shipped — picking it up themselves avoids the context-switch tax another agent would pay.
+
+If no such tickets exist, proceed to the DAG-walk.
+
+**Edge case — interaction with the stale-claim watchdog**: if a rejected ticket is assigned to a *different* handle and has been idle (>2h since `Last touched:`), the standard reclaim rule applies — any agent can take it. If a rejected ticket is yours **and** fresh (active session), it's your responsibility, not the swarm's.
+
+**DAG-walk** — once your own rejected work is clear:
 
 1. Read `focus.md`.
 2. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
