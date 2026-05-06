@@ -1,4 +1,8 @@
-export type BroadcastEvent = { type: "project-changed"; projectId: string };
+import type { Signal } from "@/lib/signal-buffer";
+
+export type BroadcastEvent =
+  | { type: "project-changed"; projectId: string }
+  | { type: "signal"; projectId: string; signal: Signal };
 type Subscriber = (event: BroadcastEvent) => void;
 
 const subscribers = new Map<string, Set<Subscriber>>();
