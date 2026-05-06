@@ -503,8 +503,8 @@ function Card({
 
   return (
     <article className={styles.card} data-state={ticket.state} data-anim={animState}>
-      {ticket.state === "in-progress" && <WalkingRobot name={assignee} />}
-      {ticket.state === "in-review" && <WalkingHuman />}
+      {ticket.state === "in-progress" && !pendingTransition && <WalkingRobot name={assignee} />}
+      {ticket.state === "in-review" && !pendingTransition && <WalkingHuman />}
       {handle && (
         <span
           className={styles.cardBot}
@@ -518,12 +518,6 @@ function Card({
           {fm.Type === "bug" && <BugIcon />}
           <span className={styles.cardId}>{ticket.hvId}</span>
           <span className={styles.badges}>
-            {pendingTransition && (
-              <span className={styles.pendingBadge} data-kind={pendingTransition}>
-                {pendingTransition === "approved" ? "✓ Approved" : "↻ Rejected"}
-                <span className={styles.pendingBadgeSub}>pending merge</span>
-              </span>
-            )}
             {fm.Priority && (
               <span className={styles.badge} data-priority={fm.Priority}>
                 {fm.Priority}
@@ -532,6 +526,11 @@ function Card({
             {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
           </span>
         </span>
+        {pendingTransition && (
+          <span className={styles.pendingBanner} data-kind={pendingTransition}>
+            {pendingTransition === "approved" ? "✓ Approved" : "✗ Rejected"} — pending merge
+          </span>
+        )}
         {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}
         <span className={styles.cardTitle}>{ticket.title}</span>
       </button>
