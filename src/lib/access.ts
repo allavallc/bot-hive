@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { account } from "@/db/schema";
+import { installationOctokit } from "@/lib/github";
 import { Octokit } from "@octokit/core";
 import { and, eq } from "drizzle-orm";
 
@@ -12,8 +13,22 @@ type CacheEntry = {
   expiresAt: number;
 };
 
+export type RepoCollaborator = {
+  login: string;
+  id: number;
+  avatarUrl: string;
+};
+
+type CollaboratorCacheEntry = {
+  collaborators: RepoCollaborator[];
+  expiresAt: number;
+};
+
 const repoListCache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<string[]>>();
+
+const collaboratorCache = new Map<string, CollaboratorCacheEntry>();
+const collaboratorInFlight = new Map<string, Promise<RepoCollaborator[]>>();
 
 function lruSet(userId: string, entry: CacheEntry): void {
   // Map iterates in insertion order. Re-inserting moves the key to most-recent.
@@ -110,11 +125,68 @@ export function invalidateUserCache(userId: string): void {
   repoListCache.delete(userId);
 }
 
+export async function listRepoCollaborators(
+  githubRepo: string,
+  installId: number,
+): Promise<RepoCollaborator[]> {
+  const cacheKey = `${installId}:${githubRepo}`;
+  const now = Date.now();
+
+  const hit = collaboratorCache.get(cacheKey);
+  if (hit && hit.expiresAt > now) {
+    return hit.collaborators;
+  }
+
+  const existing = collaboratorInFlight.get(cacheKey);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const [owner, repo] = githubRepo.split("/");
+    if (!owner || !repo) {
+      throw new Error(`invalid githubRepo "${githubRepo}" — expected "owner/repo"`);
+    }
+    const octokit = await installationOctokit(installId);
+
+    const collaborators: RepoCollaborator[] = [];
+    let page = 1;
+    while (true) {
+      const response = await octokit.request("GET /repos/{owner}/{repo}/collaborators", {
+        owner,
+        repo,
+        per_page: REPOS_PER_PAGE,
+        page,
+      });
+      const data = response.data as Array<{ login: string; id: number; avatar_url: string }>;
+      for (const c of data) {
+        collaborators.push({ login: c.login, id: c.id, avatarUrl: c.avatar_url });
+      }
+      if (data.length < REPOS_PER_PAGE) break;
+      page++;
+    }
+
+    collaboratorCache.set(cacheKey, { collaborators, expiresAt: Date.now() + CACHE_TTL_MS });
+    return collaborators;
+  })();
+
+  collaboratorInFlight.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    collaboratorInFlight.delete(cacheKey);
+  }
+}
+
+export function invalidateCollaboratorCache(githubRepo: string, installId: number): void {
+  collaboratorCache.delete(`${installId}:${githubRepo}`);
+}
+
 // Test-only helpers.
 export const __test = {
   reset(): void {
     repoListCache.clear();
     inFlight.clear();
+    collaboratorCache.clear();
+    collaboratorInFlight.clear();
   },
   cacheSize(): number {
     return repoListCache.size;
