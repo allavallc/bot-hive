@@ -71,3 +71,18 @@ When PR #20 merged first and PR #19 merged second (auto-rebased), the squash-mer
 If the work spans multiple PRs (rare; mostly for very large features with intermediate milestones), keep the ticket file motionless until the final PR — don't move it back-and-forth from PR to PR.
 
 Recovery (this case): one extra small PR to delete the duplicate file, append the lesson here, file HV-046 to capture the rejection-flow gap that surfaced from the same review cycle.
+
+## L9 — UI changes need explicit visual approval before build, not just ticket approval
+
+Burned twice in one session (2026-05-06):
+
+1. **HV-048 swarm panel** — built right-side fixed because the ticket said "right-side panel"; ignored that the right side was already occupied by the HV-039 ticket detail overlay. Result: the two panels stacked on top of each other on every card click. Hotfixed (PR #50) by moving to the left.
+2. **HV-020 billing-owner panel** — built per-spec and pinned to the top of the project board page. The ticket said "let collaborators transfer the seat"; the user never saw a layout sketch. They hated the placement. Wholesale rip-out + re-park under FS-012 (admin dashboard).
+
+The pattern: a ticket spec describes *what* a feature does; it does not describe *where it sits visually* or *how it lays out alongside everything else on the page*. Approving a ticket is approving the goal, not approving the design choices the implementor will make later. For anything a human will see, the user needs to approve the placement / shape before code is written.
+
+**Rule:** before implementing any user-facing UI ticket, post a layout sketch (text description of placement + any nearby elements + an ASCII / Mermaid sketch if helpful) and wait for explicit approval. Even one line: "panel pinned to the top of the board page, full width, above the kanban — ok?" — that's enough to surface the conflict before it ships.
+
+Pre-build interview already exists as a global rule (`~/.claude/CLAUDE.md`); this is the UI-specific subcase that I kept skipping. UI approval is a separate gate from ticket approval.
+
+Also tied to scope drift: I built HV-020 while the user had explicitly said "stay focused on coordination". Acknowledge the assigned focus before claiming any ticket — if the ticket is outside scope, surface it instead of silently working around the assignment.
