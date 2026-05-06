@@ -2,3 +2,4 @@
 # event ∈ {online, focus, offline}. Entries older than 24h may be pruned by any agent on session start.
 # See AGENTS.md / HIVE.md "Bot presence" section for the convention.
 2026-05-06T03:30:00Z nectar online model=claude-opus-4-7 focus=feature-set-007-parallel-bot-coordination
+2026-05-06T09:05:00Z wren online model=claude-sonnet-4-6 focus=feature-set-007-parallel-bot-coordination
