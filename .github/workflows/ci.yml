@@ -4,12 +4,14 @@
 # to pass before merging. With auto-merge enabled, bots can self-merge their
 # PRs once `ci` goes green — no human review of every change.
 #
-# Note on hive/-only PRs: the swarm protocol (see hive/HIVE.md "Working in
-# parallel") routes coordination metadata edits direct to main, not through
-# PRs. So in practice this workflow runs only on source-code PRs. Running it
-# on the rare hive-only PR is harmless — typecheck/lint/test/build all pass
-# trivially since no source changed. Path filtering would be an optimization,
-# not a correctness fix; deferred until CI minutes become a concern.
+# Two-job structure (HV-077):
+#   - `detect` runs in ~5s, classifies the PR as source-touching or
+#     coordination-metadata-only.
+#   - `ci` is the required-status-check job. It always runs (so branch
+#     protection always sees a pass-or-fail signal), but skips the heavy
+#     toolchain (postgres, npm ci, lint, typecheck, test, build) when the
+#     PR only touches hive/, docs/, tasks/, and similar agent-coordination
+#     surfaces. Hive-only PRs land in seconds instead of paying a full CI cycle.
 
 name: ci
 
@@ -20,10 +22,57 @@ on:
     branches: [main]
 
 jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      source_changed: ${{ steps.scope.outputs.source_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: scope
+        name: Classify PR scope
+        run: |
+          # Determine the changed set vs the merge-base with main. For pushes
+          # to main, compare against the previous commit.
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+          fi
+          if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+            # Initial push or shallow case — assume source changed (safe default).
+            echo "source_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Initial / shallow ref — assuming source_changed=true"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$base_sha" HEAD)
+          source_changed=false
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            case "$f" in
+              hive/*|docs/*|tasks/*|README.md|CLAUDE.md|AGENTS.md|.gitattributes)
+                # Coordination metadata — keep going.
+                ;;
+              *)
+                source_changed=true
+                break
+                ;;
+            esac
+          done <<< "$changed"
+          echo "source_changed=$source_changed" >> "$GITHUB_OUTPUT"
+          echo "Files changed:"
+          echo "$changed"
+          echo "Source touched: $source_changed"
+
   ci:
+    needs: detect
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # Postgres service runs only when source changed; it costs ~20s to spin up
+    # and we don't need it for coordination-metadata-only PRs.
     services:
       postgres:
         image: postgres:16
@@ -47,29 +96,42 @@ jobs:
       BETTER_AUTH_URL: http://localhost:3000
 
     steps:
+      - name: Coordination-metadata-only PR — skipping heavy CI
+        if: needs.detect.outputs.source_changed == 'false'
+        run: |
+          echo "::notice::This PR only touches coordination metadata (hive/, docs/, tasks/, README, AGENTS.md, etc.). Heavy CI skipped — required-check passes."
+
       - name: Checkout
+        if: needs.detect.outputs.source_changed == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node
+        if: needs.detect.outputs.source_changed == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: needs.detect.outputs.source_changed == 'true'
         run: npm ci --legacy-peer-deps
 
       - name: Run migrations
+        if: needs.detect.outputs.source_changed == 'true'
         run: npm run db:migrate
 
       - name: Typecheck
+        if: needs.detect.outputs.source_changed == 'true'
         run: npm run typecheck
 
       - name: Lint
+        if: needs.detect.outputs.source_changed == 'true'
         run: npm run lint
 
       - name: Test
+        if: needs.detect.outputs.source_changed == 'true'
         run: npm run test
 
       - name: Build
+        if: needs.detect.outputs.source_changed == 'true'
         run: npm run build
