@@ -63,11 +63,14 @@ The GitHub App handles repo-level reads/writes (cloning the `hive/` folder) and 
    - **Webhook URL**: `https://bot-hive.onrender.com/api/github/webhook`
    - **Webhook secret** (Step 2.4 below)
 3. **Repository permissions** — set these BEFORE clicking Create:
-   - **Contents**: Read & write (needed to read `hive/` folders)
+   - **Contents**: Read & write (needed to read/write `hive/` folders)
    - **Metadata**: Read-only (auto-required by GitHub for any app)
+   - **Pull requests**: Read & write (needed to create accept/reject PRs from the board UI)
    - All others: leave at "No access"
 
    > ⚠️ **GitHub App permissions default to "No access" for everything.** If you skip this section the App is an empty shell and Step 4's install page will show "No repositories" with no option to select any. Set permissions before saving.
+
+   > ⚠️ **Adding a permission to an existing App** requires re-approving the install. After saving the updated permissions on github.com, each user/org that has the App installed will see a banner prompting them to review and approve the new permission. Until they approve, the App's token won't include the new scope and calls requiring it will fail.
 
 4. **Webhook secret** — generate a random 32+ char string locally:
    ```bash
@@ -246,7 +249,7 @@ If a PR in a batch fails CI, GitHub bisects to find the offender, kicks it back 
 
 ### GitHub App install page shows "No repositories"
 - Cause: the GitHub App has no Repository permissions set (Step 2.3 was skipped).
-- Fix: go to your App's settings, set Contents (Read/Write) and Metadata (Read), save. The install page will then show your repos.
+- Fix: go to your App's settings, set Contents (Read/Write), Metadata (Read), and Pull requests (Read/Write), save. The install page will then show your repos. Existing installs will require re-approval after the permission change.
 
 ### "Authorization callback URL doesn't match"
 - Cause: the URL on github.com (Step 1.2 or Step 2.2) doesn't match the URL the app actually hit.
