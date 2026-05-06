@@ -80,3 +80,5 @@
 2026-05-06T03:50:00Z HV-071 in-review nectar
 2026-05-06T12:56:10Z HV-070 rejected allavallc
 2026-05-06T09:05:00Z HV-062 in-progress wren
+2026-05-06T13:17:24Z HV-062 reclaimed-stale cron
+2026-05-06T13:17:24Z HV-070 reclaimed-stale cron
