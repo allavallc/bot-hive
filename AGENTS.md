@@ -171,6 +171,28 @@ What to do with incoming signals:
 - **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
 - **`note` / `handoff`** → read for context; act if relevant.
 
+### Bot presence — every session announces itself
+
+The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, separate file: `hive/presence.log` — append-only, file-based, git-synced like everything else.
+
+**On session start** (after handle pick, after `focus.md` read, after tailing `events.log`): append one line:
+
+```
+<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
+```
+
+Example: `2026-05-06T03:30:00Z nectar online model=claude-opus-4-7 focus=feature-set-007-parallel-bot-coordination`
+
+**On focus change mid-session**: append another line with `focus=<new-focus>`.
+
+**On session end** (rarely possible — most sessions just stop): append `<ISO> <handle> offline`. Optional.
+
+**Push timing**: the presence line piggybacks on the next commit you make (your first claim PR, doc edit, etc.). If you've been online >5 minutes without any other commit, push a tiny presence-only PR.
+
+**Read it on session start**: filter to entries from the last 1 hour to see who else is online. Stale entries (>24h) may be deleted FIFO by any agent during their session-start procedure to keep the file small.
+
+Why a separate file rather than `events.log`: events.log is the durable lifecycle log (claim, in-review, done). Presence is ephemeral chatter — different contract, different file. Why not the SSE signal stream: bots don't have web-app session auth today (they push via git, not HTTP); when project-scoped bot tokens land, presence will *also* publish on the SSE channel for sub-second visibility.
+
 ### Stale-PR watchdog — active agents update BEHIND PRs
 
 A long-running session can leave its open PR `BEHIND` (main moved after the PR opened) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.

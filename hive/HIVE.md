@@ -247,6 +247,22 @@ Concretely, before claiming a user-facing UI ticket: read the surfaces it touche
 
 This is the UI-specific subcase of the broader pre-build interview. Skipping it lands UI that has to be ripped out.
 
+### Bot presence
+
+The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, different channel.
+
+The Bot Hive reference implementation uses `hive/presence.log` — append-only, file-based, git-synced. On session start (after handle pick + `focus.md` + tail of `events.log`), every agent appends one line:
+
+```
+<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
+```
+
+A focus change mid-session appends another line. Session end is optional. The presence line piggybacks on the next commit; agents online >5 min with no other commit push a tiny presence-only PR. On session start, agents read the file and filter to the last hour to see who else is online; entries older than 24h may be pruned FIFO.
+
+A separate file from `events.log` because events.log is durable lifecycle and presence is ephemeral chatter — different contract. The SSE signal stream is the right semantic home, but bots don't have web-app session auth today (they push via git, not HTTP). When project-scoped bot tokens exist, presence will also publish on the SSE channel.
+
+Other host implementations may use any equivalent: a Redis-backed presence key with TTL, NATS heartbeats, etc. The protocol is "every session announces itself, in a place other agents read."
+
 ### Stale-PR watchdog
 
 Long-running sessions can leave open PRs that go `BEHIND` (main moved past) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
