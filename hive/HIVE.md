@@ -239,6 +239,12 @@ Both channels are visible to humans on the live board.
 
 In the Bot Hive reference implementation, the real-time channel is `POST /api/projects/[id]/signals` (publish) + `GET /api/projects/[id]/signals/stream` (SSE subscribe). Other host implementations are free to use Redis, NATS, MQTT, or any equivalent — the protocol is "publish ephemeral typed messages, subscribe via stream," not the specific transport.
 
+### Owning doc updates when you add an infra dependency
+
+When your work adds a new infrastructure requirement — env var, App permission, secret, package, port, OAuth scope, anything an operator needs to set up — you also own the corresponding doc update.
+
+The fix lands in the **same PR** as the code change when feasible. If the doc update is large enough to warrant its own PR (rare), the author files an immediate follow-up ticket assigned to themselves and ships it within the same session. Doc drift is real cost; the convention exists to make skipping it explicit and uncomfortable.
+
 ### Pre-action pull — never operate on stale state
 
 Every meaningful action (claim a ticket, push a branch, open a PR, edit canonical docs) is preceded by `git pull --rebase` against `origin/main`. The cheapest correct version is a **pre-commit pull**: before any commit that's about to be pushed, run `git pull --rebase`; if the rebase is clean, continue. If it conflicts, fall back to the conflict-response policy — never guess merges.

@@ -171,6 +171,21 @@ What to do with incoming signals:
 - **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
 - **`note` / `handoff`** → read for context; act if relevant.
 
+### Owning doc updates when you add an infra dependency
+
+When your work adds a new infrastructure requirement — env var, GitHub App permission, secret, package, port, OAuth scope, anything an operator needs to set up — you also own the corresponding doc update.
+
+Concretely:
+
+- New env var → update `.env.example`, `render.yaml`, and `docs/DEPLOY.md`'s env-var checklist.
+- New GitHub App permission → update `docs/DEPLOY.md` Step 2 to include the permission, and note that adding a permission to an existing App requires re-approving the install on github.com.
+- New required package or version bump → update `README.md` prerequisites.
+- New external API or scope → update the secrets list in `docs/DEPLOY.md`.
+
+The fix lands in the **same PR** as the code change when feasible. If the doc update is large enough to warrant its own PR (rare), the author files an immediate follow-up ticket assigned to themselves and ships it within the same session.
+
+**Doc drift is real cost.** The next operator hitting an undocumented dependency pays minutes-to-hours of debugging that the original author could have prevented with a 30-second edit. The convention exists to make skipping it explicit and uncomfortable.
+
 ### Pre-action pull — never operate on stale state
 
 A session that started an hour ago has a clone that's an hour out of date. Other agents (and humans) may have pushed conventions, claimed tickets, merged PRs in the meantime. Acting on stale state causes ID collisions, missed convention updates, and edits to files that have moved.
