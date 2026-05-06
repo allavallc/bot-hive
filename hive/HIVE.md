@@ -106,9 +106,10 @@ If the user asks "what should I work on?", prepend a one-line recommendation bef
 
 ## When the user adds a story
 
-When the user says "add a story about X" or picks something new to work on, **invoke the `product-manager` skill** (installed at `~/.claude/skills/product-manager/SKILL.md`; source lives in this repo at `skills/product-manager/SKILL.md`). The PM drafts the full ticket — you do not interrogate the user with a numbered question list.
+When the user says "add a story about X" or picks something new to work on, the agent acts as a senior PM and drafts the full ticket in one pass — no numbered-question interrogation. Some agent hosts ship a dedicated helper for this; if yours does, use it. Otherwise follow the principles below directly.
 
-If the skill is not installed, follow the principles below directly.
+> *Reference helpers (one example per host — adopters add their own):*
+> *Claude Code: `~/.claude/skills/product-manager/SKILL.md` (source: `skills/product-manager/SKILL.md`).*
 
 The flow is **draft first, ask second**:
 
@@ -549,7 +550,7 @@ Trigger: HV-090 rejected
 
 **Multi-ticket commits:** prefer splitting into one-ticket-per-commit. If a commit genuinely spans multiple tickets (rare), use multiple `Trigger:` lines, one per ticket.
 
-**Convention, not enforcement.** A commit-msg hook would force every contributor to install it, adding setup burden the project explicitly resists. Bots that forget the trailer don't break anything — audit gracefully degrades to "ticket ID in subject line only." Use the PM skill and the trailers populate by default.
+**Convention, not enforcement.** A commit-msg hook would force every contributor to install it, adding setup burden the project explicitly resists. Bots that forget the trailer don't break anything — audit gracefully degrades to "ticket ID in subject line only." Use a host's ticket-drafting helper (when available) and the trailers populate by default.
 
 **Human-initiated commits** (accept/reject via the board UI) use `Rejected-by: <github-username>` instead of `Bot:` — the human is the actor, not an agent. The `Model:` and `Co-Authored-By:` trailers are omitted; only `Trigger:` and `Rejected-by:` appear:
 
@@ -711,7 +712,10 @@ The field is orthogonal to status: status describes workflow stage; verification
 
 Tickets with `**User-facing**: yes` route through `in-review/` between `in-progress/` and `done/`. A *separate* tester (human or bot — never the bot that built the ticket) reads the dev bot's `## How to test` instructions, executes them, and either approves (→ `done/`) or rejects (→ `in-progress/`).
 
-Bot-tester entry point: the `acceptance-tester` skill (installed at `~/.claude/skills/acceptance-tester/`; source in this repo at `skills/acceptance-tester/SKILL.md`) walks a bot through the steps below, including the tester ≠ dev bot identity check. Humans testing manually follow the same steps without the skill.
+Bot-tester entry point: each agent host may ship a tester helper that walks a bot through the steps below, including the tester ≠ dev bot identity check. If yours does, use it; otherwise follow the steps directly. Humans testing manually follow the same steps regardless.
+
+> *Reference helpers:*
+> *Claude Code: `~/.claude/skills/acceptance-tester/` (source: `skills/acceptance-tester/SKILL.md`).*
 
 ### Handoff (dev bot, end of work)
 
@@ -882,7 +886,7 @@ Read all files across all folders in `hive/` including `not-doing/`. Find the hi
 A feature set is a coherent collection of tickets grouped under a common goal or milestone. It is not a time box — it's done when all its tickets are done.
 
 - Feature set files live in `hive/feature-sets/` (named `feature-set-XXX-<slug>.md`)
-- Every new ticket gets a feature set assignment at creation time. The PM skill is responsible for deciding:
+- Every new ticket gets a feature set assignment at creation time. The drafting agent (or its ticket-drafting helper, if the host ships one) is responsible for deciding:
   1. Does this ticket belong to an existing feature set? → reference it
   2. If not, propose a new feature set (one-sentence rationale + slug) and scaffold the file
 - The user may override the assignment at draft-review time
