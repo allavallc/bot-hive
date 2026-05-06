@@ -67,6 +67,8 @@ gh pr merge --auto --squash --delete-branch
 
 `--auto` queues the merge and fires it the moment CI goes green. No manual step. Total ceremony per change: ~2-3 min of wall time (CI run), ~5s of agent interaction.
 
+When the GitHub merge queue is enabled (HV-080 — see `docs/DEPLOY.md` "Step 9"), source PRs are batched: multiple auto-mergeable PRs share a single CI run on a combined branch, then merge atomically. With 5 PRs in flight, total wall time stays ~3 min instead of growing to ~15 min. Coordination-metadata-only PRs (hive/, docs/, tasks/, AGENTS.md, etc.) skip CI entirely (HV-079) and land in seconds regardless.
+
 ### Conceptually: still two lanes
 
 The mental split between coordination metadata and source code is still useful — it determines what the change is *about*, even though both flow through PRs:
