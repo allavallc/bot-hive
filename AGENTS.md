@@ -123,6 +123,31 @@ Concretely:
 
 If you find yourself writing two PRs whose net effect could equally be one PR — collapse them. Race conditions are the failure mode.
 
+### Stale-PR watchdog — active agents update BEHIND PRs
+
+A long-running session can leave its open PR `BEHIND` (main moved after the PR opened) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
+
+**On session start (after the rest of this checklist) and every ~10 minutes while you work:**
+
+```bash
+gh pr list --json number,mergeStateStatus,isDraft \
+  | jq -r '.[] | select(.isDraft == false) | select(.mergeStateStatus == "BEHIND") | .number'
+```
+
+For every PR number returned, run:
+
+```bash
+gh pr update-branch <number>
+```
+
+GitHub merges current main into the PR's branch. CI re-runs. Auto-merge fires if the result is clean.
+
+**For `DIRTY` PRs (real conflicts), don't touch them.** Conflicts mean someone needs to resolve manually; surface to the human via `hive/questions-for-human.md` rather than guessing a merge.
+
+This is not a chore — it's the swarm tending its own garden. The cost is ~5 seconds; the savings is hours of idle-PR rot when an agent's session ends but its PR stays open.
+
+A convenience helper exists: `scripts/update-stale-prs.sh` (or `.ps1`). HV-051 adds a server-side cron that does the same thing every 10 min as a backstop.
+
 ### Pre-action pull — never operate on stale state
 
 A session that started an hour ago has a clone that's an hour out of date. Other agents (and humans) may have pushed conventions, claimed tickets, merged PRs in the meantime. Acting on stale state causes ID collisions, missed convention updates, and edits to files that have moved.
