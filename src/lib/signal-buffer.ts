@@ -19,7 +19,15 @@
 export const MAX_SIGNALS_PER_PROJECT = 100;
 export const SIGNAL_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-export type SignalType = "claim" | "done" | "blocked" | "question" | "note" | "handoff";
+export type SignalType =
+  | "claim"
+  | "done"
+  | "blocked"
+  | "question"
+  | "note"
+  | "handoff"
+  | "accepted"
+  | "rejected";
 
 export const SIGNAL_TYPES: readonly SignalType[] = [
   "claim",
@@ -28,6 +36,8 @@ export const SIGNAL_TYPES: readonly SignalType[] = [
   "question",
   "note",
   "handoff",
+  "accepted",
+  "rejected",
 ] as const;
 
 export type Signal = {

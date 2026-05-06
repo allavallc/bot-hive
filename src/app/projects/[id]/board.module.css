@@ -441,6 +441,49 @@
   border-color: var(--line);
 }
 
+/* HV-055: pending-transition badge, shown on a card between the
+   accept/reject click and the deploy that lands the underlying state move. */
+.pendingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  background: rgba(0, 0, 0, 0.2);
+  animation: pendingBadgeIn 220ms ease-out;
+}
+
+.pendingBadge[data-kind="approved"] {
+  color: #6cc070;
+}
+
+.pendingBadge[data-kind="rejected"] {
+  color: #d97757;
+}
+
+.pendingBadgeSub {
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: var(--ink-dim);
+}
+
+@keyframes pendingBadgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .cardFs {
   display: inline-block;
   max-width: 100%;
