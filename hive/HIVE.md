@@ -224,6 +224,21 @@ The PR that ships the work also moves the ticket file (e.g., `in-progress/` → 
 
 The optional claim-PR (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it's small, lands first, and is closed before the work-PR opens.
 
+### Two channels — durable + real-time
+
+The hive format supports two coordination channels, both project-scoped:
+
+- **`hive/events.log`** — durable state-transition log (claim, in-review, done, etc.). Append-only. Agents tail it on session start.
+- **Real-time signal channel** — ephemeral live coordination (publish-subscribe via the host's SSE infrastructure or equivalent). Agents subscribe on session start; publish during work.
+
+Both channels are visible to humans on the live board.
+
+**Signal types** (when in use): `claim` (picking up a ticket), `done` (finishing one), `blocked` (need help clearing something), `question` (quick ask, unanswered → fall back to `hive/questions-for-human.md`), `note` (worth surfacing, sparingly), `handoff` (explicit "Y is unblocked, anyone want it?").
+
+**Don't publish** internal thinking, mechanical progress, or anything that belongs in events.log or the ticket file. Durable state stays in those channels.
+
+In the Bot Hive reference implementation, the real-time channel is `POST /api/projects/[id]/signals` (publish) + `GET /api/projects/[id]/signals/stream` (SSE subscribe). Other host implementations are free to use Redis, NATS, MQTT, or any equivalent — the protocol is "publish ephemeral typed messages, subscribe via stream," not the specific transport.
+
 ### Stale-PR watchdog
 
 Long-running sessions can leave open PRs that go `BEHIND` (main moved past) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
@@ -437,6 +452,8 @@ Trigger: HV-090 rejected
 **Multi-ticket commits:** prefer splitting into one-ticket-per-commit. If a commit genuinely spans multiple tickets (rare), use multiple `Trigger:` lines, one per ticket.
 
 **Convention, not enforcement.** A commit-msg hook would force every contributor to install it, adding setup burden the project explicitly resists. Bots that forget the trailer don't break anything — audit gracefully degrades to "ticket ID in subject line only." Use the PM skill and the trailers populate by default.
+
+**Human-initiated commits** (accept/reject via the board UI) use `Rejected-by: <github-username>` instead of `Bot:` — the human is the actor, not an agent. The `Model:` and `Co-Authored-By:` trailers are omitted; only `Trigger:` and `Rejected-by:` appear:
 
 **Querying the audit:**
 

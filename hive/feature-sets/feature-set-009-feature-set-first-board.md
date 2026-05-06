@@ -11,7 +11,9 @@ This is the natural complement to FS-007 (parallel-bot coordination): bots alrea
 This also reframes Bot Hive's value proposition: the product isn't "another ticket tracker" — it's "feature-set-driven coordination for human + bot teams." The board should look the part.
 
 ## Tickets
-**To be planned collaboratively** with CC2. Anticipated scope:
+- HV-058 — View the board grouped by feature set (toggle on the board header; first cut layout TBD during implementation)
+
+**Future tickets to be planned.** Anticipated scope:
 
 - Default route `/projects/[id]` renders an FS dashboard: each feature set as a card showing goal sentence, ticket count, progress (% done), and status (planning / in-progress / done).
 - Drill-down `/projects/[id]/feature-sets/[fs-id]` shows the tickets within a feature set in the existing kanban layout (so the current rendering work is reused, not thrown away).

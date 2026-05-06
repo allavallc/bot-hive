@@ -441,6 +441,49 @@
   border-color: var(--line);
 }
 
+/* HV-055: pending-transition badge, shown on a card between the
+   accept/reject click and the deploy that lands the underlying state move. */
+.pendingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  background: rgba(0, 0, 0, 0.2);
+  animation: pendingBadgeIn 220ms ease-out;
+}
+
+.pendingBadge[data-kind="approved"] {
+  color: #6cc070;
+}
+
+.pendingBadge[data-kind="rejected"] {
+  color: #d97757;
+}
+
+.pendingBadgeSub {
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: var(--ink-dim);
+}
+
+@keyframes pendingBadgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .cardFs {
   display: inline-block;
   max-width: 100%;
@@ -741,4 +784,125 @@
   margin: 0;
   word-break: break-word;
   padding: 1px 0;
+}
+
+/* Panel review actions */
+
+.panelActions {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.panelActionBtn {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.panelActionBtn:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+
+.panelActionBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.panelActionAccept {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.panelActionAccept:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.panelActionReject {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+
+.rejectForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.rejectLabel {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.rejectReason {
+  font-family: var(--sans);
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.rejectReason:focus {
+  outline: none;
+  border-color: var(--ink-dim);
+}
+
+.rejectFormActions {
+  display: flex;
+  gap: 10px;
+}
+
+.reviewStatus {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.reviewResult {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.reviewResultLabel {
+  color: var(--accent);
+}
+
+.reviewResultLink {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reviewResultLink:hover {
+  color: var(--accent);
+}
+
+.reviewResultSub {
+  color: var(--ink-dimmer);
 }

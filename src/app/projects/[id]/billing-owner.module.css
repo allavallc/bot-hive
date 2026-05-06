@@ -1,0 +1,166 @@
+.panel {
+  border: 1px solid var(--line);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  background: var(--bg-2);
+}
+
+.heading {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin: 0 0 12px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.avatar {
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.login {
+  font-family: var(--read);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.youBadge {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 1px 6px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-family: var(--read);
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+}
+
+.empty {
+  font-family: var(--read);
+  font-size: 0.85rem;
+  color: var(--ink-dimmer);
+  font-style: italic;
+}
+
+.collabList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.collabButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 4px 10px;
+  font-family: var(--read);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.collabButton:hover {
+  border-color: var(--ink-dim);
+}
+
+.collabButton img {
+  border-radius: 50%;
+}
+
+.takeoverButton {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 6px 14px;
+  font-family: var(--read);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.takeoverButton:hover {
+  background: rgba(196, 114, 74, 0.1);
+}
+
+.confirmModal {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 24px 28px;
+  max-width: 480px;
+  width: 90%;
+  color: var(--ink);
+}
+
+.confirmModal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.confirmModal h3 {
+  font-family: var(--read);
+  font-size: 1.05rem;
+  margin: 0 0 12px 0;
+  color: var(--ink);
+}
+
+.confirmModal p {
+  font-family: var(--read);
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+.error {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirmActions button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 6px 16px;
+  font-family: var(--read);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.confirmActions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirmButton {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
