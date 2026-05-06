@@ -385,7 +385,7 @@ The **substrate** (git as the broker, file system as topics, pull-based polling)
 
 Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model **on the same machine**.
 
-**Identity is per-session, not per-machine.** Two Claude Code sessions on the same laptop get different handles. Each session is a fresh roll on start.
+**Identity is per-session, not per-machine.** Two agent sessions on the same laptop get different handles, even if they're the same agent type. Each session is a fresh roll on start.
 
 ### On session start
 
@@ -421,7 +421,7 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 
 ### Why per-session, not per-machine
 
-The earlier convention (`git config bot-hive.handle <name>` once per machine) failed the "two sessions on one laptop" case — both sessions read the same git config and ended up with identical handles, indistinguishable in audit. Per-session identity solves that case structurally: each Claude session is a fresh entity in the swarm.
+The earlier convention (`git config bot-hive.handle <name>` once per machine) failed the "two sessions on one laptop" case — both sessions read the same git config and ended up with identical handles, indistinguishable in audit. Per-session identity solves that case structurally: each agent session is a fresh entity in the swarm.
 
 **Existing `git config bot-hive.handle` values are deprecated but harmless** — bots ignore them. The user can `git config --unset bot-hive.handle` to clean up; not required.
 
