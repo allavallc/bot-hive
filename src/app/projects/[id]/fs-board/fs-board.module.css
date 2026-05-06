@@ -42,7 +42,7 @@
 
 .countBadge {
   font-size: 0.65rem;
-  color: var(--ink-dimmer);
+  color: var(--ink);
   padding: 1px 7px;
   border: 1px solid var(--line);
 }
