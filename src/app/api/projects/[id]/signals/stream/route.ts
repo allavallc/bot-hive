@@ -1,22 +1,15 @@
-import { auth } from "@/lib/auth";
+import { getActor } from "@/lib/actor";
 import { type BroadcastEvent, subscribe } from "@/lib/broadcast";
-import { getProjectForUser } from "@/lib/projects";
 import { getSignals } from "@/lib/signal-buffer";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
+  const actor = await getActor(req, projectId);
+  if (!actor) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const project = await getProjectForUser(session.user.id, projectId);
-  if (!project) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
   const encoder = new TextEncoder();
