@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { BillingOwnerPanel } from "./billing-owner.client";
 import { Board } from "./board.client";
+import { SwarmPanel } from "./swarm-panel.client";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +118,7 @@ export default async function ProjectBoardPage({
         initialTickets={initialTickets}
         initialFeatures={initialFeatures}
       />
+      <SwarmPanel projectId={project.id} />
     </>
   );
 }
