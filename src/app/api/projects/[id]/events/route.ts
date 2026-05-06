@@ -1,10 +1,17 @@
-// GET /api/projects/[id]/events — returns the last N lines of `hive/events.log`
+// GET /api/projects/[id]/events — returns recent `hive/events.log` lines
 // from the connected repo. Read via the GitHub App's installation token; no
 // bot tokens, no setup, no client-side auth beyond the user's session cookie.
 //
-// The swarm panel calls this on mount and after every `project-changed`
-// broadcast on the existing SSE stream — so newly-pushed events.log lines
-// appear in the panel within seconds of the webhook firing.
+// Filters server-side:
+//   - Lines older than MAX_AGE_DAYS are dropped (keeps the panel focused on
+//     "what's happening now," lets old activity age out gracefully).
+//   - Header comments (#-prefixed) and malformed lines are dropped.
+//   - Returned newest-first (most recent at index 0) so the swarm panel can
+//     render top-down without re-sorting.
+//   - Capped at MAX_LINES even after filtering.
+//
+// Called on board load and after every `project-changed` broadcast on the
+// existing SSE stream — so newly-pushed events.log lines appear in seconds.
 
 import { auth } from "@/lib/auth";
 import { installationOctokit } from "@/lib/github";
@@ -15,6 +22,8 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const MAX_LINES = 200;
+const MAX_AGE_DAYS = 7;
+const ISO_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\b/;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
@@ -47,21 +56,28 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   } catch (err) {
     const status = (err as { status?: number })?.status;
     if (status === 404) {
-      // No events.log yet (fresh repo). Return empty rather than 404 so the
-      // swarm panel can render its empty state.
       return NextResponse.json({ entries: [] });
     }
     console.error("[events] read failed:", err);
     return NextResponse.json({ error: "failed to read events.log" }, { status: 500 });
   }
 
-  const lines = content
+  const cutoffMs = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+
+  const recent = content
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+    .filter((l) => l.length > 0 && !l.startsWith("#"))
+    .filter((line) => {
+      const match = ISO_TS_RE.exec(line);
+      if (!match) return false; // malformed line — drop
+      const ts = Date.parse(match[1]);
+      if (Number.isNaN(ts)) return false;
+      return ts >= cutoffMs;
+    });
 
-  // Last MAX_LINES lines, oldest → newest.
-  const tail = lines.slice(-MAX_LINES);
+  // Newest first; cap.
+  const newestFirst = recent.slice(-MAX_LINES).reverse();
 
-  return NextResponse.json({ entries: tail });
+  return NextResponse.json({ entries: newestFirst });
 }

@@ -27,6 +27,6 @@ Active — three cleanup tickets filed, ready to claim.
 
 ## Architecture & decisions
 
-### 2026-05-06 — Filed (nectar)
+### 2026-05-06 — Filed (allavallc-cc1)
 
 Triggered by user feedback: "CC2 is Claude Code right now, but it could be Codex, GPT, Aider, Gemini, anything. Everything you do MUST be abstracted from Claude — it has to be something any bot / LLM would be able to understand." Audit run; three cleanup tickets identified covering the prose-level leaks. Larger structural moves (e.g., bot capability negotiation, agent-feature-detection) are explicitly out of scope — agent-neutrality is achieved through written discipline + the existing shim pattern, not through a runtime abstraction layer.
