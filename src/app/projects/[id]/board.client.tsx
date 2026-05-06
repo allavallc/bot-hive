@@ -141,7 +141,7 @@ export function Board({
     setOpenTicketId(ticketId);
   }
 
-  function handleModalClose() {
+  function handlePanelClose() {
     setOpenTicketId(null);
     openTriggerRef.current?.focus();
     openTriggerRef.current = null;
@@ -226,7 +226,7 @@ export function Board({
         </section>
       </main>
 
-      <TicketModal ticket={openTicket} onClose={handleModalClose} />
+      <TicketPanel ticket={openTicket} onClose={handlePanelClose} />
     </div>
   );
 }
@@ -452,82 +452,56 @@ function Card({
   );
 }
 
-function TicketModal({
+function TicketPanel({
   ticket,
   onClose,
 }: {
   ticket: Ticket | null;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const handleCancel = (e: Event) => {
-      e.preventDefault();
-      onCloseRef.current();
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
     };
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, []);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (ticket) {
-      if (!dialog.open) dialog.showModal();
-    } else {
-      if (dialog.open) dialog.close();
-    }
-  }, [ticket]);
-
-  function handleBackdropClick(e: React.MouseEvent<HTMLDialogElement>) {
-    if (e.target === dialogRef.current) onClose();
-  }
-
+  const isOpen = ticket !== null;
   const fm = ticket?.frontmatter ?? {};
   const metaEntries = Object.entries(fm).filter(([, v]) => v);
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: <dialog> handles Escape via the cancel event listener above
-    <dialog
-      ref={dialogRef}
-      className={styles.modal}
-      onClick={handleBackdropClick}
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
-      <div className={styles.modalInner}>
-        <div className={styles.modalHeader}>
-          <h2 id="modal-title" className={styles.modalTitle}>
-            <span className={styles.modalHvId}>{ticket?.hvId}</span>
-            {ticket?.title}
-          </h2>
-          <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+    <section className={styles.panel} data-open={isOpen} aria-label="Ticket details">
+      <div className={styles.panelHeader}>
+        <div className={styles.panelTitleBlock}>
+          <span className={styles.panelHvId}>{ticket?.hvId ?? ""}</span>
+          <h2 className={styles.panelTitle}>{ticket?.title ?? ""}</h2>
         </div>
-        <div className={styles.modalBody}>
-          {ticket && (
-            <>
-              <dl className={styles.modalMeta}>
-                {metaEntries.map(([k, v]) => (
-                  <div key={k} className={styles.modalMetaRow}>
-                    <dt className={styles.modalMetaKey}>{k}</dt>
-                    <dd className={styles.modalMetaVal}>{v}</dd>
-                  </div>
-                ))}
-              </dl>
-              <pre className={styles.bodyText}>{ticket.body}</pre>
-            </>
-          )}
-        </div>
+        <button type="button" className={styles.panelClose} onClick={onClose} aria-label="Close">
+          ✕
+        </button>
       </div>
-    </dialog>
+      <div className={styles.panelBody}>
+        {ticket && (
+          <>
+            <dl className={styles.panelMeta}>
+              {metaEntries.map(([k, v]) => (
+                <div key={k} className={styles.panelMetaRow}>
+                  <dt className={styles.panelMetaKey}>{k}</dt>
+                  <dd className={styles.panelMetaVal}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <pre className={styles.bodyText}>{ticket.body}</pre>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
