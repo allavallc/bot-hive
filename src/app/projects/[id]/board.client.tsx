@@ -229,16 +229,18 @@ export function Board({
           <span className={styles.connState} data-on={connected}>
             {connected ? "● live" : "○ reconnecting"}
           </span>
-          <span className={styles.generatedAt}>Generated {generatedAt.toLocaleString()}</span>
         </div>
       </header>
 
       <main className={styles.main}>
-        <nav className={styles.crumb}>
-          <a href="/dashboard" className={styles.crumbLink}>
-            ← Dashboard
-          </a>
-        </nav>
+        <div className={styles.crumbRow}>
+          <nav className={styles.crumb}>
+            <a href="/dashboard" className={styles.crumbLink}>
+              ← Dashboard
+            </a>
+          </nav>
+          <span className={styles.generatedAt}>Generated {generatedAt.toLocaleString()}</span>
+        </div>
         <nav className={styles.subnav}>
           <a href={`/projects/${project.id}`} className={styles.subnavActive}>
             Board

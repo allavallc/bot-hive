@@ -86,10 +86,17 @@
   width: 100%;
 }
 
-/* Crumb (back link above tabs) */
+/* Crumb row — back link + generated-at timestamp */
+
+.crumbRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
 
 .crumb {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .crumbLink {
