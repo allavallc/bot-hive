@@ -169,24 +169,3 @@ export const syncState = pgTable("sync_state", {
   lastSha: text("last_sha"),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
 });
-
-export const botTokens = pgTable(
-  "bot_tokens",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    displayName: text("display_name").notNull(),
-    tokenHash: text("token_hash").notNull().unique(),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    projectActiveIdx: index("bot_tokens_project_active_idx").on(t.projectId, t.revokedAt),
-  }),
-);

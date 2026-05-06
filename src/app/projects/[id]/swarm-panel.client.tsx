@@ -1,123 +1,124 @@
 "use client";
 
 import { robotColor } from "@/components/robot-mascot";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./swarm-panel.module.css";
 
-type Signal = {
-  id: string;
-  timestamp: string;
-  type: "claim" | "done" | "blocked" | "question" | "note" | "handoff" | "accepted" | "rejected";
-  message: string;
-  bot?: string;
-  user?: string;
-  refs?: string[];
+// The swarm panel is a real-time view of `hive/events.log` — the durable
+// coordination log every bot writes to. There is no separate signal channel,
+// no bot tokens, no API surface beyond the existing GitHub webhook → SSE
+// broadcast that already powers the live board. When a bot pushes a commit
+// that touches `hive/events.log`, the webhook fires, the panel re-fetches,
+// and the new lines render here within seconds.
+
+type EventEntry = {
+  ts: string;
+  hvId: string;
+  action: string;
+  actor: string;
+  raw: string;
 };
 
 const STORAGE_KEY = "bot-hive:swarm-panel:open";
 
-const TYPE_GLYPH: Record<Signal["type"], string> = {
+// `hive/events.log` lines look like:  <ISO ts>  <hv-id|tag>  <action>  [unblocked-list]  <actor>
+// Tolerant parser — preserves the full raw line so anything off-format still renders.
+function parseEntry(raw: string): EventEntry | null {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const parts = trimmed.split(/\s+/);
+  if (parts.length < 3) return null;
+  const [ts, hvId, action, ...rest] = parts;
+  const actor = rest[rest.length - 1] ?? "";
+  return { ts, hvId, action, actor, raw: trimmed };
+}
+
+function ago(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const ms = Date.now() - t;
+  if (ms < 60_000) return `${Math.max(1, Math.floor(ms / 1000))}s`;
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h`;
+  return `${Math.floor(ms / 86_400_000)}d`;
+}
+
+const ACTION_GLYPH: Record<string, string> = {
   claim: "→",
   done: "✓",
   blocked: "⊘",
-  question: "?",
-  note: "·",
-  handoff: "⇌",
+  reclaim: "↺",
+  reverted: "↺",
+  filed: "+",
+  "in-progress": "·",
+  "in-review": "▸",
   accepted: "✓",
-  rejected: "↻",
+  rejected: "✗",
+  "not-doing": "—",
 };
-
-function ago(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return `${Math.max(1, Math.floor(ms / 1000))}s`;
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
-  return `${Math.floor(ms / 3_600_000)}h`;
-}
 
 export function SwarmPanel({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState<boolean>(true);
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [entries, setEntries] = useState<EventEntry[]>([]);
   const [connected, setConnected] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
 
-  // Load persisted open/closed state on mount.
+  // Load persisted open/closed state.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "0") setOpen(false);
   }, []);
 
-  // Persist open state.
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY, open ? "1" : "0");
   }, [open]);
 
-  // Subscribe to SSE when open.
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/events`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { entries: string[] };
+      const parsed = data.entries.map(parseEntry).filter((e): e is EventEntry => e !== null);
+      setEntries(parsed);
+    } catch {
+      // Network error — leave existing entries; SSE will trigger another refresh.
+    }
+  }, [projectId]);
+
+  // Subscribe to the project SSE; refetch events.log on every change broadcast.
   useEffect(() => {
     if (!open) return;
-    const es = new EventSource(`/api/projects/${projectId}/signals/stream`);
+    refresh();
+    const es = new EventSource(`/api/projects/${projectId}/stream`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
-    es.onmessage = (ev) => {
-      try {
-        const signal = JSON.parse(ev.data) as Signal;
-        setSignals((prev) => {
-          if (prev.some((s) => s.id === signal.id)) return prev;
-          return [...prev, signal];
-        });
-      } catch {
-        // Ignore malformed payload.
-      }
+    es.onmessage = () => {
+      // Any change broadcast — refresh events.log. Cheap, idempotent.
+      refresh();
     };
     return () => {
       es.close();
       setConnected(false);
     };
-  }, [open, projectId]);
+  }, [open, projectId, refresh]);
 
-  // Stick-to-bottom autoscroll: re-attach to the bottom whenever a new signal lands,
-  // unless the user has scrolled up. We *read* signals.length so biome's exhaustive-deps
-  // rule sees the dependency; the actual scroll logic doesn't need the value.
+  // Stick-to-bottom autoscroll when new entries arrive, unless the user has scrolled up.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
     if (stickToBottom.current) {
       list.scrollTop = list.scrollHeight;
     }
-    // signals.length is referenced here purely for the dependency; the useEffect closure
-    // captures listRef + stickToBottom which are refs (always current).
-    void signals.length;
-  }, [signals.length]);
+    void entries.length;
+  }, [entries.length]);
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
     stickToBottom.current = nearBottom;
-  }
-
-  async function publish(e: FormEvent) {
-    e.preventDefault();
-    const message = input.trim();
-    if (!message || sending) return;
-    setSending(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/signals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "note", message }),
-      });
-      if (res.ok) {
-        setInput("");
-      }
-    } catch {
-      // Network error — leave the input populated so user can retry.
-    } finally {
-      setSending(false);
-    }
   }
 
   if (!open) {
@@ -134,7 +135,7 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <aside className={styles.panel} aria-label="Swarm signal stream">
+    <aside className={styles.panel} aria-label="Swarm — events.log view">
       <header className={styles.panelHeader}>
         <span className={styles.title}>Swarm</span>
         <span className={styles.connState} data-on={connected} aria-live="polite">
@@ -151,46 +152,32 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
       </header>
 
       <div ref={listRef} className={styles.list} onScroll={handleScroll}>
-        {signals.length === 0 ? (
+        {entries.length === 0 ? (
           <p className={styles.empty}>
-            No signals yet. Bots and humans will appear here as they work.
+            No events yet. Bots and humans appear here as they push to <code>hive/events.log</code>.
           </p>
         ) : (
-          signals.map((s) => {
-            const author = s.bot ?? s.user ?? "?";
-            const color = robotColor(author);
-            return (
-              <div key={s.id} className={styles.signal} data-type={s.type}>
-                <span className={styles.glyph} aria-hidden="true">
-                  {TYPE_GLYPH[s.type]}
-                </span>
-                <span className={styles.author} style={{ color }}>
-                  {author}
-                </span>
-                <span className={styles.message}>{s.message}</span>
-                <span className={styles.time} title={s.timestamp}>
-                  {ago(s.timestamp)}
-                </span>
-              </div>
-            );
-          })
+          entries.map((e) => (
+            <div key={e.raw} className={styles.signal} data-type={e.action}>
+              <span className={styles.glyph} aria-hidden="true">
+                {ACTION_GLYPH[e.action] ?? "·"}
+              </span>
+              <span
+                className={styles.author}
+                style={{ color: e.actor ? robotColor(e.actor) : undefined }}
+              >
+                {e.actor || "?"}
+              </span>
+              <span className={styles.message}>
+                {e.action} {e.hvId}
+              </span>
+              <span className={styles.time} title={e.ts}>
+                {ago(e.ts)}
+              </span>
+            </div>
+          ))
         )}
       </div>
-
-      <form className={styles.composer} onSubmit={publish}>
-        <input
-          type="text"
-          className={styles.input}
-          placeholder="Type a note to the swarm…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={sending}
-          maxLength={500}
-        />
-        <button type="submit" className={styles.sendButton} disabled={sending || !input.trim()}>
-          {sending ? "…" : "Send"}
-        </button>
-      </form>
     </aside>
   );
 }
