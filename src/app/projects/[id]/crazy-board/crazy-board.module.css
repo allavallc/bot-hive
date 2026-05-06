@@ -1,0 +1,364 @@
+.root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #020408;
+  font-family: var(--mono);
+}
+
+/* Floating nav */
+
+.nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 24px;
+  background: rgba(2, 4, 8, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.navBack {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-dimmer);
+  text-decoration: none;
+  margin-right: auto;
+  transition: color 0.15s;
+}
+
+.navBack:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.navLinks {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+.navLink {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.navLink:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.navActive {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent);
+  padding-bottom: 2px;
+}
+
+.navRepo {
+  font-size: 0.6rem;
+  color: var(--ink-dimmer);
+  margin-left: 28px;
+}
+
+/* Scene */
+
+.scene {
+  position: absolute;
+  inset: 0;
+}
+
+/* Stars */
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+}
+
+/* Orbit rings */
+
+.ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+/* Sun */
+
+.sun {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sunCore {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff9e8 0%, #ffe066 35%, #ff9020 65%, transparent 100%);
+  box-shadow: 0 0 24px 10px rgba(255, 210, 60, 0.45), 0 0 70px 24px rgba(255, 140, 20, 0.22), 0 0
+    140px 50px rgba(255, 90, 0, 0.1);
+  animation: sunPulse 5s ease-in-out infinite;
+}
+
+@keyframes sunPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 24px 10px rgba(255, 210, 60, 0.45), 0 0 70px 24px rgba(255, 140, 20, 0.22), 0 0
+      140px 50px rgba(255, 90, 0, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 36px 14px rgba(255, 210, 60, 0.65), 0 0 100px 36px rgba(255, 140, 20, 0.32), 0 0
+      200px 70px rgba(255, 90, 0, 0.15);
+  }
+}
+
+.sunName {
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 210, 80, 0.6);
+  white-space: nowrap;
+}
+
+/* Orbit animation */
+
+@keyframes orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.orbitArm {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  animation: orbit var(--duration, 60s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Satellites */
+
+.satellite {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--color, #888);
+  transform: translateX(var(--r, 200px)) translate(-50%, -50%);
+  width: var(--size, 8px);
+  height: var(--size, 8px);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 6px 2px var(--color, #888);
+  transition: box-shadow 0.2s, transform 0.2s;
+  z-index: 3;
+}
+
+.satellite:hover {
+  box-shadow: 0 0 16px 6px var(--color, #888);
+  transform: translateX(var(--r, 200px)) translate(-50%, -50%) scale(2);
+}
+
+.satellite[data-state="done"] {
+  opacity: 0.45;
+  box-shadow: 0 0 4px 1px #ffd060;
+  background: #ffd060;
+}
+
+.satellite[data-state="blocked"] {
+  background: #ff4444;
+  box-shadow: 0 0 8px 3px #ff4444;
+  animation: blockedPulse 2.5s ease-in-out infinite;
+}
+
+.satellite[data-state="not-doing"] {
+  opacity: 0.2;
+}
+
+@keyframes blockedPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 8px 3px #ff4444;
+  }
+  50% {
+    box-shadow: 0 0 18px 7px #ff4444;
+  }
+}
+
+/* Crew ships */
+
+.ship {
+  position: absolute;
+  transform: translateX(var(--r, 520px)) translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--color, var(--accent));
+  filter: drop-shadow(0 0 6px var(--color, var(--accent)));
+}
+
+.shipName {
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color, var(--accent));
+  white-space: nowrap;
+}
+
+/* HUD */
+
+.hud {
+  position: absolute;
+  bottom: 90px;
+  left: 24px;
+  z-index: 20;
+  min-width: 280px;
+  max-width: 380px;
+  background: rgba(2, 4, 8, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 20px;
+  backdrop-filter: blur(12px);
+  animation: hudFadeIn 0.15s ease;
+}
+
+@keyframes hudFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hudId {
+  font-size: 0.6rem;
+  letter-spacing: 0.25em;
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.hudTitle {
+  font-family: var(--read);
+  font-size: 0.95rem;
+  color: var(--ink);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.hudState {
+  display: inline-block;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink-dim);
+  padding: 2px 9px;
+  margin-bottom: 6px;
+}
+
+.hudState[data-state="in-progress"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.hudState[data-state="in-review"] {
+  color: #4a9bc4;
+  border-color: #4a9bc4;
+}
+.hudState[data-state="done"] {
+  color: #ffd060;
+  border-color: #ffd060;
+}
+.hudState[data-state="blocked"] {
+  color: #ff4444;
+  border-color: #ff4444;
+}
+
+.hudMeta {
+  font-size: 0.6rem;
+  color: var(--ink-dimmer);
+  margin-top: 4px;
+  letter-spacing: 0.05em;
+}
+
+/* Legend */
+
+.legend {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 20;
+  background: rgba(2, 4, 8, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 14px 18px;
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.legendDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 2px 0;
+}
+
+.legendHint {
+  font-size: 0.58rem;
+  color: var(--ink-dimmer);
+  letter-spacing: 0.08em;
+}
