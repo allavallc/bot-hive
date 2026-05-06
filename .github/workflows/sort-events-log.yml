@@ -1,0 +1,55 @@
+# Sort hive/events.log by ISO timestamp every 30 min — see HV-083 + AGENTS.md
+# "events.log".
+#
+# Pairs with HV-071 (merge=union) which auto-resolves events.log conflicts by
+# concatenating without sorting. This cron periodically re-sorts so the log
+# stays chronologically readable.
+
+name: sort-events-log
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "events-log-sort-bot"
+          git config user.email "events-log-sort-bot@users.noreply.github.com"
+
+      - name: Sort events.log
+        id: sort
+        run: |
+          chmod +x ./scripts/sort-events-log.sh
+          result=$(./scripts/sort-events-log.sh)
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "Sort result: $result"
+
+      - name: Open auto-merging PR if anything changed
+        if: steps.sort.outputs.result == 'changed'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="sort-events-log-$(date -u +%s)"
+          git checkout -b "$branch"
+          git add hive/events.log
+          git commit -m "chore: sort hive/events.log (HV-083 cron)"
+          git push -u origin "$branch"
+          gh pr create \
+            --title "chore: sort hive/events.log (HV-083 cron)" \
+            --body "Periodic re-sort by ISO timestamp. Pairs with HV-071 (merge=union) which concatenates without sorting."
+          gh pr merge --auto --squash --delete-branch
