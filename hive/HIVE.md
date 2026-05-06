@@ -247,6 +247,40 @@ Concretely, before claiming a user-facing UI ticket: read the surfaces it touche
 
 This is the UI-specific subcase of the broader pre-build interview. Skipping it lands UI that has to be ripped out.
 
+### Bot presence
+
+The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, different channel.
+
+The Bot Hive reference implementation uses `hive/presence.log` — append-only, file-based, git-synced. On session start (after handle pick + `focus.md` + tail of `events.log`), every agent appends one line:
+
+```
+<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
+```
+
+A focus change mid-session appends another line. Session end is optional. The presence line piggybacks on the next commit; agents online >5 min with no other commit push a tiny presence-only PR. On session start, agents read the file and filter to the last hour to see who else is online; entries older than 24h may be pruned FIFO.
+
+A separate file from `events.log` because events.log is durable lifecycle and presence is ephemeral chatter — different contract. The SSE signal stream is the right semantic home, but bots don't have web-app session auth today (they push via git, not HTTP). When project-scoped bot tokens exist, presence will also publish on the SSE channel.
+
+Other host implementations may use any equivalent: a Redis-backed presence key with TTL, NATS heartbeats, etc. The protocol is "every session announces itself, in a place other agents read."
+
+### Hot-file conflict avoidance
+
+A "hot file" is one that multiple parallel agents commonly edit, where parallel PRs reliably go DIRTY at merge time. The convention: before opening a PR that touches a hot file, query the host's PR system for any open PR already touching that file. If one exists, rebase onto its branch (preferred), wait for it to merge, or pick different work — don't open a competing edit.
+
+The list of hot files is repo-local (lives next to the code, not in this format-neutral spec). It typically includes the canonical agent-coordination docs (this file's host equivalent, the agent-shim file, the events log, the focus file, the presence log, lessons-learned files), the deploy config, the dependency manifest, and any auto-generated migration files. Curated, not auto-detected.
+
+The pre-edit check is a query to the host's PR system, not a lock service. github + `gh pr list --json files` is one implementation; other hosts use their equivalent. Optional: a small helper script (`scripts/check-hot-files.sh` in the Bot Hive reference) that takes a list of file paths and prints any open PR touching them, returning non-zero if conflicts exist — composes into pre-push hooks if anyone wants automation later.
+
+When real-time bot-to-host auth becomes available, the convention can absorb a sub-second SSE-based "lock" signal without changing the agent-side rule: same check, faster channel.
+
+### Stale-PR watchdog
+
+Long-running sessions can leave open PRs that go `BEHIND` (main moved past) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
+
+On session start and every ~10 min while working: scan open non-draft PRs; for any in `BEHIND` state, trigger an "update branch" against main (no conflict resolution; just merge-from-main). For `DIRTY` PRs, leave them — surface to humans via `hive/questions-for-human.md`.
+
+The Bot Hive reference implementation uses `gh pr update-branch <N>` for the update; other host implementations may differ. Optional server-side complement: a scheduled job (e.g., GitHub Actions cron) that does the same thing every 10 min as a backstop for when no agents are online.
+
 ### Owning doc updates when you add an infra dependency
 
 When your work adds a new infrastructure requirement — env var, App permission, secret, package, port, OAuth scope, anything an operator needs to set up — you also own the corresponding doc update.
@@ -271,6 +305,8 @@ If a bot looks at an in-progress ticket whose `Last touched:` is older than **2 
 OR take the ticket over by reassigning `Assigned to:` and refreshing `Last touched:` to now.
 
 This replaces a heartbeat daemon with a passive, environment-readable signal. No process required.
+
+A scheduled job may run periodically as a backstop: scan `in-progress/`, find tickets older than the threshold, return them to `backlog/`. The Bot Hive reference implementation uses a GitHub Actions cron at `*/30 * * * *` (`scripts/reclaim-stale-claims.sh` does the work). Active agents may still reclaim manually on session start — the cron handles only the gap when no agents are around.
 
 ### `hive/events.log` — append-only event topic
 
@@ -355,7 +391,7 @@ The **substrate** (git as the broker, file system as topics, pull-based polling)
 
 Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model **on the same machine**.
 
-**Identity is per-session, not per-machine.** Two Claude Code sessions on the same laptop get different handles. Each session is a fresh roll on start.
+**Identity is per-session, not per-machine.** Two agent sessions on the same laptop get different handles, even if they're the same agent type. Each session is a fresh roll on start.
 
 ### On session start
 
@@ -391,7 +427,7 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 
 ### Why per-session, not per-machine
 
-The earlier convention (`git config bot-hive.handle <name>` once per machine) failed the "two sessions on one laptop" case — both sessions read the same git config and ended up with identical handles, indistinguishable in audit. Per-session identity solves that case structurally: each Claude session is a fresh entity in the swarm.
+The earlier convention (`git config bot-hive.handle <name>` once per machine) failed the "two sessions on one laptop" case — both sessions read the same git config and ended up with identical handles, indistinguishable in audit. Per-session identity solves that case structurally: each agent session is a fresh entity in the swarm.
 
 **Existing `git config bot-hive.handle` values are deprecated but harmless** — bots ignore them. The user can `git config --unset bot-hive.handle` to clean up; not required.
 
@@ -415,25 +451,56 @@ The earlier convention (`git config bot-hive.handle <name>` once per machine) fa
 
 ## Provenance trailers
 
-Bot commits for ticket-lifecycle actions carry trailers in the commit message body so the audit trail lives in `git log` without any new infrastructure:
-
-```
-HV-XXX: <action>
-
-<short body explaining what changed>
-
-Model: claude-opus-4-7
-Bot: CC1
-Trigger: HV-XXX <action>
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-```
+Bot commits for ticket-lifecycle actions carry trailers in the commit message body so the audit trail lives in `git log` without any new infrastructure. The trailer captures *who / what / when* for every ticket-state-change commit, agent-neutral by design — any LLM agent type slots into the same format.
 
 **Trailer format:**
 
-- `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`, `gpt-5-codex`).
-- `Bot:` — the bot's handle from `git config bot-hive.handle` (e.g. `CC1`, `CC2`, `scout`). Required when the handle is set; omit only if the convention isn't yet adopted in the repo.
+- `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `gpt-5-codex`, `gemini-2.5-pro`, `aider-deepseek-v3`). Use whatever string identifies your agent's underlying model.
+- `Bot:` — the bot's per-session handle (e.g. `nectar`, `kestrel`, `scout`).
 - `Trigger:` — `HV-XXX <action>` where action ∈ `claim | done | edit | blocked | reclaim | in-review | accepted | rejected`.
-- `Co-Authored-By:` — existing convention, unchanged.
+- `Co-Authored-By:` — standard git convention. Use the email convention your agent's host provides (`<noreply@anthropic.com>`, `<noreply@github.com>` for Codex, etc.). Pure-tooling agents without a hosted email may omit.
+
+**Examples** — one trailer block per agent type, all interoperable:
+
+Claude Code session:
+
+```
+HV-074: in-review
+
+Refactored sync helper to share buffer with broadcast.
+
+Model: claude-opus-4-7
+Bot: nectar
+Trigger: HV-074 in-review
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```
+
+Codex / GPT-family session:
+
+```
+HV-090: in-review
+
+Patched off-by-one in pagination.
+
+Model: gpt-5-codex
+Bot: scout
+Trigger: HV-090 in-review
+Co-Authored-By: Codex <noreply@github.com>
+```
+
+Aider / open-model session:
+
+```
+HV-101: claim
+
+Picked up after stale-claim reclaim.
+
+Model: aider-deepseek-v3
+Bot: kestrel
+Trigger: HV-101 claim
+```
+
+The agent-type-specific bits live in the `Model:` value and the optional `Co-Authored-By:` email. Everything else (`Bot:`, `Trigger:`, action vocabulary) is identical across agents.
 
 **Acceptance-loop actions:**
 
@@ -465,8 +532,9 @@ Trigger: HV-090 rejected
 
 ```bash
 git log --grep "Trigger: HV-074"        # full lifecycle of one ticket
-git log --grep "Model: claude-"         # everything done by Claude models
-git log --grep "Bot: CC1"               # everything done by a specific bot session
+git log --grep "Model: claude-"         # everything done by Claude family models
+git log --grep "Model: gpt-"            # everything done by GPT family models
+git log --grep "Bot: nectar"            # everything done by a specific bot session
 git log --grep "Trigger: .* done"       # all completion events
 git log --grep "Trigger: .* accepted"   # tester sign-offs (loop output)
 git log --grep "Trigger: .* rejected"   # rejected work — what came back

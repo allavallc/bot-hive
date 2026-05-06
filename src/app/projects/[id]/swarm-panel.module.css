@@ -1,11 +1,11 @@
 .panel {
   position: fixed;
   top: 64px;
-  right: 0;
+  left: 0;
   bottom: 0;
   width: 320px;
   background: var(--bg-2);
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   z-index: 50;
@@ -184,10 +184,10 @@
 .collapsedToggle {
   position: fixed;
   top: 80px;
-  right: 0;
+  left: 0;
   background: var(--bg-2);
   border: 1px solid var(--line);
-  border-right: none;
+  border-left: none;
   color: var(--ink);
   padding: 8px 12px;
   font-family: var(--mono);

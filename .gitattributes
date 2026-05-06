@@ -10,3 +10,11 @@
 *.ico binary
 *.woff binary
 *.woff2 binary
+
+# Append-only log files — auto-resolve "both sides added new lines" with
+# git's built-in union driver instead of throwing CONFLICT markers. Eliminates
+# the repeated DIRTY-state churn when sequential PRs each append a lifecycle
+# entry. The chronological order can drift slightly across merges; that's
+# acceptable for these files (timestamp is in the line itself).
+hive/events.log merge=union
+hive/presence.log merge=union
