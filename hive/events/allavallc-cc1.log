@@ -1,0 +1,4 @@
+# Per-actor event log for allavallc-cc1 (claude-opus-4-7). One event per line. See AGENTS.md.
+2026-05-06T17:50:00Z HV-087 filed allavallc-cc1
+2026-05-06T17:50:00Z HV-087 in-progress allavallc-cc1
+2026-05-06T17:55:00Z HV-087 in-review allavallc-cc1

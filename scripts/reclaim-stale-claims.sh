@@ -109,7 +109,8 @@ for f in "${stale_files[@]}"; do
 
   basename=$(basename "$f")
   git mv "$f" "hive/backlog/$basename"
-  echo "${reclaim_iso} ${ticket_id} reclaimed-stale cron" >> hive/events.log
+  mkdir -p hive/events
+  echo "${reclaim_iso} ${ticket_id} reclaimed-stale cron" >> hive/events/cron.log
 done
 
 git add -A
