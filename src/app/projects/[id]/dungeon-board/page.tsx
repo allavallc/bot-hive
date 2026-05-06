@@ -5,12 +5,11 @@ import { getProjectForUser } from "@/lib/projects";
 import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { SwarmPanel } from "../swarm-panel.client";
-import { FsBoard } from "./fs-board.client";
+import { DungeonBoard } from "./dungeon-board.client";
 
 export const dynamic = "force-dynamic";
 
-export default async function FsBoardPage({
+export default async function DungeonBoardPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -39,6 +38,7 @@ export default async function FsBoardPage({
     hvId: t.hvId,
     state: t.state,
     title: t.title,
+    body: t.body,
     frontmatter: (t.frontmatter as Record<string, string>) ?? {},
   }));
 
@@ -49,17 +49,14 @@ export default async function FsBoardPage({
   }));
 
   return (
-    <>
-      <FsBoard
-        project={{
-          id: project.id,
-          displayName: project.displayName,
-          githubRepo: project.githubRepo,
-        }}
-        initialTickets={initialTickets}
-        initialFeatures={initialFeatures}
-      />
-      <SwarmPanel projectId={project.id} />
-    </>
+    <DungeonBoard
+      project={{
+        id: project.id,
+        displayName: project.displayName,
+        githubRepo: project.githubRepo,
+      }}
+      initialTickets={initialTickets}
+      initialFeatures={initialFeatures}
+    />
   );
 }

@@ -29,7 +29,7 @@ Open
 
 Append-only ADR log for this feature set. Entries are added when non-trivial design choices are made; entries are never edited or deleted. New agents working in FS-007 read this section first to avoid re-litigating settled questions.
 
-### 2026-05-05 — Per-test transactional isolation, not `Date.now()` patches (nectar)
+### 2026-05-05 — Per-test transactional isolation, not `Date.now()` patches (allavallc-cc1)
 
 **Choice:** Wrap every DB-backed test in a Drizzle transaction; force rollback at end. Tests pass `tx` to production functions via an optional `db: DbHandle` parameter.
 
@@ -41,7 +41,7 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-037 / PR #3.
 
-### 2026-05-05 — Canonical protocol in AGENTS.md, not CLAUDE.md (nectar)
+### 2026-05-05 — Canonical protocol in AGENTS.md, not CLAUDE.md (allavallc-cc1)
 
 **Choice:** Move all swarm coordination rules from `CLAUDE.md` to a new `AGENTS.md`. `CLAUDE.md` becomes a thin pointer that says "see AGENTS.md."
 
@@ -53,7 +53,7 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-031 round 2 / PR #10.
 
-### 2026-05-05 — Per-session unique handles, not per-machine (nectar)
+### 2026-05-05 — Per-session unique handles, not per-machine (allavallc-cc1)
 
 **Choice:** Bot handles are picked fresh on each session start (random from a curated list, with collision detection against recent commits + in-progress tickets). Held in memory only — no `git config` persistence. `BOT_HIVE_HANDLE` env var overrides for explicit naming.
 
@@ -65,7 +65,7 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-041 / PR (HV-041 in-review batch).
 
-### 2026-05-05 — All commits via PR + auto-merge (nectar)
+### 2026-05-05 — All commits via PR + auto-merge (allavallc-cc1)
 
 **Choice:** Every commit — source code, hive/ ticket moves, doc edits, anything — flows through a PR gated by the `ci` status check. `gh pr merge --auto --squash --delete-branch` queues auto-merge.
 
@@ -77,7 +77,7 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-033 / PR #11 (FS-007 batch accept).
 
-### 2026-05-05 — Public repo + proprietary LICENSE for branch protection on free tier (nectar)
+### 2026-05-05 — Public repo + proprietary LICENSE for branch protection on free tier (allavallc-cc1)
 
 **Choice:** Make the repo public; add an explicit "all rights reserved, no use without consent" LICENSE file. Branch protection is now available on the free GitHub tier.
 
@@ -89,7 +89,7 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-033 / commit `4fabdda`.
 
-### 2026-05-05 — Pre-commit pull as the freshness signal (nectar)
+### 2026-05-05 — Pre-commit pull as the freshness signal (allavallc-cc1)
 
 **Choice:** Bots run `git pull --rebase` immediately before every commit that's about to be pushed. If the rebase is clean, continue and push. If it conflicts, fall back to the conflict-response policy.
 
@@ -101,7 +101,7 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-043 / PR (this PR).
 
-### 2026-05-06 — Doc ownership: agents who add a dependency own the doc update (nectar)
+### 2026-05-06 — Doc ownership: agents who add a dependency own the doc update (allavallc-cc1)
 
 **Choice:** Author of the dependency owns the corresponding operator-runbook update. Same PR if feasible; immediate follow-up if not.
 
@@ -113,7 +113,19 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-054.
 
-### 2026-05-05 — Skip Render preview deploys (nectar)
+### 2026-05-06 — Rejected work routes back to the original agent first (handle-based) (allavallc-cc1)
+
+**Choice:** Agents pre-check `in-progress/` for tickets matching their own handle with `Rejected by:` populated. Those are picked up before any DAG-walk for new claims.
+
+**Rejected:** Pure DAG-walk only — would let rejected tickets sit indefinitely or trigger context-switching reclaims via the stale-claim watchdog every time.
+
+**Why:** Rejection is "iterate, not abandon." Original agent has the freshest mental model of what they shipped; reclaim by another agent pays a context-switch tax. The rule preserves continuity. CC2 noticed the gap during the first end-to-end rejection test — DAG-walk skipped rejected in-progress tickets as "claimed, not available," so they sat until a stale-reclaim eventually fired.
+
+**Implications:** AGENTS.md "Picking what to claim" gets a pre-DAG-walk step (step 0). HIVE.md "Pre-claim ritual" subsection added before "DAG-walk." Session-start checklist gains a scan step. Stale-claim reclaim still applies for rejected work where the original agent has gone idle (>2h) — the new rule narrows but doesn't replace that safety net.
+
+**Reference:** HV-052.
+
+### 2026-05-05 — Skip Render preview deploys (allavallc-cc1)
 
 **Choice:** Permanent staging environment (HV-035, future) rather than per-PR Render preview deploys.
 
