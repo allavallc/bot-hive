@@ -40,6 +40,15 @@ const COLUMNS = [
 
 const NOT_DOING = { state: "not-doing", label: "Not doing" } as const;
 
+function effectiveState(
+  ticket: Ticket,
+  pending: { kind: "approved" | "rejected" } | undefined,
+): string {
+  if (!pending) return ticket.state;
+  if (ticket.state !== "in-review") return ticket.state;
+  return pending.kind === "approved" ? "done" : "in-progress";
+}
+
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
 
 export function Board({
@@ -204,7 +213,10 @@ export function Board({
   const cols = showNotDoing ? [...COLUMNS, NOT_DOING] : COLUMNS;
   const byColumn = new Map<string, Ticket[]>();
   for (const c of cols) byColumn.set(c.state, []);
-  for (const t of visible) byColumn.get(t.state)?.push(t);
+  for (const t of visible) {
+    const col = effectiveState(t, pendingTransitions.get(t.hvId));
+    byColumn.get(col)?.push(t);
+  }
 
   const openTicket = openTicketId ? (tickets.find((t) => t.id === openTicketId) ?? null) : null;
 
