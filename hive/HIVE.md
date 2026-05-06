@@ -210,13 +210,57 @@ Every bot, on session start, after `git pull`:
 
 1. Read `hive/focus.md`.
 2. Collect every ticket in scope (the named FS, or named ticket, or all of `backlog/` if focus is empty).
-3. Filter out: tickets in `in-progress/`, tickets in `blocked/`, tickets with any unfinished `Blocked by:` (i.e., a blocker that isn't in `done/`).
-4. From the remaining "available leaves," pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
-5. Claim it via the standard "Checking out a ticket" flow.
+3. **Filter** to eligible candidates — a ticket is eligible only if all hold:
+   - Currently in `backlog/` (not in-progress, in-review, blocked, or anywhere else).
+   - Every `Blocked by:` reference resolves to a ticket currently in **`done/`**. A blocker in `in-review/` still blocks — the human hasn't approved it yet, so the dependent work shouldn't begin. A blocker in `in-progress/` likewise blocks.
+   - No recent `claim` signal for this ticket from another agent on the host's real-time channel (last ~10 min). That's the live lock.
+4. From the eligible leaves, pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
+5. Publish a `claim` signal for the picked ticket. The signal is the lock; until you publish, the ticket is open to anyone.
 
-This rule is deterministic enough that two bots running it simultaneously usually pick different leaves (because two different tickets unblock different downstream sets). If they pick the same, the git push lock breaks the tie and the loser re-runs.
+If two bots claim the same ticket within ~2 seconds, both signals reach the buffer. The bot whose signal has the *earlier* timestamp wins; the loser sees the conflicting claim arrive on its real-time subscription and re-picks the next eligible leaf.
 
-If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
+If there are no eligible leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
+
+### Bot lifecycle — pick to approved, end to end
+
+The full procedure a bot follows on a session:
+
+```
+SESSION START
+  - resolve agent-id (durable) + pick handle (ephemeral)
+  - subscribe to real-time signals stream (one connection, lasts the session)
+  - run host's "my work" lookup → those tickets become your active_set,
+    the work you'll monitor for human accept/reject
+
+PICK
+  - DAG-walk per the rules above (claim signal = lock)
+
+WORK
+  - local edits, tests, etc.
+  - open ONE work PR moving the ticket file backlog → in-review (or
+    backlog → done if User-facing: no — see routing below)
+  - active_set += this ticket (only when routed via in-review)
+  - move on to the next ticket; do not wait
+
+MONITOR (passive — same real-time subscription)
+  - on every signal, check refs[0] against active_set:
+    - accepted → remove; stop monitoring
+    - rejected → re-claim and re-ship
+  - active_set empty → no monitoring overhead
+
+SESSION END
+  - active_set survives because tickets stay tagged Assigned to: <agent-id>
+  - next session reconstructs it from the same lookup
+```
+
+### Routing by `User-facing` tag
+
+The work PR's destination depends on the `User-facing` field on the ticket:
+
+- **`User-facing: yes`** → work PR moves `backlog/` → `in-review/`. The ticket waits for the human's accept/reject. Examples: anything that adds or changes a UI affordance, animation, mascot, badge, page, button, etc.
+- **`User-facing: no`** → work PR moves `backlog/` → `done/` directly. The bot's own typecheck/lint/test/build verification IS the verification; no human reviewer to wait for. Examples: backend APIs, CI workflow changes, conventions, scripts, doc edits, internal tooling.
+
+Bots self-route based on the field. Don't dump `User-facing: no` work into `in-review/` — it has no human reviewer; it just clutters the queue. If a ticket's `User-facing` is wrong (mistagged), fix the tag in the same PR that moves it.
 
 ### One PR per ticket — claim signal first, then work
 

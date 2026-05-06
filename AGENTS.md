@@ -120,7 +120,7 @@ DAG-walk with cohesion preference:
 
 ### One PR per ticket — claim signal first, then work
 
-A ticket lifecycle is **one PR**: backlog → in-review in a single commit. The board shows the in-progress state visually within ~200ms of the bot's `claim` signal (HV-082's optimistic column placement), so a separate claim PR is unnecessary — and counterproductive, because each extra PR advances main and bumps every other open PR to BEHIND.
+A ticket lifecycle is **one PR**: backlog → (in-review or done) in a single commit. The board shows the in-progress state visually within ~200ms of the bot's `claim` signal (HV-082's optimistic column placement), so a separate claim PR is unnecessary — and counterproductive, because each extra PR advances main and bumps every other open PR to BEHIND.
 
 The flow:
 
@@ -130,8 +130,14 @@ The flow:
    ./scripts/signal.sh --type=claim --refs=HV-XXX
    ```
 3. **Do the work locally.** Edit files, write tests, etc.
-4. **Open one PR** that moves the ticket file `backlog/` → `in-review/` and ships the work. The PR title and commit body reference the ticket id; standard auto-merge.
-5. **Optionally publish a `done` signal** after pushing the PR (`./scripts/signal.sh --type=done --refs=HV-XXX`) — visually flips the card to in-review without waiting for the PR to merge + Render to redeploy. Optional because the PR-merge SSE refresh handles the same transition; the signal is just faster.
+4. **Open one PR** that moves the ticket file and ships the work. Destination depends on the ticket's `User-facing` tag:
+   - **`User-facing: yes`** → `backlog/` → `in-review/`. The ticket waits for the human's accept/reject (HV-046 flow). Examples: any UI affordance, animation, badge, page, button.
+   - **`User-facing: no`** → `backlog/` → `done/` directly. Skip in-review entirely; the bot's own typecheck/lint/test/build verification IS the verification, with `Verification:` field set accordingly. Examples: backend APIs, CI workflows, conventions, scripts, doc edits.
+
+   Don't route `User-facing: no` work into `in-review/` — it has no human reviewer waiting and just clutters the queue. If a ticket's `User-facing` is mistagged, fix the tag in the same PR.
+5. **Optionally publish a `done` signal** after pushing the PR (`./scripts/signal.sh --type=done --refs=HV-XXX`) — visually flips the card to its destination column without waiting for the PR to merge + Render to redeploy. Optional because the PR-merge SSE refresh handles the same transition; the signal is just faster.
+
+**For `User-facing: yes` work only**, the ticket joins your **active_set** (see "Active set — the tickets you're monitoring" below). Your existing SSE subscription handles the rest.
 
 The earlier 2-PR pattern (claim PR moves backlog → in-progress, then work PR moves in-progress → in-review) is **deprecated** as of HV-085. It existed because the board read state from main only; HV-082 made that obsolete. Tickets currently in flight on the old flow can finish; new claims use the single-PR flow.
 
