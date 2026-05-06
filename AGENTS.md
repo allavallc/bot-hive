@@ -256,6 +256,24 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
 
+### UI changes need explicit visual approval before build
+
+A ticket spec describes *what* a feature does; it does not describe *where it sits on the page* or *how it lays out alongside everything else*. **Approving a ticket is not approving a layout choice.** For any change a human will visually see, the agent must propose placement *before* writing implementation code, and wait for explicit approval — even if the ticket itself is already accepted.
+
+**Concretely**, before claiming a user-facing UI ticket:
+
+1. Read the ticket. Identify which surfaces it touches (board page, dashboard, masthead, modal, etc.).
+2. Read the existing layout for those surfaces (what's already there, where, taking what space).
+3. Post a short layout proposal in chat: text description + ASCII / Mermaid sketch where helpful. Examples that earn approval:
+   - "Add a 32px-tall pill in the top-right of the masthead, between the live-state badge and the user avatar."
+   - "Add a new collapsed left rail (40px) below the masthead; toggles to a 320px panel."
+4. **Wait for explicit approval.** "Yes" / "go" / "looks right" — anything explicit. Silence or reading the ticket back to the user is not approval.
+5. Only after approval: claim the ticket and start implementation.
+
+If the surface is already crowded (right rail occupied by a modal, top of the board owned by another panel), call that out in the proposal — the user can't approve a layout if they don't know what's already there.
+
+This is the UI-specific subcase of the broader pre-build interview rule. Skipping it lands UI that has to be ripped out (HV-020, HV-048 — see `tasks/lessons.md` L9).
+
 ### Human rejection and acceptance via the board
 
 Rejections and acceptances happen on the live board — no manual file editing required.
