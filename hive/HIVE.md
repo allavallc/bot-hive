@@ -383,47 +383,76 @@ The **substrate** (git as the broker, file system as topics, pull-based polling)
 
 ## Bot identity
 
-Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model **on the same machine**.
+Every agent has **two identities**, deliberately split:
 
-**Identity is per-session, not per-machine.** Two agent sessions on the same laptop get different handles, even if they're the same agent type. Each session is a fresh roll on start.
+- **Agent-id** (durable) — *who is the worker?* Stable across sessions. The thing tickets bind to.
+- **Session handle** (ephemeral) — *which sitting of that worker?* Random per session. Used for chat / presence / live UI distinguishing.
 
-### On session start
+The split exists because conflating them caused real failures: a session picks `tern` on Monday, ships work, ends. Tuesday the same agent (same human, same machine, same instance) picks `wren` — and has no way to recognize that Monday's tern-tagged in-review ticket is theirs to follow up on.
 
-1. **Auto-pick** a random handle from the curated list:
+### Agent-id (durable)
 
-   ```
-   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-   sparrow, finch, robin, wren, fox, otter, badger, mole,
-   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-   falcon, tern, jay
-   ```
+Resolution order at session start:
 
-2. **Check the environment for collisions:**
-   - Recent commit trailers: `git log --grep "Bot: " -n 50` — extract `Bot: <handle>` values.
-   - In-progress tickets: read each `hive/in-progress/*.md` file's `Assigned to:` field.
-   - If your roll matches any handle in either set, **re-pick**. Repeat up to 10 times.
-   - If 10 rolls all collide, append a numeric suffix: `scout-2`.
+1. Host's repo-local config — in the Bot Hive reference implementation, `git config bot-hive.agent-id`. One-time per clone.
+2. Default-derive when no explicit setting — typically `<user-email>@<hostname>` or equivalent. Most users (one agent per machine) get this for free, no setup.
 
-3. **Hold the handle in memory** for this session only. **Do not** persist to `git config` or any file. Each session re-rolls.
+Other host implementations may use different lookup paths (a YAML file, a system keyring, etc.) — the protocol is "resolve a stable string identity unique to this agent instance, before anything else."
 
-4. **Announce** "I'm `<handle>`" to the user.
+**Tickets bind to agent-id.** The `Assigned to:` field uses agent-id, never the session handle:
 
-### Override
+```
+- **Assigned to**: allavallc-cc2 (claude-opus-4-7)
+```
 
-`BOT_HIVE_HANDLE=billy` in the environment overrides the auto-pick. Use when you want a session to have a specific name (demos, tests, named bots).
+(The model identifier in parens is illustrative — describes what kind of agent the agent-id represents.)
 
-### Where the handle appears
+**Concurrent agents on one machine:** clone the repo per-agent, each clone with its own agent-id config. The filesystem provides natural separation; no env var setup, no runtime magic.
 
-- `Assigned to:` ticket field — `Assigned to: nectar (claude-opus-4-7)`
-- `Bot:` commit trailer — alongside `Model:` and `Trigger:`
-- `hive/events.log` entries — every event line ends with the originating handle
-- The live board UI — colored badge on each ticket card (color via `robotColor(handle)`)
+### Session handle (ephemeral)
 
-### Why per-session, not per-machine
+After agent-id is resolved, each session picks a fresh random handle from a curated list. The handle never appears in `Assigned to:`. It exists only for live distinguishing — chat color, swarm-panel display, presence-log identifier when the same agent-id has multiple concurrent sessions.
 
-The earlier convention (`git config bot-hive.handle <name>` once per machine) failed the "two sessions on one laptop" case — both sessions read the same git config and ended up with identical handles, indistinguishable in audit. Per-session identity solves that case structurally: each agent session is a fresh entity in the swarm.
+The Bot Hive reference list:
 
-**Existing `git config bot-hive.handle` values are deprecated but harmless** — bots ignore them. The user can `git config --unset bot-hive.handle` to clean up; not required.
+```
+buzz, scout, forager, drone, comb, pollen, nectar, waggle,
+sparrow, finch, robin, wren, fox, otter, badger, mole,
+squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
+falcon, tern, jay
+```
+
+Pick one at random. Check for collisions against:
+
+- Recent commit trailers (`git log --grep "Bot: " -n 50`)
+- Currently-online handles in `presence.log` (last 1h)
+
+If collision, re-pick (up to 10 attempts). If 10 collide, append a numeric suffix (`scout-2`). Hold in memory; don't persist.
+
+### Resume your previous work
+
+After resolving agent-id and picking a handle, on session start, scan `in-progress/` and `in-review/` for tickets owned by your agent-id:
+
+```bash
+grep -l "^- \*\*Assigned to\*\*: <agent-id>" hive/in-progress/*.md hive/in-review/*.md 2>/dev/null
+```
+
+Surface the list to the human as "resuming: HV-X, HV-Y." This closes the gap where a crashed / restarted session forgets its own work.
+
+### Where each appears
+
+| Surface | Agent-id | Session handle |
+|---|---|---|
+| `Assigned to:` ticket field | yes | never |
+| `presence.log` | `<ts> <agent-id>:<handle> online ...` | (same line) |
+| `Bot:` commit trailer | — (the trailer captures the handle, since the actor is the *session*) | yes |
+| Live board UI | (looked up from agent-id when needed) | colored badges via `robotColor(handle)` |
+
+### Migration from earlier conventions
+
+Pre-this-rule conventions had two earlier forms — the long-lost `git config bot-hive.handle` (per-machine handle, deprecated for not handling concurrent sessions), and the `BOT_HIVE_HANDLE` env var override (rejected for shell-rc complexity). Both are dead. The current rule absorbs the durability the first one wanted via `git config bot-hive.agent-id`, while keeping the per-session handle convention for the live-distinguishing role only.
+
+Existing tickets tagged with bare-handle `Assigned to:` fields (e.g., `tern`, `kestrel`) get reclaimed by the existing 2h stale-claim cron — no data migration step required.
 
 ### Rules
 

@@ -8,9 +8,40 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 ## Identity (read first)
 
-Every agent session has a unique handle. **Two sessions on the same machine get different handles** — identity is per-session, not per-machine.
+Every agent has **two identities**: a durable **agent-id** that owns tickets across sessions, and an ephemeral **session handle** that distinguishes concurrent sessions of the same agent in chat / presence / live UI.
 
-### On session start
+| | Agent-id | Session handle |
+|---|---|---|
+| Stable across sessions | ✓ | — fresh per session |
+| Tickets bind to it | ✓ (`Assigned to:`) | — |
+| Visible in chat / swarm panel | — | ✓ |
+| Visible in `presence.log` | ✓ (with handle) | ✓ (with agent-id) |
+| Visible in commit trailers | — | ✓ (`Bot:`) |
+
+### Agent-id (durable)
+
+**On session start, resolve in this order:**
+
+1. `git config bot-hive.agent-id` — preferred. One-time per clone. Lives in `.git/config`, where devs already look for repo-local settings.
+2. **Default-derive**: `${git config user.email}@${HOSTNAME}` if no explicit setting. Most users (one agent per laptop) get this for free, no setup.
+
+The agent-id is what `Assigned to:` binds to. It survives session crashes, agent restarts, and handle rotation.
+
+**Two concurrent agents on the same laptop?** Clone the repo twice; set `git config bot-hive.agent-id` differently in each clone:
+
+```bash
+cd ~/work/bot-hive-cc1
+git config bot-hive.agent-id allavallc-cc1
+
+cd ~/work/bot-hive-cc2
+git config bot-hive.agent-id allavallc-cc2
+```
+
+Each Claude Code / Codex / Aider / etc. instance opens its own clone. Identity is stable, no env vars, no runtime magic — the filesystem (separate working directories) provides the natural separation.
+
+### Session handle (ephemeral)
+
+**On session start (after agent-id is resolved):**
 
 1. **Auto-pick a handle from the curated list** (random selection):
 
@@ -23,28 +54,38 @@ Every agent session has a unique handle. **Two sessions on the same machine get 
 
 2. **Check for collisions** with handles already in active use:
    - Scan recent commit trailers: `git log --grep "Bot: " -n 50` — extract the `Bot: <handle>` values.
-   - Scan in-progress tickets: read every `hive/in-progress/*.md` and extract the `Assigned to:` field's handle.
+   - Scan presence.log for currently-online handles.
    - If your random pick appears in either set, **re-pick**. Repeat up to 10 times.
    - If 10 rolls all collide (extremely unlikely), append a numeric suffix: `scout-2`.
 
-3. **Hold the handle in memory** for the session. **Do not** persist it to `git config` or any file. Each session is a fresh roll.
+3. **Hold the handle in memory** for the session. Each session is a fresh roll. The handle never appears in `Assigned to:` ticket fields.
 
-4. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
+4. **Announce** "I'm `<handle>` (agent: `<agent-id>`)" to the user so they can tell sessions apart.
 
-### Override
+### Resume your previous work
 
-If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`), use that value verbatim — skip the random pick and the collision check. Lets the human lock a session to a specific name.
+After resolving agent-id and picking a handle, find any tickets owned by your agent-id in `hive/in-progress/` and `hive/in-review/`:
 
-### Where the handle appears
+```bash
+grep -l "^- \*\*Assigned to\*\*: <your-agent-id>" hive/in-progress/*.md hive/in-review/*.md 2>/dev/null
+```
 
-- `Assigned to:` ticket field (e.g., `Assigned to: nectar (claude-opus-4-7)`).
-- `Bot:` commit trailer (alongside `Model:` and `Trigger:`).
-- `hive/events.log` entries.
-- Live board UI as a colored badge on each ticket card (color is deterministic via `robotColor(handle)`).
+Surface the list to the human as "resuming: HV-X (in-progress), HV-Y (in-review)." This closes the gap where a session that crashes or restarts loses track of its own work.
 
-### Existing `git config bot-hive.handle` values
+### Where each appears
 
-Handles set under the prior convention (`git config bot-hive.handle <name>`) are **deprecated but harmless**. Agents should ignore them. Run `git config --unset bot-hive.handle` to clean up if desired — not required.
+| | Agent-id | Session handle |
+|---|---|---|
+| `Assigned to:` ticket field | `allavallc-cc2 (claude-opus-4-7)` | — never |
+| `presence.log` | `... <agent-id>:<handle> online ...` | `... <agent-id>:<handle> online ...` |
+| `Bot:` commit trailer | — | `Bot: nectar` |
+| Live board UI | — | session colors via `robotColor(handle)` |
+
+### Existing handle-based assignments
+
+Tickets already tagged with a bare handle (e.g., `Assigned to: tern`) from before this convention will get reclaimed by the existing 2h stale-claim cron (HV-066). No data migration step. As tickets cycle through, they pick up the agent-id format naturally.
+
+The earlier `BOT_HIVE_HANDLE` env var override was deprecated as part of the same simplification — agents that locked their handle previously now lock their agent-id via `git config` instead.
 
 Full convention discussion: see `hive/HIVE.md` "Bot identity" section.
 
