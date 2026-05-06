@@ -62,6 +62,11 @@ export function Board({
   const [animating, setAnimating] = useState<Map<string, "arrived" | "new" | "in-review">>(
     new Map(),
   );
+  // hvId → pending transition kind, set by signals from accept/reject. Cleared
+  // when the ticket actually moves columns (SSE refresh) or after a timeout.
+  const [pendingTransitions, setPendingTransitions] = useState<
+    Map<string, { kind: "approved" | "rejected"; at: number }>
+  >(new Map());
 
   const openTriggerRef = useRef<HTMLElement | null>(null);
   const prevTicketsRef = useRef<Ticket[]>(initialTickets);
@@ -111,6 +116,21 @@ export function Board({
           setAnimating(anims);
           animTimerRef.current = setTimeout(() => setAnimating(new Map()), 2500);
         }
+        // Clear pending-transition badges for any ticket that has actually
+        // moved out of in-review — the underlying state change is now visible,
+        // so the "pending merge" hint has served its purpose.
+        setPendingTransitions((prev) => {
+          if (prev.size === 0) return prev;
+          let changed = false;
+          const out = new Map(prev);
+          for (const t of next) {
+            if (out.has(t.hvId) && t.state !== "in-review") {
+              out.delete(t.hvId);
+              changed = true;
+            }
+          }
+          return changed ? out : prev;
+        });
       }
     };
     return () => {
@@ -118,6 +138,57 @@ export function Board({
       clearTimeout(animTimerRef.current);
     };
   }, [project.id, computeAnimations]);
+
+  // Subscribe to the real-time signal stream for accept/reject signals so the
+  // pending-merge badge appears within ~200ms of the click — well before CI +
+  // deploy land the actual state change. (HV-055.)
+  useEffect(() => {
+    const es = new EventSource(`/api/projects/${project.id}/signals/stream`);
+    es.onmessage = (ev) => {
+      try {
+        const sig = JSON.parse(ev.data) as {
+          id: string;
+          type: string;
+          refs?: string[];
+        };
+        const hvId = sig.refs?.[0];
+        if (!hvId) return;
+        if (sig.type === "accepted" || sig.type === "rejected") {
+          const kind = sig.type === "accepted" ? "approved" : "rejected";
+          setPendingTransitions((prev) => {
+            const out = new Map(prev);
+            out.set(hvId, { kind, at: Date.now() });
+            return out;
+          });
+        }
+      } catch {
+        // Malformed payload — ignore.
+      }
+    };
+    return () => es.close();
+  }, [project.id]);
+
+  // Hard timeout: drop badges older than 10 minutes. Protects against a stuck
+  // CI / deploy that never lands the underlying state change.
+  useEffect(() => {
+    if (pendingTransitions.size === 0) return;
+    const tick = setInterval(() => {
+      setPendingTransitions((prev) => {
+        if (prev.size === 0) return prev;
+        const now = Date.now();
+        let changed = false;
+        const out = new Map(prev);
+        for (const [hvId, entry] of prev) {
+          if (now - entry.at > 10 * 60 * 1000) {
+            out.delete(hvId);
+            changed = true;
+          }
+        }
+        return changed ? out : prev;
+      });
+    }, 30_000);
+    return () => clearInterval(tick);
+  }, [pendingTransitions.size]);
 
   const visible = useMemo(
     () =>
@@ -215,6 +286,7 @@ export function Board({
                         ticket={t}
                         features={features}
                         animState={animating.get(t.id)}
+                        pendingTransition={pendingTransitions.get(t.hvId)?.kind}
                         onOpen={(trigger) => handleCardOpen(t.id, trigger)}
                       />
                     ))
@@ -226,7 +298,7 @@ export function Board({
         </section>
       </main>
 
-      <TicketPanel ticket={openTicket} onClose={handlePanelClose} />
+      <TicketPanel ticket={openTicket} projectId={project.id} onClose={handlePanelClose} />
     </div>
   );
 }
@@ -408,11 +480,13 @@ function Card({
   ticket,
   features,
   animState,
+  pendingTransition,
   onOpen,
 }: {
   ticket: Ticket;
   features: Feature[];
   animState?: "arrived" | "new" | "in-review";
+  pendingTransition?: "approved" | "rejected";
   onOpen: (trigger: HTMLElement) => void;
 }) {
   const fm = ticket.frontmatter;
@@ -437,6 +511,12 @@ function Card({
           {fm.Type === "bug" && <BugIcon />}
           <span className={styles.cardId}>{ticket.hvId}</span>
           <span className={styles.badges}>
+            {pendingTransition && (
+              <span className={styles.pendingBadge} data-kind={pendingTransition}>
+                {pendingTransition === "approved" ? "✓ Approved" : "↻ Rejected"}
+                <span className={styles.pendingBadgeSub}>pending merge</span>
+              </span>
+            )}
             {fm.Priority && (
               <span className={styles.badge} data-priority={fm.Priority}>
                 {fm.Priority}
@@ -452,11 +532,19 @@ function Card({
   );
 }
 
+type ReviewState =
+  | { phase: "idle" }
+  | { phase: "rejecting"; reason: string }
+  | { phase: "submitting" }
+  | { phase: "done"; prUrl: string; prNumber: number; action: "accepted" | "rejected" };
+
 function TicketPanel({
   ticket,
+  projectId,
   onClose,
 }: {
   ticket: Ticket | null;
+  projectId: string;
   onClose: () => void;
 }) {
   const onCloseRef = useRef(onClose);
@@ -472,9 +560,57 @@ function TicketPanel({
     return () => document.removeEventListener("keydown", handleKey);
   }, []);
 
+  const [review, setReview] = useState<ReviewState>({ phase: "idle" });
+
+  // Reset review state when a different ticket opens
+  const prevTicketId = useRef<string | null>(null);
+  useEffect(() => {
+    if (ticket?.id !== prevTicketId.current) {
+      prevTicketId.current = ticket?.id ?? null;
+      setReview({ phase: "idle" });
+    }
+  }, [ticket?.id]);
+
+  async function handleAccept() {
+    if (!ticket) return;
+    setReview({ phase: "submitting" });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tickets/${ticket.hvId}/accept`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "unknown error");
+      setReview({ phase: "done", prUrl: data.prUrl, prNumber: data.prNumber, action: "accepted" });
+    } catch (err) {
+      setReview({ phase: "idle" });
+      alert(`Accept failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  async function handleRejectConfirm() {
+    if (!ticket || review.phase !== "rejecting") return;
+    const reason = review.reason.trim();
+    if (!reason) return;
+    setReview({ phase: "submitting" });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tickets/${ticket.hvId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "unknown error");
+      setReview({ phase: "done", prUrl: data.prUrl, prNumber: data.prNumber, action: "rejected" });
+    } catch (err) {
+      setReview({ phase: "idle" });
+      alert(`Reject failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   const isOpen = ticket !== null;
   const fm = ticket?.frontmatter ?? {};
   const metaEntries = Object.entries(fm).filter(([, v]) => v);
+  const canReview = ticket?.state === "in-review";
 
   return (
     <section className={styles.panel} data-open={isOpen} aria-label="Ticket details">
@@ -499,6 +635,85 @@ function TicketPanel({
               ))}
             </dl>
             <pre className={styles.bodyText}>{ticket.body}</pre>
+
+            {canReview && (
+              <div className={styles.panelActions}>
+                {review.phase === "idle" && (
+                  <>
+                    <button
+                      type="button"
+                      className={`${styles.panelActionBtn} ${styles.panelActionAccept}`}
+                      onClick={handleAccept}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.panelActionBtn} ${styles.panelActionReject}`}
+                      onClick={() => setReview({ phase: "rejecting", reason: "" })}
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
+
+                {review.phase === "rejecting" && (
+                  <div className={styles.rejectForm}>
+                    <label className={styles.rejectLabel} htmlFor="reject-reason">
+                      Rejection reason
+                    </label>
+                    <textarea
+                      id="reject-reason"
+                      className={styles.rejectReason}
+                      // biome-ignore lint/a11y/noAutofocus: intentional — user just clicked Reject
+                      autoFocus
+                      rows={3}
+                      placeholder="What needs to change?"
+                      value={review.reason}
+                      onChange={(e) => setReview({ phase: "rejecting", reason: e.target.value })}
+                    />
+                    <div className={styles.rejectFormActions}>
+                      <button
+                        type="button"
+                        className={`${styles.panelActionBtn} ${styles.panelActionReject}`}
+                        disabled={review.reason.trim().length === 0}
+                        onClick={handleRejectConfirm}
+                      >
+                        Confirm reject
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.panelActionBtn}
+                        onClick={() => setReview({ phase: "idle" })}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {review.phase === "submitting" && (
+                  <span className={styles.reviewStatus}>Submitting…</span>
+                )}
+
+                {review.phase === "done" && (
+                  <div className={styles.reviewResult}>
+                    <span className={styles.reviewResultLabel}>
+                      {review.action === "accepted" ? "Accepted" : "Rejected"} —{" "}
+                    </span>
+                    <a
+                      href={review.prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.reviewResultLink}
+                    >
+                      PR #{review.prNumber}
+                    </a>
+                    <span className={styles.reviewResultSub}> queued for merge</span>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

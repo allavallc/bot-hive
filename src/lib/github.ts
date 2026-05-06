@@ -97,3 +97,28 @@ export async function installationOctokit(installationId: number): Promise<Octok
   const { token } = await getInstallationToken(installationId);
   return new Octokit({ auth: token });
 }
+
+export async function graphqlInstallation<T>(
+  installationId: number,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const { token } = await getInstallationToken(installationId);
+  const res = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!res.ok) throw new Error(`GitHub GraphQL HTTP ${res.status}`);
+  const json = (await res.json()) as {
+    data?: T;
+    errors?: Array<{ message: string }>;
+  };
+  if (json.errors?.length) {
+    throw new Error(`GitHub GraphQL: ${json.errors.map((e) => e.message).join(", ")}`);
+  }
+  return json.data as T;
+}
