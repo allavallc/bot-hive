@@ -1,10 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { tickets } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { broadcast } from "@/lib/broadcast";
 import { getProjectForUser } from "@/lib/projects";
-import { type Signal, addSignal } from "@/lib/signal-buffer";
 import { rejectTicket } from "@/lib/ticket-review";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
@@ -58,18 +56,17 @@ export async function POST(
     const actorEmail = session.user.email ?? `${actorName}@users.noreply.github.com`;
     const result = await rejectTicket(project, ticket, reason, actorName, actorEmail);
 
-    // Publish a real-time signal so the board can render a "pending merge"
-    // badge on the card immediately. (HV-055: pending-transition badge.)
-    const signal: Signal = {
-      id: randomUUID(),
-      timestamp: new Date().toISOString(),
-      type: "rejected",
+    // Broadcast a `ticket-action` so the board can render an optimistic
+    // column move within ~200ms of the click — well before the PR merges
+    // and Render redeploys. (HV-055 / HV-072 / HV-082.)
+    broadcast({
+      type: "ticket-action",
+      projectId,
+      hvId,
+      kind: "rejected",
+      actor: actorName,
       message: `Rejected by ${actorName} (PR #${result.prNumber})`,
-      user: actorName,
-      refs: [hvId],
-    };
-    addSignal(projectId, signal);
-    broadcast({ type: "signal", projectId, signal });
+    });
 
     return NextResponse.json(result, { status: 201 });
   } catch (err) {

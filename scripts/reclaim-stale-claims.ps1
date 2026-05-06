@@ -81,7 +81,8 @@ foreach ($s in $stale) {
     $basename = Split-Path -Leaf $s.File
     $newPath = Join-Path "hive" "backlog" $basename
     git mv $s.File $newPath
-    "$reclaimIso $($s.Id) reclaimed-stale cron" | Add-Content "hive/events.log"
+    if (-not (Test-Path "hive/events")) { New-Item -ItemType Directory -Path "hive/events" | Out-Null }
+    "$reclaimIso $($s.Id) reclaimed-stale cron" | Add-Content "hive/events/cron.log"
 }
 
 git add -A
