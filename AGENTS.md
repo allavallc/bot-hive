@@ -193,6 +193,39 @@ Example: `2026-05-06T03:30:00Z nectar online model=claude-opus-4-7 focus=feature
 
 Why a separate file rather than `events.log`: events.log is the durable lifecycle log (claim, in-review, done). Presence is ephemeral chatter — different contract, different file. Why not the SSE signal stream: bots don't have web-app session auth today (they push via git, not HTTP); when project-scoped bot tokens land, presence will *also* publish on the SSE channel for sub-second visibility.
 
+### Hot-file conflict avoidance — check open PRs before editing canonical docs
+
+A "hot file" is one that multiple parallel agents edit, where parallel PRs reliably go DIRTY at merge time. The fix is a pre-edit check: before opening a PR that touches a hot file, scan the open PR queue for any PR already touching that file, and rebase / wait / pick different work instead of opening a competing edit.
+
+**Hot files in this repo:**
+
+- `AGENTS.md`
+- `hive/HIVE.md`
+- `hive/events.log`
+- `hive/focus.md`
+- `hive/presence.log`
+- `tasks/lessons.md`
+- `render.yaml`
+- `package.json`
+- `drizzle/migrations/*.sql`
+
+**Pre-edit check** — run this before staging your edits to a hot file:
+
+```bash
+./scripts/check-hot-files.sh AGENTS.md hive/HIVE.md
+```
+
+The script prints any open PR that already touches the file(s) and exits non-zero if a conflict exists. Equivalent PowerShell: `.\scripts\check-hot-files.ps1`.
+
+**If a conflict is reported:**
+1. **Best**: rebase your branch onto the existing PR's branch (`git fetch origin <theirs>`, `git rebase origin/<theirs>`) and add your changes; the second PR replaces the first as the canonical edit.
+2. **Acceptable**: wait for the existing PR to merge, then base off updated main.
+3. **Last resort**: pick different work and come back when the lock clears.
+
+**If no conflict**: proceed normally.
+
+This is the swarm's pre-flight check, not a hard lock. github's PR queue is the source of truth — the script is just a convenience wrapper. Once bot HTTP auth lands (separate ticket), this convention can absorb sub-second locking via the SSE channel without changing the agent-side rule.
+
 ### Stale-PR watchdog — active agents update BEHIND PRs
 
 A long-running session can leave its open PR `BEHIND` (main moved after the PR opened) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
@@ -261,6 +294,8 @@ Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <handle>`. The 
 ### Stale claims
 
 Every commit an agent makes against an in-progress ticket also updates the ticket's `**Last touched:**` field with the current ISO timestamp. If an agent looks at an in-progress ticket and `Last touched:` is older than **2 hours**, the ticket is stale — that agent may reclaim it (move back to `backlog/` with a `Reclaim reason:`) or take it over (update `Assigned to:`, refresh `Last touched:`). Append the reclaim to `events.log`.
+
+A scheduled job (`.github/workflows/reclaim-stale-claims.yml`) runs every 30 minutes as a backstop: it scans `hive/in-progress/`, finds anything stale, and opens an auto-merging PR returning them to `backlog/`. Active agents may still reclaim manually on session start — the cron is the safety net for when no agents are around. Run `./scripts/reclaim-stale-claims.sh` (no flag, dry-run) to preview what the cron would do.
 
 ### Per-FS architecture & decisions log
 

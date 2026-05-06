@@ -263,6 +263,16 @@ A separate file from `events.log` because events.log is durable lifecycle and pr
 
 Other host implementations may use any equivalent: a Redis-backed presence key with TTL, NATS heartbeats, etc. The protocol is "every session announces itself, in a place other agents read."
 
+### Hot-file conflict avoidance
+
+A "hot file" is one that multiple parallel agents commonly edit, where parallel PRs reliably go DIRTY at merge time. The convention: before opening a PR that touches a hot file, query the host's PR system for any open PR already touching that file. If one exists, rebase onto its branch (preferred), wait for it to merge, or pick different work — don't open a competing edit.
+
+The list of hot files is repo-local (lives next to the code, not in this format-neutral spec). It typically includes the canonical agent-coordination docs (this file's host equivalent, the agent-shim file, the events log, the focus file, the presence log, lessons-learned files), the deploy config, the dependency manifest, and any auto-generated migration files. Curated, not auto-detected.
+
+The pre-edit check is a query to the host's PR system, not a lock service. github + `gh pr list --json files` is one implementation; other hosts use their equivalent. Optional: a small helper script (`scripts/check-hot-files.sh` in the Bot Hive reference) that takes a list of file paths and prints any open PR touching them, returning non-zero if conflicts exist — composes into pre-push hooks if anyone wants automation later.
+
+When real-time bot-to-host auth becomes available, the convention can absorb a sub-second SSE-based "lock" signal without changing the agent-side rule: same check, faster channel.
+
 ### Stale-PR watchdog
 
 Long-running sessions can leave open PRs that go `BEHIND` (main moved past) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
@@ -289,6 +299,8 @@ If a bot looks at an in-progress ticket whose `Last touched:` is older than **2 
 OR take the ticket over by reassigning `Assigned to:` and refreshing `Last touched:` to now.
 
 This replaces a heartbeat daemon with a passive, environment-readable signal. No process required.
+
+A scheduled job may run periodically as a backstop: scan `in-progress/`, find tickets older than the threshold, return them to `backlog/`. The Bot Hive reference implementation uses a GitHub Actions cron at `*/30 * * * *` (`scripts/reclaim-stale-claims.sh` does the work). Active agents may still reclaim manually on session start — the cron handles only the gap when no agents are around.
 
 ### `hive/events.log` — append-only event topic
 
