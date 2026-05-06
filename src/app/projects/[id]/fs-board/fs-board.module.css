@@ -1,7 +1,7 @@
 .sections {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
 }
 
 .section {
@@ -54,6 +54,51 @@
   border: 1px solid var(--accent);
 }
 
+/* Assignee lanes */
+
+.laneList {
+  border-top: 1px solid var(--line);
+}
+
+.lane {
+  border-bottom: 1px solid var(--line);
+}
+
+.lane:last-child {
+  border-bottom: none;
+}
+
+.laneHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px 7px 32px;
+  background: color-mix(in srgb, var(--bg) 60%, var(--bg-2) 40%);
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+}
+
+.laneName {
+  flex: 1;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.laneActive {
+  color: var(--accent);
+  font-size: 0.6rem;
+}
+
+.laneCount {
+  color: var(--ink-dimmer);
+  border: 1px solid var(--line);
+  padding: 0 5px;
+  font-size: 0.6rem;
+}
+
+/* Ticket rows */
+
 .ticketList {
   list-style: none;
   margin: 0;
@@ -64,7 +109,7 @@
   display: flex;
   align-items: baseline;
   gap: 14px;
-  padding: 9px 16px;
+  padding: 8px 16px 8px 48px;
   border-top: 1px solid var(--line);
   font-family: var(--mono);
   font-size: 0.75rem;
@@ -126,11 +171,35 @@
   white-space: nowrap;
 }
 
-.emptyRow {
-  padding: 10px 16px;
-  border-top: 1px solid var(--line);
+/* Presence strip */
+
+.presenceStrip {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 8px 0 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.presenceItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+}
+
+.presenceName {
+  text-transform: uppercase;
+}
+
+.presenceCount {
   color: var(--ink-dimmer);
-  font-style: italic;
+  border: 1px solid var(--line);
+  padding: 0 5px;
+  font-size: 0.6rem;
 }
