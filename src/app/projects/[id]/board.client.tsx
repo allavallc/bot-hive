@@ -240,6 +240,9 @@ export function Board({
           <a href={`/projects/${project.id}/fs-board`} className={styles.subnavLink}>
             FS Board
           </a>
+          <a href={`/projects/${project.id}/crazy-board`} className={styles.subnavLink}>
+            Crazy Creative View
+          </a>
           <span className={styles.subnavRepo}>{project.githubRepo}</span>
         </nav>
 
