@@ -33,3 +33,8 @@ export function broadcast(event: BroadcastEvent): void {
     }
   }
 }
+
+// Test-only — clears all subscribers. Production code should never call this.
+export function __resetBroadcast(): void {
+  subscribers.clear();
+}
