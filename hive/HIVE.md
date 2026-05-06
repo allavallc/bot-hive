@@ -247,6 +247,14 @@ Concretely, before claiming a user-facing UI ticket: read the surfaces it touche
 
 This is the UI-specific subcase of the broader pre-build interview. Skipping it lands UI that has to be ripped out.
 
+### Stale-PR watchdog
+
+Long-running sessions can leave open PRs that go `BEHIND` (main moved past) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
+
+On session start and every ~10 min while working: scan open non-draft PRs; for any in `BEHIND` state, trigger an "update branch" against main (no conflict resolution; just merge-from-main). For `DIRTY` PRs, leave them — surface to humans via `hive/questions-for-human.md`.
+
+The Bot Hive reference implementation uses `gh pr update-branch <N>` for the update; other host implementations may differ. Optional server-side complement: a scheduled job (e.g., GitHub Actions cron) that does the same thing every 10 min as a backstop for when no agents are online.
+
 ### Pre-action pull — never operate on stale state
 
 Every meaningful action (claim a ticket, push a branch, open a PR, edit canonical docs) is preceded by `git pull --rebase` against `origin/main`. The cheapest correct version is a **pre-commit pull**: before any commit that's about to be pushed, run `git pull --rebase`; if the rebase is clean, continue. If it conflicts, fall back to the conflict-response policy — never guess merges.
