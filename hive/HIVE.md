@@ -218,11 +218,23 @@ This rule is deterministic enough that two bots running it simultaneously usuall
 
 If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
 
-### One PR per ticket lifecycle transition
+### One PR per ticket — claim signal first, then work
 
-The PR that ships the work also moves the ticket file (e.g., `in-progress/` → `in-review/`) in the same commit. Don't split "do the work" and "move the ticket" into separate PRs — they can race each other and both merge, leaving the ticket duplicated across two folders. No merge conflict surfaces because the diffs don't overlap line-wise.
+A ticket lifecycle is **one PR**: backlog → in-review in a single commit. The flow:
 
-The optional claim-PR (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it's small, lands first, and is closed before the work-PR opens.
+1. Bot publishes a `claim` signal before opening any PR. The live board renders the card in in-progress optimistically within ~200ms (the host's "optimistic column placement" mechanism reads the SSE channel for live state and only falls back to file location after deploy lands).
+2. Bot does the work locally.
+3. Bot opens **one PR** that moves the ticket file `backlog/` → `in-review/` and ships the work in a single commit.
+4. Bot optionally publishes a `done` signal after pushing — flips the card to in-review immediately, before the PR-merge + deploy completes. Optional; the SSE refresh on PR merge handles the same transition.
+
+This is the format-neutral protocol. Concrete implementations:
+
+- The Bot Hive reference uses `scripts/signal.sh --type=claim --refs=<id>` to publish.
+- Other hosts use whatever publish path their substrate provides.
+
+A previously-used "claim PR" pattern (separate small PR moving backlog → in-progress, then work PR moving in-progress → in-review) is **deprecated**. It existed because the board read state from main only; with optimistic-placement-from-signals, the extra PR just adds queue churn for no UX gain.
+
+Don't split "do the work" and "move the ticket" into separate PRs — they can race each other and both merge, leaving the ticket duplicated across two folders. No merge conflict surfaces because the diffs don't overlap line-wise.
 
 ### Two channels — durable + real-time
 

@@ -114,17 +114,24 @@ DAG-walk with cohesion preference:
 
 This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
 
-### One PR per ticket lifecycle transition
+### One PR per ticket — claim signal first, then work
 
-The PR that ships the work also performs the ticket-folder move (e.g., `in-progress` → `in-review`). **Don't split "do the work" and "move the ticket" into two separate PRs** — they can race each other, both merge, and end up with the ticket file duplicated across two folders (no merge conflict surfaces because the diffs don't overlap line-wise). The board then renders the same ticket twice, in two different states.
+A ticket lifecycle is **one PR**: backlog → in-review in a single commit. The board shows the in-progress state visually within ~200ms of the bot's `claim` signal (HV-082's optimistic column placement), so a separate claim PR is unnecessary — and counterproductive, because each extra PR advances main and bumps every other open PR to BEHIND.
 
-Concretely:
+The flow:
 
-- The PR that lands `src/` changes also moves the ticket from `in-progress/` to `in-review/` in the same commit.
-- The PR that ships a doc-only ticket also moves that ticket file in the same commit.
-- The optional **claim-PR** (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it lands first, is small, and is closed cleanly before the work-PR opens. The work-PR is then based on a main where the ticket is already in `in-progress/`.
+1. **Pick a ticket** via DAG-walk (per the section above).
+2. **Publish a `claim` signal** before any local edits — the live board immediately shows the card in In-Progress with a "claimed by `<handle>` (pending sync)" banner. Use the helper:
+   ```bash
+   ./scripts/signal.sh --type=claim --refs=HV-XXX
+   ```
+3. **Do the work locally.** Edit files, write tests, etc.
+4. **Open one PR** that moves the ticket file `backlog/` → `in-review/` and ships the work. The PR title and commit body reference the ticket id; standard auto-merge.
+5. **Optionally publish a `done` signal** after pushing the PR (`./scripts/signal.sh --type=done --refs=HV-XXX`) — visually flips the card to in-review without waiting for the PR to merge + Render to redeploy. Optional because the PR-merge SSE refresh handles the same transition; the signal is just faster.
 
-If you find yourself writing two PRs whose net effect could equally be one PR — collapse them. Race conditions are the failure mode.
+The earlier 2-PR pattern (claim PR moves backlog → in-progress, then work PR moves in-progress → in-review) is **deprecated** as of HV-085. It existed because the board read state from main only; HV-082 made that obsolete. Tickets currently in flight on the old flow can finish; new claims use the single-PR flow.
+
+**Don't split "do the work" and "move the ticket" into two separate PRs** — they can race each other, both merge, and end up with the ticket file duplicated across two folders (no merge conflict surfaces because the diffs don't overlap line-wise). The board then renders the same ticket twice, in two different states.
 
 ### Two channels — durable + real-time
 
