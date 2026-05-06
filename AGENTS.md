@@ -95,8 +95,9 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 1. `git pull` (subscribe to durable state).
 2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
 3. Tail the last ~50 lines of `hive/events.log` to see what other agents have done recently.
-4. Auto-pick a handle (per the Identity section above). Announce it.
+4. Resolve agent-id (from `git config bot-hive.agent-id` or `<email>@<hostname>` per HV-074). Auto-pick a handle for this session (per the Identity section above). Announce both: "I'm `<handle>` (agent: `<agent-id>`)".
 5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
+6. Run `./scripts/my-work.sh` — any tickets returned are your **active_set**: tickets you currently own across `in-progress/` and `in-review/` and must monitor for the rest of the session.
 
 ### When the human says "do FS-X" or "work on HV-X"
 
@@ -108,11 +109,14 @@ DAG-walk with cohesion preference:
 
 1. Read `focus.md`.
 2. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
-3. Filter out: in-progress, blocked, anything with unfinished `Blocked by:`.
-4. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
-5. Claim it.
+3. **Filter** by these rules — a candidate is *only* eligible if all hold:
+   - Currently in `backlog/` (not in-progress, in-review, blocked, or anywhere else).
+   - Every `Blocked by:` reference resolves to a ticket currently in **`done/`**. A blocker in `in-review/` still counts as blocking — the human hasn't approved it yet, so the dependent ticket stays unsafe to start. A blocker in `in-progress/` likewise blocks.
+   - No `claim` signal for this ticket from another agent in the last 10 minutes of the SSE buffer (the live lock).
+4. From the eligible leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
+5. **Publish a `claim` signal** for it (`./scripts/signal.sh --type=claim --refs=<id>`) — that's the lock. Don't open a PR yet.
 
-This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
+**Claim collision resolution:** if two agents claim the same ticket within ~2 seconds (rare), both signals reach the SSE buffer. The agent whose signal has the *earlier* timestamp wins; the loser sees the conflicting claim arrive on its own SSE subscription and re-picks the next eligible leaf. (Pre-HV-085 the lock was the git push; with HV-085's claim-signal-first convention, the lock fires before any push, which is what makes parallel agents safe.)
 
 ### One PR per ticket lifecycle transition
 
@@ -167,11 +171,23 @@ On session start (after `git pull`, after reading `focus.md`, after tailing `eve
 
 What to do with incoming signals:
 
-- **Another agent's `claim` for a ticket you were about to claim** → pick a different leaf (DAG-walk).
+- **Another agent's `claim` for a ticket you were about to claim** → pick a different leaf (DAG-walk). If the colliding claim arrived within ~2 seconds of yours, the timestamp-loser is the one re-picking.
 - **`blocked` from another agent** → if you can clear it, do so (or reply with a `note` that you're on it).
 - **`question`** → answer if you can, in <30s. Otherwise ignore.
-- **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
+- **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf. Remember: the parent must reach `done/` before this fires — `done` signal from another agent means they shipped to in-review, not approved.
+- **`accepted` for a ticket in your active_set** → human approved it. Remove from active_set; stop monitoring.
+- **`rejected` for a ticket in your active_set** → human rejected it. Re-claim the ticket (per HV-052), address the rejection reason in `Rejection reason:`, ship a new work PR. The rejected ticket is now back in your queue at the top.
 - **`note` / `handoff`** → read for context; act if relevant.
+
+### Active set — the tickets you're monitoring
+
+After session-start `my-work.sh` returns the tickets you own across `in-progress/` and `in-review/`, those become your **active_set** — the tickets you're listening for human accept/reject signals on. The set is maintained passively as part of your existing SSE subscription:
+
+- **Adding** to active_set: when you ship a work PR (in-progress → in-review), the ticket joins active_set.
+- **Removing** from active_set: an `accepted` signal for that ticket (or the ticket reaching `done/` via the SSE refresh) — that's your "stop monitoring" cue.
+- **Re-engaging**: a `rejected` signal pulls the ticket back into your active work queue; address it before picking a new leaf.
+
+The set survives across sessions because tickets are tagged `Assigned to: <your-agent-id>`. A new session reconstructs active_set the same way: `my-work.sh`. There's no persistent state to keep — the ticket files are the state.
 
 ### Bot presence — every session announces itself
 
