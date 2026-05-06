@@ -102,72 +102,66 @@ export function Board({
     const es = new EventSource(`/api/projects/${project.id}/stream`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
-    es.onmessage = async () => {
+
+    const refreshTickets = async () => {
       const res = await fetch(`/api/projects/${project.id}/tickets`);
-      if (res.ok) {
-        const data = await res.json();
-        const next: Ticket[] = data.tickets;
-        const anims = computeAnimations(prevTicketsRef.current, next);
-        prevTicketsRef.current = next;
-        setTickets(next);
-        setFeatures(data.features);
-        setGeneratedAt(new Date());
-        if (anims.size > 0) {
-          clearTimeout(animTimerRef.current);
-          setAnimating(anims);
-          animTimerRef.current = setTimeout(() => setAnimating(new Map()), 2500);
-        }
-        // Clear pending-transition badges for any ticket that has actually
-        // moved out of in-review — the underlying state change is now visible,
-        // so the "pending merge" hint has served its purpose.
-        setPendingTransitions((prev) => {
-          if (prev.size === 0) return prev;
-          let changed = false;
-          const out = new Map(prev);
-          for (const t of next) {
-            if (out.has(t.hvId) && t.state !== "in-review") {
-              out.delete(t.hvId);
-              changed = true;
-            }
+      if (!res.ok) return;
+      const data = await res.json();
+      const next: Ticket[] = data.tickets;
+      const anims = computeAnimations(prevTicketsRef.current, next);
+      prevTicketsRef.current = next;
+      setTickets(next);
+      setFeatures(data.features);
+      setGeneratedAt(new Date());
+      if (anims.size > 0) {
+        clearTimeout(animTimerRef.current);
+        setAnimating(anims);
+        animTimerRef.current = setTimeout(() => setAnimating(new Map()), 2500);
+      }
+      // Clear pending-transition badges for any ticket whose underlying file
+      // has moved out of in-review — the actual state change is visible now,
+      // so the optimistic banner has served its purpose. (HV-055/072.)
+      setPendingTransitions((prev) => {
+        if (prev.size === 0) return prev;
+        let changed = false;
+        const out = new Map(prev);
+        for (const t of next) {
+          if (out.has(t.hvId) && t.state !== "in-review") {
+            out.delete(t.hvId);
+            changed = true;
           }
-          return changed ? out : prev;
+        }
+        return changed ? out : prev;
+      });
+    };
+
+    es.onmessage = (ev) => {
+      let event: { type: string; hvId?: string; kind?: string } | null = null;
+      try {
+        event = JSON.parse(ev.data);
+      } catch {
+        // Malformed payload — ignore.
+        return;
+      }
+      if (!event) return;
+      if (event.type === "project-changed") {
+        refreshTickets();
+      } else if (event.type === "ticket-action" && event.hvId && event.kind) {
+        const kind = event.kind === "approved" ? "approved" : "rejected";
+        const hvId = event.hvId;
+        setPendingTransitions((prev) => {
+          const out = new Map(prev);
+          out.set(hvId, { kind, at: Date.now() });
+          return out;
         });
       }
     };
+
     return () => {
       es.close();
       clearTimeout(animTimerRef.current);
     };
   }, [project.id, computeAnimations]);
-
-  // Subscribe to the real-time signal stream for accept/reject signals so the
-  // pending-merge badge appears within ~200ms of the click — well before CI +
-  // deploy land the actual state change. (HV-055.)
-  useEffect(() => {
-    const es = new EventSource(`/api/projects/${project.id}/signals/stream`);
-    es.onmessage = (ev) => {
-      try {
-        const sig = JSON.parse(ev.data) as {
-          id: string;
-          type: string;
-          refs?: string[];
-        };
-        const hvId = sig.refs?.[0];
-        if (!hvId) return;
-        if (sig.type === "accepted" || sig.type === "rejected") {
-          const kind = sig.type === "accepted" ? "approved" : "rejected";
-          setPendingTransitions((prev) => {
-            const out = new Map(prev);
-            out.set(hvId, { kind, at: Date.now() });
-            return out;
-          });
-        }
-      } catch {
-        // Malformed payload — ignore.
-      }
-    };
-    return () => es.close();
-  }, [project.id]);
 
   // Hard timeout: drop badges older than 10 minutes. Protects against a stuck
   // CI / deploy that never lands the underlying state change.
