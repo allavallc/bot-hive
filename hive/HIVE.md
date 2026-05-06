@@ -281,6 +281,12 @@ On session start and every ~10 min while working: scan open non-draft PRs; for a
 
 The Bot Hive reference implementation uses `gh pr update-branch <N>` for the update; other host implementations may differ. Optional server-side complement: a scheduled job (e.g., GitHub Actions cron) that does the same thing every 10 min as a backstop for when no agents are online.
 
+### Owning doc updates when you add an infra dependency
+
+When your work adds a new infrastructure requirement — env var, App permission, secret, package, port, OAuth scope, anything an operator needs to set up — you also own the corresponding doc update.
+
+The fix lands in the **same PR** as the code change when feasible. If the doc update is large enough to warrant its own PR (rare), the author files an immediate follow-up ticket assigned to themselves and ships it within the same session. Doc drift is real cost; the convention exists to make skipping it explicit and uncomfortable.
+
 ### Pre-action pull — never operate on stale state
 
 Every meaningful action (claim a ticket, push a branch, open a PR, edit canonical docs) is preceded by `git pull --rebase` against `origin/main`. The cheapest correct version is a **pre-commit pull**: before any commit that's about to be pushed, run `git pull --rebase`; if the rebase is clean, continue. If it conflicts, fall back to the conflict-response policy — never guess merges.

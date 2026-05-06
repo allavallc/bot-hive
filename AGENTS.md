@@ -67,6 +67,8 @@ gh pr merge --auto --squash --delete-branch
 
 `--auto` queues the merge and fires it the moment CI goes green. No manual step. Total ceremony per change: ~2-3 min of wall time (CI run), ~5s of agent interaction.
 
+When the GitHub merge queue is enabled (HV-080 — see `docs/DEPLOY.md` "Step 9"), source PRs are batched: multiple auto-mergeable PRs share a single CI run on a combined branch, then merge atomically. With 5 PRs in flight, total wall time stays ~3 min instead of growing to ~15 min. Coordination-metadata-only PRs (hive/, docs/, tasks/, AGENTS.md, etc.) skip CI entirely (HV-079) and land in seconds regardless.
+
 ### Conceptually: still two lanes
 
 The mental split between coordination metadata and source code is still useful — it determines what the change is *about*, even though both flow through PRs:
@@ -250,6 +252,21 @@ GitHub merges current main into the PR's branch. CI re-runs. Auto-merge fires if
 This is not a chore — it's the swarm tending its own garden. The cost is ~5 seconds; the savings is hours of idle-PR rot when an agent's session ends but its PR stays open.
 
 A convenience helper exists: `scripts/update-stale-prs.sh` (or `.ps1`). HV-051 adds a server-side cron that does the same thing every 10 min as a backstop.
+
+### Owning doc updates when you add an infra dependency
+
+When your work adds a new infrastructure requirement — env var, GitHub App permission, secret, package, port, OAuth scope, anything an operator needs to set up — you also own the corresponding doc update.
+
+Concretely:
+
+- New env var → update `.env.example`, `render.yaml`, and `docs/DEPLOY.md`'s env-var checklist.
+- New GitHub App permission → update `docs/DEPLOY.md` Step 2 to include the permission, and note that adding a permission to an existing App requires re-approving the install on github.com.
+- New required package or version bump → update `README.md` prerequisites.
+- New external API or scope → update the secrets list in `docs/DEPLOY.md`.
+
+The fix lands in the **same PR** as the code change when feasible. If the doc update is large enough to warrant its own PR (rare), the author files an immediate follow-up ticket assigned to themselves and ships it within the same session.
+
+**Doc drift is real cost.** The next operator hitting an undocumented dependency pays minutes-to-hours of debugging that the original author could have prevented with a 30-second edit. The convention exists to make skipping it explicit and uncomfortable.
 
 ### Pre-action pull — never operate on stale state
 

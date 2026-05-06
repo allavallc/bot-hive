@@ -101,6 +101,18 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-043 / PR (this PR).
 
+### 2026-05-06 — Doc ownership: agents who add a dependency own the doc update (nectar)
+
+**Choice:** Author of the dependency owns the corresponding operator-runbook update. Same PR if feasible; immediate follow-up if not.
+
+**Rejected:** Letting doc updates be a separate "someone will pick this up later" backlog item. Doc drift is the predictable failure mode — every undocumented dependency is a paper cut for the next operator.
+
+**Why:** Captured live during today's session — CC2's HV-046 added a GitHub App permission requirement (`Pull requests: Read & write`) to call the PR-create API. `docs/DEPLOY.md` Step 2 wasn't updated, so the operator hit a "failed to create PR" error with no breadcrumb pointing at the missing permission. Convention is cheap; the absence of it is expensive.
+
+**Implications:** AGENTS.md + HIVE.md gain a new "Owning doc updates when you add an infra dependency" subsection in the swarm protocol. PR reviewers (human or bot) check for doc updates whenever a PR introduces an infra change.
+
+**Reference:** HV-054.
+
 ### 2026-05-05 — Skip Render preview deploys (nectar)
 
 **Choice:** Permanent staging environment (HV-035, future) rather than per-PR Render preview deploys.

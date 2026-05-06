@@ -173,6 +173,60 @@ If all four steps work, the deploy is good. If step 4 fails, see the troubleshoo
 
 ---
 
+## Step 9 — Enable the GitHub merge queue (HV-080)
+
+The merge queue batches multiple auto-mergeable PRs into a single CI run instead of running CI per PR. This is the primary defense against the merge-train problem when many agents are working in parallel.
+
+### Enable via GitHub UI (one-time)
+
+1. Open the repo → **Settings** → **Branches** → click **Edit** on the `main` branch protection rule.
+2. Check **Require merge queue**.
+3. Configure the queue:
+   - **Build concurrency**: 5 (default)
+   - **Min entries to merge**: 1
+   - **Wait before merging**: 5 minutes
+   - **Merge method**: Squash and merge
+4. Save.
+
+### Or via `gh api` (scriptable)
+
+```bash
+gh api -X PUT "repos/<owner>/<repo>/branches/main/protection" \
+  --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": false,
+    "contexts": ["ci"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "required_linear_history": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": false,
+  "lock_branch": false,
+  "allow_fork_syncing": false,
+  "block_creations": false,
+  "required_signatures": false,
+  "required_merge_queue": {
+    "merge_method": "SQUASH",
+    "min_entries_to_merge": 1,
+    "max_entries_to_build": 5,
+    "min_entries_to_merge_wait_minutes": 5
+  }
+}
+JSON
+```
+
+### Verification
+
+After enabling: open 3+ source PRs simultaneously, all auto-mergeable. GitHub will batch them into one merge-queue group, run CI once on the batch, merge atomically. The "all PRs serial each pay full CI" pattern goes away.
+
+If a PR in a batch fails CI, GitHub bisects to find the offender, kicks it back to the queue, retries the rest. No manual intervention.
+
+---
+
 ## Troubleshooting appendix
 
 ### CORS errors on sign-in

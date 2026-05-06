@@ -4,7 +4,7 @@
 # to pass before merging. With auto-merge enabled, bots can self-merge their
 # PRs once `ci` goes green — no human review of every change.
 #
-# Two-job structure (HV-077):
+# Two-job structure (HV-079):
 #   - `detect` runs in ~5s, classifies the PR as source-touching or
 #     coordination-metadata-only.
 #   - `ci` is the required-status-check job. It always runs (so branch
@@ -12,6 +12,14 @@
 #     toolchain (postgres, npm ci, lint, typecheck, test, build) when the
 #     PR only touches hive/, docs/, tasks/, and similar agent-coordination
 #     surfaces. Hive-only PRs land in seconds instead of paying a full CI cycle.
+#
+# Merge queue support (HV-080):
+#   - The `merge_group` trigger lets GitHub's merge queue run CI on a batch
+#     of PRs combined into a single ephemeral branch. Source PRs land in
+#     batches (one CI cycle per batch, not per PR), eliminating the N²
+#     CI-cycle problem when many PRs are auto-mergeable simultaneously.
+#   - Branch protection rule on main must enable "Require merge queue"
+#     for this trigger to actually fire — see docs/DEPLOY.md "Merge queue".
 
 name: ci
 
@@ -20,6 +28,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  merge_group:
 
 jobs:
   detect:
@@ -34,10 +43,18 @@ jobs:
       - id: scope
         name: Classify PR scope
         run: |
-          # Determine the changed set vs the merge-base with main. For pushes
-          # to main, compare against the previous commit.
+          # Determine the changed set vs the merge-base with main. The base
+          # depends on the event type:
+          #   - pull_request: the PR's base.sha
+          #   - push (to main): the previous commit (event.before)
+          #   - merge_group (HV-080): the merge queue's base_sha — the commit
+          #     this batch is being merged onto. The batch may combine N PRs;
+          #     diffing against base_sha shows the union of all their changes,
+          #     which is exactly what we want to classify.
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base_sha="${{ github.event.pull_request.base.sha }}"
+          elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
+            base_sha="${{ github.event.merge_group.base_sha }}"
           else
             base_sha="${{ github.event.before }}"
           fi
