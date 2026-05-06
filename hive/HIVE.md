@@ -300,6 +300,8 @@ OR take the ticket over by reassigning `Assigned to:` and refreshing `Last touch
 
 This replaces a heartbeat daemon with a passive, environment-readable signal. No process required.
 
+A scheduled job may run periodically as a backstop: scan `in-progress/`, find tickets older than the threshold, return them to `backlog/`. The Bot Hive reference implementation uses a GitHub Actions cron at `*/30 * * * *` (`scripts/reclaim-stale-claims.sh` does the work). Active agents may still reclaim manually on session start — the cron handles only the gap when no agents are around.
+
 ### `hive/events.log` — append-only event topic
 
 Bots publish one-line events on lifecycle transitions. The log is durable history; other bots tail it on session start to catch up on what changed.
