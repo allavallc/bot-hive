@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { auth } from "@/lib/auth";
+import { getActor } from "@/lib/actor";
 import { broadcast } from "@/lib/broadcast";
-import { getProjectForUser } from "@/lib/projects";
 import { type Signal, addSignal, isSignalType } from "@/lib/signal-buffer";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 const MAX_MESSAGE_LENGTH = 500;
@@ -11,14 +9,9 @@ const MAX_REFS = 10;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
+  const actor = await getActor(req, projectId);
+  if (!actor) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  const project = await getProjectForUser(session.user.id, projectId);
-  if (!project) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
   let body: unknown;
@@ -65,13 +58,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   }
 
+  // Bot tokens self-attribute via the token's displayName; humans get attributed
+  // by their session display name. Either side may still pass an explicit `bot:`
+  // override in the body for cases where the bot wants a finer-grained handle.
   const signal: Signal = {
     id: randomUUID(),
     timestamp: new Date().toISOString(),
     type,
     message,
-    bot: typeof bot === "string" ? bot : undefined,
-    user: session.user.name ?? session.user.id,
+    bot: typeof bot === "string" ? bot : actor.kind === "bot" ? actor.displayName : undefined,
+    user: actor.kind === "user" ? actor.displayName : undefined,
     refs: Array.isArray(refs) ? (refs as string[]) : undefined,
   };
 
