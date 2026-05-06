@@ -445,25 +445,56 @@ The earlier convention (`git config bot-hive.handle <name>` once per machine) fa
 
 ## Provenance trailers
 
-Bot commits for ticket-lifecycle actions carry trailers in the commit message body so the audit trail lives in `git log` without any new infrastructure:
-
-```
-HV-XXX: <action>
-
-<short body explaining what changed>
-
-Model: claude-opus-4-7
-Bot: CC1
-Trigger: HV-XXX <action>
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-```
+Bot commits for ticket-lifecycle actions carry trailers in the commit message body so the audit trail lives in `git log` without any new infrastructure. The trailer captures *who / what / when* for every ticket-state-change commit, agent-neutral by design — any LLM agent type slots into the same format.
 
 **Trailer format:**
 
-- `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`, `gpt-5-codex`).
-- `Bot:` — the bot's handle from `git config bot-hive.handle` (e.g. `CC1`, `CC2`, `scout`). Required when the handle is set; omit only if the convention isn't yet adopted in the repo.
+- `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `gpt-5-codex`, `gemini-2.5-pro`, `aider-deepseek-v3`). Use whatever string identifies your agent's underlying model.
+- `Bot:` — the bot's per-session handle (e.g. `nectar`, `kestrel`, `scout`).
 - `Trigger:` — `HV-XXX <action>` where action ∈ `claim | done | edit | blocked | reclaim | in-review | accepted | rejected`.
-- `Co-Authored-By:` — existing convention, unchanged.
+- `Co-Authored-By:` — standard git convention. Use the email convention your agent's host provides (`<noreply@anthropic.com>`, `<noreply@github.com>` for Codex, etc.). Pure-tooling agents without a hosted email may omit.
+
+**Examples** — one trailer block per agent type, all interoperable:
+
+Claude Code session:
+
+```
+HV-074: in-review
+
+Refactored sync helper to share buffer with broadcast.
+
+Model: claude-opus-4-7
+Bot: nectar
+Trigger: HV-074 in-review
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```
+
+Codex / GPT-family session:
+
+```
+HV-090: in-review
+
+Patched off-by-one in pagination.
+
+Model: gpt-5-codex
+Bot: scout
+Trigger: HV-090 in-review
+Co-Authored-By: Codex <noreply@github.com>
+```
+
+Aider / open-model session:
+
+```
+HV-101: claim
+
+Picked up after stale-claim reclaim.
+
+Model: aider-deepseek-v3
+Bot: kestrel
+Trigger: HV-101 claim
+```
+
+The agent-type-specific bits live in the `Model:` value and the optional `Co-Authored-By:` email. Everything else (`Bot:`, `Trigger:`, action vocabulary) is identical across agents.
 
 **Acceptance-loop actions:**
 
@@ -495,8 +526,9 @@ Trigger: HV-090 rejected
 
 ```bash
 git log --grep "Trigger: HV-074"        # full lifecycle of one ticket
-git log --grep "Model: claude-"         # everything done by Claude models
-git log --grep "Bot: CC1"               # everything done by a specific bot session
+git log --grep "Model: claude-"         # everything done by Claude family models
+git log --grep "Model: gpt-"            # everything done by GPT family models
+git log --grep "Bot: nectar"            # everything done by a specific bot session
 git log --grep "Trigger: .* done"       # all completion events
 git log --grep "Trigger: .* accepted"   # tester sign-offs (loop output)
 git log --grep "Trigger: .* rejected"   # rejected work — what came back
