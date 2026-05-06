@@ -1,5 +1,6 @@
 "use client";
 
+import { HumanMascot } from "@/components/human-mascot";
 import { RobotMascot, robotColor } from "@/components/robot-mascot";
 import { Wordmark } from "@/components/wordmark";
 import Link from "next/link";
@@ -476,6 +477,11 @@ function WalkingRobot({ name }: { name?: string }) {
   );
 }
 
+function WalkingHuman() {
+  const delay = useMemo(() => -Math.random() * 14, []);
+  return <HumanMascot className={styles.cardHuman} style={{ animationDelay: `${delay}s` }} />;
+}
+
 function Card({
   ticket,
   features,
@@ -498,6 +504,7 @@ function Card({
   return (
     <article className={styles.card} data-state={ticket.state} data-anim={animState}>
       {ticket.state === "in-progress" && <WalkingRobot name={assignee} />}
+      {ticket.state === "in-review" && <WalkingHuman />}
       {handle && (
         <span
           className={styles.cardBot}

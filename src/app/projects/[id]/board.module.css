@@ -545,6 +545,15 @@
   animation: botRobotWalk 12s linear infinite;
 }
 
+.cardHuman {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 1;
+  animation: cardHumanWalk 14s linear infinite;
+}
+
 @keyframes botRobotWalk {
   0% {
     top: -10px;
@@ -568,8 +577,32 @@
   }
 }
 
+@keyframes cardHumanWalk {
+  0% {
+    top: -10px;
+    left: -10px;
+  }
+  25% {
+    top: -10px;
+    left: calc(100% - 8px);
+  }
+  50% {
+    top: calc(100% - 8px);
+    left: calc(100% - 8px);
+  }
+  75% {
+    top: calc(100% - 8px);
+    left: -10px;
+  }
+  100% {
+    top: -10px;
+    left: -10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .botRobot {
+  .botRobot,
+  .cardHuman {
     animation: none;
     top: -10px;
     left: -10px;
