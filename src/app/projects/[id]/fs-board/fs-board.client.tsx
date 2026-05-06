@@ -169,11 +169,13 @@ export function FsBoard({
         )}
 
         <div className={styles.sections}>
-          {initialFeatures.map((fs) => {
-            const tickets = (ticketsByFs.get(fs.fsId) ?? []).sort(sortTickets);
-            const label = `${fs.fsId.replace("feature-set-", "FS-")} — ${fs.title}`;
-            return <FsSection key={fs.id} label={label} tickets={tickets} />;
-          })}
+          {initialFeatures
+            .filter((fs) => (ticketsByFs.get(fs.fsId)?.length ?? 0) > 0)
+            .map((fs) => {
+              const tickets = (ticketsByFs.get(fs.fsId) ?? []).sort(sortTickets);
+              const label = `${fs.fsId.replace("feature-set-", "FS-")} — ${fs.title}`;
+              return <FsSection key={fs.id} label={label} tickets={tickets} />;
+            })}
           {uncategorized.length > 0 && (
             <FsSection label="Uncategorized" tickets={uncategorized.sort(sortTickets)} />
           )}
