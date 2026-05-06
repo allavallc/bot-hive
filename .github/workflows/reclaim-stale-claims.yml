@@ -1,0 +1,42 @@
+# Stale-claim reclaim (server-side backstop) — see AGENTS.md "Last touched"
+# and HV-066.
+#
+# Runs every 30 minutes. Scans hive/in-progress/*.md for tickets whose
+# `Last touched:` ISO timestamp is older than 2 hours, and returns them to
+# backlog/ via an auto-merging PR.
+#
+# Pairs with the bot-side convention (active agents may reclaim manually on
+# session start). The cron is the safety net for when no agents are around.
+
+name: reclaim-stale-claims
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  reclaim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "stale-claim-reclaim-bot"
+          git config user.email "stale-claim-reclaim-bot@users.noreply.github.com"
+
+      - name: Reclaim stale claims
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x ./scripts/reclaim-stale-claims.sh
+          ./scripts/reclaim-stale-claims.sh --reclaim
