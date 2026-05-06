@@ -40,14 +40,37 @@ const COLUMNS = [
 
 const NOT_DOING = { state: "not-doing", label: "Not doing" } as const;
 
-function effectiveState(
-  ticket: Ticket,
-  pending: { kind: "approved" | "rejected" } | undefined,
-): string {
+// Optimistic column placement (HV-075 + HV-082):
+//  - "approved" / "rejected" come from human Accept/Reject; a card in
+//    in-review jumps to done / in-progress within ~1s of the click.
+//  - "bot-claim" / "bot-done" come from bot signals (HV-082); a card jumps
+//    backlog → in-progress on a `claim` signal, in-progress → in-review on
+//    a `done` signal. Bot signals don't pre-suppose a starting column the
+//    way human signals do, so we fan out to whichever destination matches
+//    the signal.
+function effectiveState(ticket: Ticket, pending: PendingTransition | undefined): string {
   if (!pending) return ticket.state;
-  if (ticket.state !== "in-review") return ticket.state;
-  return pending.kind === "approved" ? "done" : "in-progress";
+  switch (pending.kind) {
+    case "approved":
+      return ticket.state === "in-review" ? "done" : ticket.state;
+    case "rejected":
+      return ticket.state === "in-review" ? "in-progress" : ticket.state;
+    case "bot-claim":
+      // Bot just claimed: card was in backlog (or wherever), should now look
+      // like in-progress. We don't gate on starting column — the signal
+      // means "I've started," wherever the card was, render it in-progress.
+      return "in-progress";
+    case "bot-done":
+      // Bot just finished: render in-review.
+      return "in-review";
+  }
 }
+
+type PendingTransition =
+  | { kind: "approved"; at: number }
+  | { kind: "rejected"; at: number }
+  | { kind: "bot-claim"; at: number; handle?: string }
+  | { kind: "bot-done"; at: number; handle?: string };
 
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
 
@@ -72,11 +95,12 @@ export function Board({
   const [animating, setAnimating] = useState<Map<string, "arrived" | "new" | "in-review">>(
     new Map(),
   );
-  // hvId → pending transition kind, set by signals from accept/reject. Cleared
-  // when the ticket actually moves columns (SSE refresh) or after a timeout.
-  const [pendingTransitions, setPendingTransitions] = useState<
-    Map<string, { kind: "approved" | "rejected"; at: number }>
-  >(new Map());
+  // hvId → pending transition, set by signals (human accept/reject from
+  // HV-055/075, bot claim/done from HV-082). Cleared when the SSE refresh
+  // shows the actual file move landed, or after a 10-min hard timeout.
+  const [pendingTransitions, setPendingTransitions] = useState<Map<string, PendingTransition>>(
+    new Map(),
+  );
 
   const openTriggerRef = useRef<HTMLElement | null>(null);
   const prevTicketsRef = useRef<Ticket[]>(initialTickets);
@@ -149,9 +173,11 @@ export function Board({
     };
   }, [project.id, computeAnimations]);
 
-  // Subscribe to the real-time signal stream for accept/reject signals so the
-  // pending-merge badge appears within ~200ms of the click — well before CI +
-  // deploy land the actual state change. (HV-055.)
+  // Subscribe to the real-time signal stream:
+  //  - accepted/rejected → pending-merge banner from human Accept/Reject (HV-055/075)
+  //  - claim/done from bots → optimistic column move + muted "in flight" banner (HV-082)
+  // The pending-merge state appears within ~200ms — well before CI + deploy
+  // land the actual state change.
   useEffect(() => {
     const es = new EventSource(`/api/projects/${project.id}/signals/stream`);
     es.onmessage = (ev) => {
@@ -160,14 +186,23 @@ export function Board({
           id: string;
           type: string;
           refs?: string[];
+          bot?: string;
         };
         const hvId = sig.refs?.[0];
         if (!hvId) return;
+        const now = Date.now();
         if (sig.type === "accepted" || sig.type === "rejected") {
           const kind = sig.type === "accepted" ? "approved" : "rejected";
           setPendingTransitions((prev) => {
             const out = new Map(prev);
-            out.set(hvId, { kind, at: Date.now() });
+            out.set(hvId, { kind, at: now });
+            return out;
+          });
+        } else if (sig.type === "claim" || sig.type === "done") {
+          const kind = sig.type === "claim" ? "bot-claim" : "bot-done";
+          setPendingTransitions((prev) => {
+            const out = new Map(prev);
+            out.set(hvId, { kind, at: now, handle: sig.bot });
             return out;
           });
         }
@@ -299,7 +334,7 @@ export function Board({
                         ticket={t}
                         features={features}
                         animState={animating.get(t.id)}
-                        pendingTransition={pendingTransitions.get(t.hvId)?.kind}
+                        pendingTransition={pendingTransitions.get(t.hvId)}
                         onOpen={(trigger) => handleCardOpen(t.id, trigger)}
                       />
                     ))
@@ -494,6 +529,19 @@ function WalkingHuman() {
   return <HumanMascot className={styles.cardHuman} style={{ animationDelay: `${delay}s` }} />;
 }
 
+function pendingBannerText(p: PendingTransition): string {
+  switch (p.kind) {
+    case "approved":
+      return "✓ Approved — pending merge";
+    case "rejected":
+      return "✗ Rejected — pending merge";
+    case "bot-claim":
+      return `→ ${p.handle ?? "bot"} claimed (pending sync)`;
+    case "bot-done":
+      return `✓ ${p.handle ?? "bot"} finished (pending sync)`;
+  }
+}
+
 function Card({
   ticket,
   features,
@@ -504,7 +552,7 @@ function Card({
   ticket: Ticket;
   features: Feature[];
   animState?: "arrived" | "new" | "in-review";
-  pendingTransition?: "approved" | "rejected";
+  pendingTransition?: PendingTransition;
   onOpen: (trigger: HTMLElement) => void;
 }) {
   const fm = ticket.frontmatter;
@@ -539,8 +587,8 @@ function Card({
           </span>
         </span>
         {pendingTransition && (
-          <span className={styles.pendingBanner} data-kind={pendingTransition}>
-            {pendingTransition === "approved" ? "✓ Approved" : "✗ Rejected"} — pending merge
+          <span className={styles.pendingBanner} data-kind={pendingTransition.kind}>
+            {pendingBannerText(pendingTransition)}
           </span>
         )}
         {fs && <span className={styles.cardFs}>{fs.fsId.replace(/^feature-set-/, "fs-")}</span>}

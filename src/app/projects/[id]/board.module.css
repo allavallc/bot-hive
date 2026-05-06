@@ -472,6 +472,17 @@
   color: #d97757;
 }
 
+/* HV-082: muted variants for bot lifecycle signals (claim / done). Visually
+   distinct from the bold human-action banners — this is "FYI, in flight"
+   not "your action is processing." */
+.pendingBanner[data-kind="bot-claim"],
+.pendingBanner[data-kind="bot-done"] {
+  color: var(--ink-dim);
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.15);
+  border-color: var(--line);
+}
+
 @keyframes pendingBannerIn {
   from {
     opacity: 0;
