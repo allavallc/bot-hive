@@ -113,6 +113,18 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-054.
 
+### 2026-05-06 — Rejected work routes back to the original agent first (handle-based) (allavallc-cc1)
+
+**Choice:** Agents pre-check `in-progress/` for tickets matching their own handle with `Rejected by:` populated. Those are picked up before any DAG-walk for new claims.
+
+**Rejected:** Pure DAG-walk only — would let rejected tickets sit indefinitely or trigger context-switching reclaims via the stale-claim watchdog every time.
+
+**Why:** Rejection is "iterate, not abandon." Original agent has the freshest mental model of what they shipped; reclaim by another agent pays a context-switch tax. The rule preserves continuity. CC2 noticed the gap during the first end-to-end rejection test — DAG-walk skipped rejected in-progress tickets as "claimed, not available," so they sat until a stale-reclaim eventually fired.
+
+**Implications:** AGENTS.md "Picking what to claim" gets a pre-DAG-walk step (step 0). HIVE.md "Pre-claim ritual" subsection added before "DAG-walk." Session-start checklist gains a scan step. Stale-claim reclaim still applies for rejected work where the original agent has gone idle (>2h) — the new rule narrows but doesn't replace that safety net.
+
+**Reference:** HV-052.
+
 ### 2026-05-05 — Skip Render preview deploys (allavallc-cc1)
 
 **Choice:** Permanent staging environment (HV-035, future) rather than per-PR Render preview deploys.
