@@ -177,47 +177,32 @@ If all four steps work, the deploy is good. If step 4 fails, see the troubleshoo
 
 The merge queue batches multiple auto-mergeable PRs into a single CI run instead of running CI per PR. This is the primary defense against the merge-train problem when many agents are working in parallel.
 
-### Enable via GitHub UI (one-time)
+### Enable via GitHub UI
 
-1. Open the repo → **Settings** → **Branches** → click **Edit** on the `main` branch protection rule.
-2. Check **Require merge queue**.
-3. Configure the queue:
-   - **Build concurrency**: 5 (default)
-   - **Min entries to merge**: 1
-   - **Wait before merging**: 5 minutes
+1. Open the repo → **Settings** → **Rules** → **Rulesets** → **New branch ruleset**.
+2. Name: `main-merge-queue`. Enforcement: **Active**.
+3. Target branches → add **Default branch**.
+4. Rules → check **Require merge queue**. Configure:
    - **Merge method**: Squash and merge
-4. Save.
+   - **Build concurrency**: 5
+   - **Min entries to merge**: 1
+   - **Max entries to merge**: 5
+   - **Wait before merging**: 5 minutes
+   - **Status check timeout**: 60 minutes
+   - **Grouping strategy**: All Green
+5. Save.
 
-### Or via `gh api` (scriptable)
+(Older versions of GitHub put this under Settings → Branches → branch protection rules instead. Either path works; rulesets is the modern home.)
+
+### Canonical config (config-as-code)
+
+The desired ruleset is committed at `infra/main-merge-queue-ruleset.json`. **Note**: GitHub's REST `POST /repos/{owner}/{repo}/rulesets` endpoint currently rejects the `merge_queue` rule type with a generic `Invalid rule 'merge_queue':` 422, even with the schema-canonical body — appears feature-flag-gated as of 2026-05-06. The JSON file documents intent; once the API gap closes, an adopter can enable in one command:
 
 ```bash
-gh api -X PUT "repos/<owner>/<repo>/branches/main/protection" \
-  --input - <<'JSON'
-{
-  "required_status_checks": {
-    "strict": false,
-    "contexts": ["ci"]
-  },
-  "enforce_admins": false,
-  "required_pull_request_reviews": null,
-  "restrictions": null,
-  "required_linear_history": false,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "required_conversation_resolution": false,
-  "lock_branch": false,
-  "allow_fork_syncing": false,
-  "block_creations": false,
-  "required_signatures": false,
-  "required_merge_queue": {
-    "merge_method": "SQUASH",
-    "min_entries_to_merge": 1,
-    "max_entries_to_build": 5,
-    "min_entries_to_merge_wait_minutes": 5
-  }
-}
-JSON
+gh api -X POST "repos/<owner>/<repo>/rulesets" --input infra/main-merge-queue-ruleset.json
 ```
+
+Until then, use the UI path above. The JSON stays current so the migration is a one-line operation when GitHub catches up.
 
 ### Verification
 
