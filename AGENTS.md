@@ -171,6 +171,86 @@ What to do with incoming signals:
 - **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
 - **`note` / `handoff`** → read for context; act if relevant.
 
+### Bot presence — every session announces itself
+
+The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, separate file: `hive/presence.log` — append-only, file-based, git-synced like everything else.
+
+**On session start** (after handle pick, after `focus.md` read, after tailing `events.log`): append one line:
+
+```
+<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
+```
+
+Example: `2026-05-06T03:30:00Z nectar online model=claude-opus-4-7 focus=feature-set-007-parallel-bot-coordination`
+
+**On focus change mid-session**: append another line with `focus=<new-focus>`.
+
+**On session end** (rarely possible — most sessions just stop): append `<ISO> <handle> offline`. Optional.
+
+**Push timing**: the presence line piggybacks on the next commit you make (your first claim PR, doc edit, etc.). If you've been online >5 minutes without any other commit, push a tiny presence-only PR.
+
+**Read it on session start**: filter to entries from the last 1 hour to see who else is online. Stale entries (>24h) may be deleted FIFO by any agent during their session-start procedure to keep the file small.
+
+Why a separate file rather than `events.log`: events.log is the durable lifecycle log (claim, in-review, done). Presence is ephemeral chatter — different contract, different file. Why not the SSE signal stream: bots don't have web-app session auth today (they push via git, not HTTP); when project-scoped bot tokens land, presence will *also* publish on the SSE channel for sub-second visibility.
+
+### Hot-file conflict avoidance — check open PRs before editing canonical docs
+
+A "hot file" is one that multiple parallel agents edit, where parallel PRs reliably go DIRTY at merge time. The fix is a pre-edit check: before opening a PR that touches a hot file, scan the open PR queue for any PR already touching that file, and rebase / wait / pick different work instead of opening a competing edit.
+
+**Hot files in this repo:**
+
+- `AGENTS.md`
+- `hive/HIVE.md`
+- `hive/events.log`
+- `hive/focus.md`
+- `hive/presence.log`
+- `tasks/lessons.md`
+- `render.yaml`
+- `package.json`
+- `drizzle/migrations/*.sql`
+
+**Pre-edit check** — run this before staging your edits to a hot file:
+
+```bash
+./scripts/check-hot-files.sh AGENTS.md hive/HIVE.md
+```
+
+The script prints any open PR that already touches the file(s) and exits non-zero if a conflict exists. Equivalent PowerShell: `.\scripts\check-hot-files.ps1`.
+
+**If a conflict is reported:**
+1. **Best**: rebase your branch onto the existing PR's branch (`git fetch origin <theirs>`, `git rebase origin/<theirs>`) and add your changes; the second PR replaces the first as the canonical edit.
+2. **Acceptable**: wait for the existing PR to merge, then base off updated main.
+3. **Last resort**: pick different work and come back when the lock clears.
+
+**If no conflict**: proceed normally.
+
+This is the swarm's pre-flight check, not a hard lock. github's PR queue is the source of truth — the script is just a convenience wrapper. Once bot HTTP auth lands (separate ticket), this convention can absorb sub-second locking via the SSE channel without changing the agent-side rule.
+
+### Stale-PR watchdog — active agents update BEHIND PRs
+
+A long-running session can leave its open PR `BEHIND` (main moved after the PR opened) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
+
+**On session start (after the rest of this checklist) and every ~10 minutes while you work:**
+
+```bash
+gh pr list --json number,mergeStateStatus,isDraft \
+  | jq -r '.[] | select(.isDraft == false) | select(.mergeStateStatus == "BEHIND") | .number'
+```
+
+For every PR number returned, run:
+
+```bash
+gh pr update-branch <number>
+```
+
+GitHub merges current main into the PR's branch. CI re-runs. Auto-merge fires if the result is clean.
+
+**For `DIRTY` PRs (real conflicts), don't touch them.** Conflicts mean someone needs to resolve manually; surface to the human via `hive/questions-for-human.md` rather than guessing a merge.
+
+This is not a chore — it's the swarm tending its own garden. The cost is ~5 seconds; the savings is hours of idle-PR rot when an agent's session ends but its PR stays open.
+
+A convenience helper exists: `scripts/update-stale-prs.sh` (or `.ps1`). HV-051 adds a server-side cron that does the same thing every 10 min as a backstop.
+
 ### Pre-action pull — never operate on stale state
 
 A session that started an hour ago has a clone that's an hour out of date. Other agents (and humans) may have pushed conventions, claimed tickets, merged PRs in the meantime. Acting on stale state causes ID collisions, missed convention updates, and edits to files that have moved.
@@ -215,6 +295,8 @@ Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <handle>`. The 
 
 Every commit an agent makes against an in-progress ticket also updates the ticket's `**Last touched:**` field with the current ISO timestamp. If an agent looks at an in-progress ticket and `Last touched:` is older than **2 hours**, the ticket is stale — that agent may reclaim it (move back to `backlog/` with a `Reclaim reason:`) or take it over (update `Assigned to:`, refresh `Last touched:`). Append the reclaim to `events.log`.
 
+A scheduled job (`.github/workflows/reclaim-stale-claims.yml`) runs every 30 minutes as a backstop: it scans `hive/in-progress/`, finds anything stale, and opens an auto-merging PR returning them to `backlog/`. Active agents may still reclaim manually on session start — the cron is the safety net for when no agents are around. Run `./scripts/reclaim-stale-claims.sh` (no flag, dry-run) to preview what the cron would do.
+
 ### Per-FS architecture & decisions log
 
 Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture & decisions`** section that bots and humans append to as design choices accumulate. It's the swarm's institutional memory for that feature set — captures the *why*, not just the *what*. Future agents working in that FS read it on session start and don't re-litigate settled questions.
@@ -240,6 +322,24 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 **Read** the relevant FS's section on session start, **after** `focus.md` and `events.log`. If `focus.md` names an FS, that FS's decisions are mandatory pre-reading.
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
+
+### UI changes need explicit visual approval before build
+
+A ticket spec describes *what* a feature does; it does not describe *where it sits on the page* or *how it lays out alongside everything else*. **Approving a ticket is not approving a layout choice.** For any change a human will visually see, the agent must propose placement *before* writing implementation code, and wait for explicit approval — even if the ticket itself is already accepted.
+
+**Concretely**, before claiming a user-facing UI ticket:
+
+1. Read the ticket. Identify which surfaces it touches (board page, dashboard, masthead, modal, etc.).
+2. Read the existing layout for those surfaces (what's already there, where, taking what space).
+3. Post a short layout proposal in chat: text description + ASCII / Mermaid sketch where helpful. Examples that earn approval:
+   - "Add a 32px-tall pill in the top-right of the masthead, between the live-state badge and the user avatar."
+   - "Add a new collapsed left rail (40px) below the masthead; toggles to a 320px panel."
+4. **Wait for explicit approval.** "Yes" / "go" / "looks right" — anything explicit. Silence or reading the ticket back to the user is not approval.
+5. Only after approval: claim the ticket and start implementation.
+
+If the surface is already crowded (right rail occupied by a modal, top of the board owned by another panel), call that out in the proposal — the user can't approve a layout if they don't know what's already there.
+
+This is the UI-specific subcase of the broader pre-build interview rule. Skipping it lands UI that has to be ripped out (HV-020, HV-048 — see `tasks/lessons.md` L9).
 
 ### Human rejection and acceptance via the board
 

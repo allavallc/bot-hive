@@ -21,6 +21,10 @@ An admin dashboard is the standard answer: a small set of pages, gated by an adm
 
 The list above is illustrative — actual ticket breakdown happens once the FS is prioritized.
 
+## Pre-attached tickets
+
+- **HV-020** — Billing-seat transfer (UI + endpoint). First attempt landed on the project board page and was ripped out 2026-05-06 because the placement was wrong; re-parked here. Belongs on the admin dashboard surface; needs a layout review before re-implementation.
+
 ## Status
 Planning — to be ideated and broken into tickets when prioritized
 
