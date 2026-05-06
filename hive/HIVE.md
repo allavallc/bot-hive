@@ -239,6 +239,14 @@ Both channels are visible to humans on the live board.
 
 In the Bot Hive reference implementation, the real-time channel is `POST /api/projects/[id]/signals` (publish) + `GET /api/projects/[id]/signals/stream` (SSE subscribe). Other host implementations are free to use Redis, NATS, MQTT, or any equivalent — the protocol is "publish ephemeral typed messages, subscribe via stream," not the specific transport.
 
+### UI changes need explicit visual approval before build
+
+A ticket spec describes *what* a feature does; it does not describe *where it sits on the page* or *how it lays out alongside everything else*. **Approving a ticket is not approving a layout choice.** For any change a human will visually see, the agent proposes placement *before* writing implementation code, and waits for explicit approval — even if the ticket itself is already accepted.
+
+Concretely, before claiming a user-facing UI ticket: read the surfaces it touches, post a short layout proposal (text + sketch where helpful), and wait for explicit "yes / go / looks right." Reading the ticket back to the user is not approval. If the surface is already crowded (right rail occupied by a modal, top of the board owned by another panel), call that out — the user can't approve a layout if they don't know what's already there.
+
+This is the UI-specific subcase of the broader pre-build interview. Skipping it lands UI that has to be ripped out.
+
 ### Pre-action pull — never operate on stale state
 
 Every meaningful action (claim a ticket, push a branch, open a PR, edit canonical docs) is preceded by `git pull --rebase` against `origin/main`. The cheapest correct version is a **pre-commit pull**: before any commit that's about to be pushed, run `git pull --rebase`; if the rebase is clean, continue. If it conflicts, fall back to the conflict-response policy — never guess merges.
