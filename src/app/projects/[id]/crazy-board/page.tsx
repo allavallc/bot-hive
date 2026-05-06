@@ -38,6 +38,7 @@ export default async function CrazyBoardPage({
     hvId: t.hvId,
     state: t.state,
     title: t.title,
+    body: t.body,
     frontmatter: (t.frontmatter as Record<string, string>) ?? {},
   }));
 
