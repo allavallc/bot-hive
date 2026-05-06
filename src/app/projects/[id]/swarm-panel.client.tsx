@@ -62,7 +62,6 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
   const [entries, setEntries] = useState<EventEntry[]>([]);
   const [connected, setConnected] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const stickToBottom = useRef(true);
 
   // Load persisted open/closed state.
   useEffect(() => {
@@ -105,22 +104,6 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
     };
   }, [open, projectId, refresh]);
 
-  // Stick-to-bottom autoscroll when new entries arrive, unless the user has scrolled up.
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    if (stickToBottom.current) {
-      list.scrollTop = list.scrollHeight;
-    }
-    void entries.length;
-  }, [entries.length]);
-
-  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
-    const el = e.currentTarget;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
-    stickToBottom.current = nearBottom;
-  }
-
   if (!open) {
     return (
       <button
@@ -151,10 +134,11 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
         </button>
       </header>
 
-      <div ref={listRef} className={styles.list} onScroll={handleScroll}>
+      <div ref={listRef} className={styles.list}>
         {entries.length === 0 ? (
           <p className={styles.empty}>
-            No events yet. Bots and humans appear here as they push to <code>hive/events.log</code>.
+            No events in the last 7 days. Activity appears here as agents push to{" "}
+            <code>hive/events.log</code>.
           </p>
         ) : (
           entries.map((e) => (
