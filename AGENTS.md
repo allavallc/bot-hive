@@ -126,74 +126,44 @@ Concretely:
 
 If you find yourself writing two PRs whose net effect could equally be one PR — collapse them. Race conditions are the failure mode.
 
-### Two channels — durable + real-time
+### One coordination channel: `hive/events.log`
 
-Bot Hive has **two coordination channels**, both project-scoped:
+There is no separate real-time signal API. `hive/events.log` is the durable channel **and** the real-time view: when a bot pushes a commit that touches it, the GitHub webhook fires, the Bot Hive web app broadcasts via SSE, and the swarm panel renders the new lines within seconds. Bots authenticate via the same git push they already do — no tokens, no setup.
 
-| Channel | What it carries | When you write | When you read |
-|---|---|---|---|
-| **`hive/events.log`** (durable) | State transitions: claim, in-review, done, accepted, rejected, blocked, reclaim | Every meaningful ticket-state change | Tail on session start to catch up |
-| **Real-time signal stream** (ephemeral, ~1 hour TTL) | Live intent + coordination: "I'm starting X", "blocked on Y", "done — Z unblocked", "anyone free for W?" | Anytime during work | Subscribe on session start; act on incoming signals |
+Format (one event per line):
 
-Both channels are project-scoped. Both are visible to humans on the live board.
+```
+<ISO timestamp>  <hv-id-or-tag>  <action>  [unblocked-list]  <actor>
+```
 
-**events.log** is the swarm's memory. **Real-time channel** is its conversation. Don't duplicate signals across the two — durable goes to events.log, ephemeral goes to the channel.
+Example:
 
-### Real-time channel — what to publish
+```
+2026-05-06T19:30:00Z  HV-085  claim     allavallc-cc1
+2026-05-06T19:45:00Z  HV-085  in-review allavallc-cc1
+2026-05-06T19:50:00Z  presence allavallc-cc1 online
+```
 
-API: `POST /api/projects/[id]/signals` with `{ type, message, bot, refs? }`. Subscribe via SSE at `GET /api/projects/[id]/signals/stream`.
+Append to `events.log` on every meaningful event:
 
-Signal types and when to use them:
+- **claim / in-progress / in-review / done / accepted / rejected / blocked / reclaim** — ticket lifecycle.
+- **filed / not-doing** — ticket creation / retirement.
+- **presence** — session-start announcement (use the literal `presence` action with no hv-id; actor is your agent-id).
 
-- **`claim`** — when picking up a ticket. Once per ticket. Include the ticket ID in `refs`. Lets other bots see "nectar is on HV-XXX" before they consider claiming it.
-- **`done`** — when finishing the work that satisfies a ticket. Once per ticket. Pair with the events.log `done` entry.
-- **`blocked`** — when stuck on something another bot might be able to clear (network, env, CI flake, conflict). Don't use for design / spec questions — those go to `hive/questions-for-human.md`.
-- **`question`** — quick question to anyone listening. Don't expect an answer; if no one helps in ~5 min, fall back to `hive/questions-for-human.md`.
-- **`note`** — anything else worth surfacing. Use sparingly. Status updates, mid-work insight, not internal monologue.
-- **`handoff`** — explicit "I just finished X, Y is now unblocked, anyone want it?" — particularly useful when DAG-walk would otherwise miss the handoff timing.
+Don't write to events.log for internal thinking, mechanical progress, or anything that belongs in the ticket file itself. The log is for cross-agent coordination, not chatter.
 
-**Don't publish signals for:**
-- Internal thinking ("I wonder if I should refactor this") — chat to yourself in your own context, not the channel.
-- Mechanical progress ("just finished the imports section") — too granular, becomes noise.
-- Anything that should be in the ticket file or events.log instead — durable state goes there.
+The append rides on the same commit that ships your work (or a tiny dedicated commit if you're starting work and want claim visibility before opening the PR).
 
-### Real-time channel — how to subscribe
+### What other agents do with your event lines
 
-On session start (after `git pull`, after reading `focus.md`, after tailing `events.log`):
+On session start, every bot tails the last ~50 lines of `events.log` (catch-up). While running, every bot subscribes to the project's SSE stream — when an event lands, the swarm panel renders it; bots can also re-tail to react.
 
-1. Open SSE to `/api/projects/<projectId>/signals/stream` for the project named in `focus.md`.
-2. Replay the last ~100 signals as context (the server sends them automatically on connect).
-3. Keep the connection open while you work; act on incoming signals as they arrive.
-
-What to do with incoming signals:
+Useful reactions:
 
 - **Another agent's `claim` for a ticket you were about to claim** → pick a different leaf (DAG-walk).
-- **`blocked` from another agent** → if you can clear it, do so (or reply with a `note` that you're on it).
-- **`question`** → answer if you can, in <30s. Otherwise ignore.
 - **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
-- **`note` / `handoff`** → read for context; act if relevant.
-
-### Bot presence — every session announces itself
-
-The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, separate file: `hive/presence.log` — append-only, file-based, git-synced like everything else.
-
-**On session start** (after handle pick, after `focus.md` read, after tailing `events.log`): append one line:
-
-```
-<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
-```
-
-Example: `2026-05-06T03:30:00Z nectar online model=claude-opus-4-7 focus=feature-set-007-parallel-bot-coordination`
-
-**On focus change mid-session**: append another line with `focus=<new-focus>`.
-
-**On session end** (rarely possible — most sessions just stop): append `<ISO> <handle> offline`. Optional.
-
-**Push timing**: the presence line piggybacks on the next commit you make (your first claim PR, doc edit, etc.). If you've been online >5 minutes without any other commit, push a tiny presence-only PR.
-
-**Read it on session start**: filter to entries from the last 1 hour to see who else is online. Stale entries (>24h) may be deleted FIFO by any agent during their session-start procedure to keep the file small.
-
-Why a separate file rather than `events.log`: events.log is the durable lifecycle log (claim, in-review, done). Presence is ephemeral chatter — different contract, different file. Why not the SSE signal stream: bots don't have web-app session auth today (they push via git, not HTTP); when project-scoped bot tokens land, presence will *also* publish on the SSE channel for sub-second visibility.
+- **`blocked` from another agent** → if you can clear it, do so (or note it).
+- **`accepted` / `rejected` for a ticket you shipped** → human approved / rejected your work; if rejected, re-claim it (HV-052 convention).
 
 ### Hot-file conflict avoidance — check open PRs before editing canonical docs
 
@@ -205,7 +175,6 @@ A "hot file" is one that multiple parallel agents edit, where parallel PRs relia
 - `hive/HIVE.md`
 - `hive/events.log`
 - `hive/focus.md`
-- `hive/presence.log`
 - `tasks/lessons.md`
 - `render.yaml`
 - `package.json`

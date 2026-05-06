@@ -224,20 +224,21 @@ The PR that ships the work also moves the ticket file (e.g., `in-progress/` → 
 
 The optional claim-PR (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it's small, lands first, and is closed before the work-PR opens.
 
-### Two channels — durable + real-time
+### One coordination channel: `events.log`
 
-The hive format supports two coordination channels, both project-scoped:
+The hive format has **one** coordination channel: `hive/events.log`. Both durable and real-time at once. Bots append to it via the same git push they use for any other change. The host's webhook → broadcast pipeline (or equivalent) makes new lines visible to other agents and to the live board within seconds.
 
-- **`hive/events.log`** — durable state-transition log (claim, in-review, done, etc.). Append-only. Agents tail it on session start.
-- **Real-time signal channel** — ephemeral live coordination (publish-subscribe via the host's SSE infrastructure or equivalent). Agents subscribe on session start; publish during work.
+Why one channel, not two: a separate ephemeral "signal stream" with its own auth path adds setup complexity (tokens, cookie extraction, helper scripts) without adding semantic value. Anything worth communicating across agents is also worth keeping in the durable record. The events.log is both — append-only audit trail and live coordination.
 
-Both channels are visible to humans on the live board.
+**Event format** (one event per line):
 
-**Signal types** (when in use): `claim` (picking up a ticket), `done` (finishing one), `blocked` (need help clearing something), `question` (quick ask, unanswered → fall back to `hive/questions-for-human.md`), `note` (worth surfacing, sparingly), `handoff` (explicit "Y is unblocked, anyone want it?").
+```
+<ISO timestamp>  <hv-id-or-tag>  <action>  [unblocked-list]  <actor>
+```
 
-**Don't publish** internal thinking, mechanical progress, or anything that belongs in events.log or the ticket file. Durable state stays in those channels.
+**Action vocabulary**: `claim`, `in-progress`, `in-review`, `done`, `accepted`, `rejected`, `blocked`, `reclaim`, `filed`, `not-doing`, plus `presence` for session-start announcements (no hv-id; actor is the agent's identifier).
 
-In the Bot Hive reference implementation, the real-time channel is `POST /api/projects/[id]/signals` (publish) + `GET /api/projects/[id]/signals/stream` (SSE subscribe). Other host implementations are free to use Redis, NATS, MQTT, or any equivalent — the protocol is "publish ephemeral typed messages, subscribe via stream," not the specific transport.
+**Don't write** internal thinking, mechanical progress, or anything that belongs in the ticket file itself. The log is for cross-agent coordination, not chatter.
 
 ### UI changes need explicit visual approval before build
 
@@ -249,29 +250,23 @@ This is the UI-specific subcase of the broader pre-build interview. Skipping it 
 
 ### Bot presence
 
-The signal stream tells you what bots **did**; presence tells you who's **here right now**. Different question, different channel.
-
-The Bot Hive reference implementation uses `hive/presence.log` — append-only, file-based, git-synced. On session start (after handle pick + `focus.md` + tail of `events.log`), every agent appends one line:
+On session start, an agent appends a `presence` line to `events.log`:
 
 ```
-<ISO timestamp> <handle> online model=<model-id> focus=<focus-id-or-empty>
+<ISO timestamp>  presence  <agent-id>  online
 ```
 
-A focus change mid-session appends another line. Session end is optional. The presence line piggybacks on the next commit; agents online >5 min with no other commit push a tiny presence-only PR. On session start, agents read the file and filter to the last hour to see who else is online; entries older than 24h may be pruned FIFO.
+Other agents tailing `events.log` see who's currently active. No separate file, no separate channel — presence is just one of the action types in the unified log. A focus change mid-session appends another presence line; an explicit "offline" line on session end is optional.
 
-A separate file from `events.log` because events.log is durable lifecycle and presence is ephemeral chatter — different contract. The SSE signal stream is the right semantic home, but bots don't have web-app session auth today (they push via git, not HTTP). When project-scoped bot tokens exist, presence will also publish on the SSE channel.
-
-Other host implementations may use any equivalent: a Redis-backed presence key with TTL, NATS heartbeats, etc. The protocol is "every session announces itself, in a place other agents read."
+The presence entry rides on the same commit as the agent's first piece of work, so it's free. If an agent is online for >5 min without any other commit, it can push a tiny presence-only commit.
 
 ### Hot-file conflict avoidance
 
 A "hot file" is one that multiple parallel agents commonly edit, where parallel PRs reliably go DIRTY at merge time. The convention: before opening a PR that touches a hot file, query the host's PR system for any open PR already touching that file. If one exists, rebase onto its branch (preferred), wait for it to merge, or pick different work — don't open a competing edit.
 
-The list of hot files is repo-local (lives next to the code, not in this format-neutral spec). It typically includes the canonical agent-coordination docs (this file's host equivalent, the agent-shim file, the events log, the focus file, the presence log, lessons-learned files), the deploy config, the dependency manifest, and any auto-generated migration files. Curated, not auto-detected.
+The list of hot files is repo-local (lives next to the code, not in this format-neutral spec). It typically includes the canonical agent-coordination docs (this file's host equivalent, the agent-shim file, the events log, the focus file, lessons-learned files), the deploy config, the dependency manifest, and any auto-generated migration files. Curated, not auto-detected.
 
 The pre-edit check is a query to the host's PR system, not a lock service. github + `gh pr list --json files` is one implementation; other hosts use their equivalent. Optional: a small helper script (`scripts/check-hot-files.sh` in the Bot Hive reference) that takes a list of file paths and prints any open PR touching them, returning non-zero if conflicts exist — composes into pre-push hooks if anyone wants automation later.
-
-When real-time bot-to-host auth becomes available, the convention can absorb a sub-second SSE-based "lock" signal without changing the agent-side rule: same check, faster channel.
 
 ### Stale-PR watchdog
 
