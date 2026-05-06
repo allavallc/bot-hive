@@ -101,6 +101,18 @@ Append-only ADR log for this feature set. Entries are added when non-trivial des
 
 **Reference:** HV-043 / PR (this PR).
 
+### 2026-05-06 — Rejected work routes back to original agent first (handle-based) (nectar)
+
+**Choice:** Agents pre-check `in-progress/` for tickets matching their own handle with `Rejected by:` populated. Those are picked up before any DAG-walk for new claims. Stale-claim watchdog (>2h) handles the case where the original agent has gone idle.
+
+**Rejected:** Pure DAG-walk with no special-casing. Result: rejected work either sits indefinitely or triggers context-switching reclaims by other agents.
+
+**Why:** Rejection is "iterate, not abandon." Original agent has freshest mental model. Identified by CC2 during the first end-to-end rejection test (HV-046).
+
+**Implications:** AGENTS.md + HIVE.md "Picking what to claim" sections gain a step-0 pre-DAG-walk ritual. Session-start checklist gets a 6th step.
+
+**Reference:** HV-052.
+
 ### 2026-05-05 — Skip Render preview deploys (nectar)
 
 **Choice:** Permanent staging environment (HV-035, future) rather than per-PR Render preview deploys.

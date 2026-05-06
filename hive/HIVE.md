@@ -204,6 +204,12 @@ current = backlog
 
 When the human says "do FS-007" in chat, the bot they're chatting with **also updates `focus.md`** so the other bot picks up the same intent on its next session start. The chat message is a hint; the file is the source of truth.
 
+### Pre-claim ritual: own rejected work first
+
+Before any DAG-walk for new work, scan `hive/in-progress/` for tickets where `Assigned to:` matches your handle AND `Rejected by:` is populated. Those are your pending rework — read the rejection reason, resume the iteration, append a `reclaimed-after-rejection` entry to `events.log`. Don't claim new work while your own rejected work is outstanding.
+
+Rejection is iterate, not abandon. The original agent has the freshest mental model. Stale-claim watchdog (>2h since `Last touched:`) handles the case where the original agent has gone idle.
+
 ### DAG-walk with cohesion preference — work selection
 
 Every bot, on session start, after `git pull`:

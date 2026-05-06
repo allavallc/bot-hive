@@ -95,12 +95,27 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 3. Tail the last ~50 lines of `hive/events.log` to see what other agents have done recently.
 4. Auto-pick a handle (per the Identity section above). Announce it.
 5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
+6. Scan `hive/in-progress/` for tickets assigned to your handle with `Rejected by:` populated. Those are your pending rework — handle them before claiming new work (see "Picking what to claim" below).
 
 ### When the human says "do FS-X" or "work on HV-X"
 
 The agent they're chatting with **also writes that to `hive/focus.md`** so the other agents pick up the same intent on their next session start. The chat message is a hint; `focus.md` is the source of truth across agents.
 
 ### Picking what to claim
+
+**0. Pre-claim ritual: pick up your own rejected work first.**
+
+Before any DAG-walk for new work, scan `hive/in-progress/*.md`. For each ticket where the `Assigned to:` field's handle equals **your** session handle AND the `Rejected by:` field is populated:
+
+- This is your pending rework. **Read the `Rejection reason:` carefully** — that's the spec for the next iteration.
+- Resume work on it. Append to `events.log`: `<ISO> <hv-id> reclaimed-after-rejection <handle>`.
+- **Skip the rest of the DAG-walk.** Don't claim a new ticket while you have rejected work outstanding.
+
+Rejection is "iterate, not abandon." The original agent has the freshest mental model of what they shipped; reclaim by another agent pays a context-switch tax. The pre-claim ritual preserves continuity.
+
+Edge case: if a ticket assigned to a different handle is stale (its `Last touched:` is older than 2h per the stale-claim watchdog), the standard reclaim rule applies — any agent can pick it up. Rejected work that's yours AND fresh is your responsibility, not the swarm's.
+
+If no such tickets exist, proceed to step 1 (DAG-walk).
 
 DAG-walk with cohesion preference:
 
