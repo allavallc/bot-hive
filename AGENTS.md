@@ -90,10 +90,11 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 
 ### On every session start
 
-1. `git pull` (subscribe).
+1. `git pull` (subscribe to durable state).
 2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
 3. Tail the last ~50 lines of `hive/events.log` to see what other agents have done recently.
 4. Auto-pick a handle (per the Identity section above). Announce it.
+5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
 
 ### When the human says "do FS-X" or "work on HV-X"
 
@@ -122,6 +123,53 @@ Concretely:
 - The optional **claim-PR** (move from `backlog/` to `in-progress/` before any work) is the one allowed exception — it lands first, is small, and is closed cleanly before the work-PR opens. The work-PR is then based on a main where the ticket is already in `in-progress/`.
 
 If you find yourself writing two PRs whose net effect could equally be one PR — collapse them. Race conditions are the failure mode.
+
+### Two channels — durable + real-time
+
+Bot Hive has **two coordination channels**, both project-scoped:
+
+| Channel | What it carries | When you write | When you read |
+|---|---|---|---|
+| **`hive/events.log`** (durable) | State transitions: claim, in-review, done, accepted, rejected, blocked, reclaim | Every meaningful ticket-state change | Tail on session start to catch up |
+| **Real-time signal stream** (ephemeral, ~1 hour TTL) | Live intent + coordination: "I'm starting X", "blocked on Y", "done — Z unblocked", "anyone free for W?" | Anytime during work | Subscribe on session start; act on incoming signals |
+
+Both channels are project-scoped. Both are visible to humans on the live board.
+
+**events.log** is the swarm's memory. **Real-time channel** is its conversation. Don't duplicate signals across the two — durable goes to events.log, ephemeral goes to the channel.
+
+### Real-time channel — what to publish
+
+API: `POST /api/projects/[id]/signals` with `{ type, message, bot, refs? }`. Subscribe via SSE at `GET /api/projects/[id]/signals/stream`.
+
+Signal types and when to use them:
+
+- **`claim`** — when picking up a ticket. Once per ticket. Include the ticket ID in `refs`. Lets other bots see "nectar is on HV-XXX" before they consider claiming it.
+- **`done`** — when finishing the work that satisfies a ticket. Once per ticket. Pair with the events.log `done` entry.
+- **`blocked`** — when stuck on something another bot might be able to clear (network, env, CI flake, conflict). Don't use for design / spec questions — those go to `hive/questions-for-human.md`.
+- **`question`** — quick question to anyone listening. Don't expect an answer; if no one helps in ~5 min, fall back to `hive/questions-for-human.md`.
+- **`note`** — anything else worth surfacing. Use sparingly. Status updates, mid-work insight, not internal monologue.
+- **`handoff`** — explicit "I just finished X, Y is now unblocked, anyone want it?" — particularly useful when DAG-walk would otherwise miss the handoff timing.
+
+**Don't publish signals for:**
+- Internal thinking ("I wonder if I should refactor this") — chat to yourself in your own context, not the channel.
+- Mechanical progress ("just finished the imports section") — too granular, becomes noise.
+- Anything that should be in the ticket file or events.log instead — durable state goes there.
+
+### Real-time channel — how to subscribe
+
+On session start (after `git pull`, after reading `focus.md`, after tailing `events.log`):
+
+1. Open SSE to `/api/projects/<projectId>/signals/stream` for the project named in `focus.md`.
+2. Replay the last ~100 signals as context (the server sends them automatically on connect).
+3. Keep the connection open while you work; act on incoming signals as they arrive.
+
+What to do with incoming signals:
+
+- **Another agent's `claim` for a ticket you were about to claim** → pick a different leaf (DAG-walk).
+- **`blocked` from another agent** → if you can clear it, do so (or reply with a `note` that you're on it).
+- **`question`** → answer if you can, in <30s. Otherwise ignore.
+- **`done` for a parent of a ticket you were waiting on** → that's your handoff; claim the unblocked leaf.
+- **`note` / `handoff`** → read for context; act if relevant.
 
 ### Pre-action pull — never operate on stale state
 
