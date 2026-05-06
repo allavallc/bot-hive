@@ -5,6 +5,7 @@ import { getProjectForUser } from "@/lib/projects";
 import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { SwarmPanel } from "../swarm-panel.client";
 import { FsBoard } from "./fs-board.client";
 
 export const dynamic = "force-dynamic";
@@ -48,14 +49,17 @@ export default async function FsBoardPage({
   }));
 
   return (
-    <FsBoard
-      project={{
-        id: project.id,
-        displayName: project.displayName,
-        githubRepo: project.githubRepo,
-      }}
-      initialTickets={initialTickets}
-      initialFeatures={initialFeatures}
-    />
+    <>
+      <FsBoard
+        project={{
+          id: project.id,
+          displayName: project.displayName,
+          githubRepo: project.githubRepo,
+        }}
+        initialTickets={initialTickets}
+        initialFeatures={initialFeatures}
+      />
+      <SwarmPanel projectId={project.id} />
+    </>
   );
 }

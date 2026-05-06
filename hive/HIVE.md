@@ -310,9 +310,9 @@ Bots publish one-line events on lifecycle transitions. The log is durable histor
 Format: one event per line, ISO timestamp, ticket ID, action, optional unblocked-list, originating handle.
 
 ```
-2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
+2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked allavallc-cc1
 2026-05-05T15:50:12Z HV-034 in-review CC2
-2026-05-05T16:05:33Z HV-031 in-progress nectar
+2026-05-05T16:05:33Z HV-031 in-progress allavallc-cc1
 ```
 
 Bots tail `events.log` on session start (`git pull` then read the last ~50 lines). Catches handoffs ("HV-A done — HV-B unblocked, available for pickup") without re-computing the whole DAG.
@@ -352,7 +352,7 @@ When a bot needs a human decision (ambiguity, scope question, conflict it can't 
 Format: dated heading + the question.
 
 ```markdown
-## 2026-05-05T15:30 (nectar) — HV-031
+## 2026-05-05T15:30 (allavallc-cc1) — HV-031
 
 Should the events.log live at `hive/events.log` or `hive/feature-sets/events.log`?
 The former is simpler; the latter scopes events per FS.
@@ -415,7 +415,7 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 
 ### Where the handle appears
 
-- `Assigned to:` ticket field — `Assigned to: nectar (claude-opus-4-7)`
+- `Assigned to:` ticket field — `Assigned to: allavallc-cc1 (claude-opus-4-7)`
 - `Bot:` commit trailer — alongside `Model:` and `Trigger:`
 - `hive/events.log` entries — every event line ends with the originating handle
 - The live board UI — colored badge on each ticket card (color via `robotColor(handle)`)
@@ -451,7 +451,7 @@ Bot commits for ticket-lifecycle actions carry trailers in the commit message bo
 **Trailer format:**
 
 - `Model:` — the model identifier of the agent that made the commit (e.g. `claude-opus-4-7`, `gpt-5-codex`, `gemini-2.5-pro`, `aider-deepseek-v3`). Use whatever string identifies your agent's underlying model.
-- `Bot:` — the bot's per-session handle (e.g. `nectar`, `kestrel`, `scout`).
+- `Bot:` — the bot's per-session handle (e.g. `allavallc-cc1`, `kestrel`, `scout`).
 - `Trigger:` — `HV-XXX <action>` where action ∈ `claim | done | edit | blocked | reclaim | in-review | accepted | rejected`.
 - `Co-Authored-By:` — standard git convention. Use the email convention your agent's host provides (`<noreply@anthropic.com>`, `<noreply@github.com>` for Codex, etc.). Pure-tooling agents without a hosted email may omit.
 
@@ -465,7 +465,7 @@ HV-074: in-review
 Refactored sync helper to share buffer with broadcast.
 
 Model: claude-opus-4-7
-Bot: nectar
+Bot: allavallc-cc1
 Trigger: HV-074 in-review
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
@@ -529,7 +529,7 @@ Trigger: HV-090 rejected
 git log --grep "Trigger: HV-074"        # full lifecycle of one ticket
 git log --grep "Model: claude-"         # everything done by Claude family models
 git log --grep "Model: gpt-"            # everything done by GPT family models
-git log --grep "Bot: nectar"            # everything done by a specific bot session
+git log --grep "Bot: allavallc-cc1"            # everything done by a specific bot session
 git log --grep "Trigger: .* done"       # all completion events
 git log --grep "Trigger: .* accepted"   # tester sign-offs (loop output)
 git log --grep "Trigger: .* rejected"   # rejected work — what came back

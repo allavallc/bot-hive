@@ -37,7 +37,7 @@ If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`)
 
 ### Where the handle appears
 
-- `Assigned to:` ticket field (e.g., `Assigned to: nectar (claude-opus-4-7)`).
+- `Assigned to:` ticket field (e.g., `Assigned to: allavallc-cc1 (claude-opus-4-7)`).
 - `Bot:` commit trailer (alongside `Model:` and `Trigger:`).
 - `hive/events.log` entries.
 - Live board UI as a colored badge on each ticket card (color is deterministic via `robotColor(handle)`).
@@ -272,7 +272,7 @@ The pre-commit pull is the durable choice; the others can come later if scale de
 After every meaningful state transition (claim, in-review, accepted, rejected, blocked, reclaim), append a one-line entry to `hive/events.log`:
 
 ```
-2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked nectar
+2026-05-05T15:42:00Z HV-031 done HV-032,HV-033 unblocked allavallc-cc1
 ```
 
 Format: `<ISO timestamp> <ticket-id> <action> [<unblocked-list>] <handle>`. The unblocked-list is comma-separated ticket IDs that just became available. Other agents tail this on session start to catch handoffs without re-walking the DAG.
