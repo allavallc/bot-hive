@@ -9,27 +9,14 @@
 import { auth } from "@/lib/auth";
 import { broadcast } from "@/lib/broadcast";
 import { installationOctokit } from "@/lib/github";
+import { actorSlug, appendAndTrim, validateMessage } from "@/lib/notes";
 import { getProjectForUser } from "@/lib/projects";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const MAX_MESSAGE_CHARS = 280;
-const MAX_LINES_BEFORE_TRIM = 1000;
-const KEEP_AFTER_TRIM = 500;
-
 type Octokit = Awaited<ReturnType<typeof installationOctokit>>;
-
-function actorSlug(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 64) || "anon"
-  );
-}
 
 async function getDefaultBranch(oct: Octokit, owner: string, repo: string): Promise<string> {
   const info = await oct.request("GET /repos/{owner}/{repo}", { owner, repo });
@@ -92,16 +79,6 @@ async function createBlob(
   return blob.data.sha;
 }
 
-function appendAndTrim(existing: string, line: string): string {
-  const trimmed = existing.trimEnd();
-  const lines = trimmed ? trimmed.split("\n") : [];
-  lines.push(line);
-  if (lines.length > MAX_LINES_BEFORE_TRIM) {
-    return `${lines.slice(lines.length - KEEP_AFTER_TRIM).join("\n")}\n`;
-  }
-  return `${lines.join("\n")}\n`;
-}
-
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
 
@@ -122,17 +99,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
-  const rawMessage = typeof body.message === "string" ? body.message : "";
-  const cleaned = rawMessage.replace(/[\t\r\n]+/g, " ").trim();
-  if (!cleaned) {
-    return NextResponse.json({ error: "empty message" }, { status: 400 });
+  const validation = validateMessage(body.message);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
   }
-  if (cleaned.length > MAX_MESSAGE_CHARS) {
-    return NextResponse.json(
-      { error: `message exceeds ${MAX_MESSAGE_CHARS} chars` },
-      { status: 400 },
-    );
-  }
+  const cleaned = validation.message;
 
   const [owner, repo] = project.githubRepo.split("/");
   if (!owner || !repo) {
