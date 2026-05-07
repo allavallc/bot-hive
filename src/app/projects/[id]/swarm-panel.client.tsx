@@ -12,13 +12,15 @@ import styles from "./swarm-panel.module.css";
 // writers never conflict. The panel renders a merged, newest-first view.
 // The composer at the top writes notes (use @cc2 or @swarm to target).
 
-type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
+type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans" | "claim-active";
 
 type Entry = {
   kind: EntryKind;
   ts: string;
   actor: string;
   raw: string;
+  hvId?: string;
+  expiresAt?: string;
 };
 
 const STORAGE_KEY = "bot-hive:swarm-panel:open";
@@ -208,6 +210,25 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
                     {action} {hvId}
                   </span>
                   <span className={styles.time} title={e.ts}>
+                    {ago(e.ts)}
+                  </span>
+                </div>
+              );
+            }
+            if (e.kind === "claim-active") {
+              return (
+                <div key={key} className={styles.signal} data-type="claim-active">
+                  <span className={styles.glyph} aria-hidden="true">
+                    ◐
+                  </span>
+                  <span
+                    className={styles.author}
+                    style={{ color: e.actor ? robotColor(e.actor) : undefined }}
+                  >
+                    {e.actor}
+                  </span>
+                  <span className={styles.message}>claiming {e.hvId}</span>
+                  <span className={styles.time} title={`expires ${e.expiresAt}`}>
                     {ago(e.ts)}
                   </span>
                 </div>

@@ -128,8 +128,10 @@ If no such tickets exist, proceed to the DAG-walk.
    - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
    - Anything with unfinished `Blocked by:` (a blocker not in `done/`)
    - **Anything whose `Feature set:` points at an FS file with `Status:` other than `active`.** A `future` or `parked` FS means the human has explicitly said "not yet" — skip every ticket in that FS, regardless of how attractive the leaf looks.
-5. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
-6. **Pull again** (`git pull --rebase`) right before the `git mv` claim, in case main moved during your scan. Then claim.
+5. **Filter out tickets with active soft-fence claims**. Read `GET /api/projects/[id]/events` and skip any entry with `kind: "claim-active"` — a peer just claimed it within the last 30 minutes via the platform's claim endpoint, before their canonical Git move landed.
+6. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
+7. **Reserve via the soft fence first**: `POST /api/projects/[id]/tickets/<hvId>/claim` with `{ "handle": "<your-handle>" }`. The platform records a 30-min claim and broadcasts SSE so the swarm panel + other bots see it within ~1s. If the platform returns 409, a peer beat you to it — re-DAG-walk.
+8. **Pull again** (`git pull --rebase`) right before the `git mv` claim, in case main moved during your scan. Then claim canonically by moving the ticket file in a real PR (or in your work-PR's first commit). The webhook clears the soft-fence claim when it sees the canonical move.
 
 This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
 
