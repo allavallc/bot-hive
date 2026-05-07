@@ -2,7 +2,8 @@
 #
 # Runs every 10 minutes. Scans open non-draft PRs; calls `gh pr update-branch`
 # on any in BEHIND state. DIRTY PRs are skipped (real conflicts — humans
-# resolve via hive/questions-for-human.md).
+# resolve manually; bots surface via @<human> notes in
+# hive/notes-to-humans/<bot>.log).
 #
 # This complements HV-050's bot-side convention (active agents do the same
 # scan on session start + every 10 min). The cron handles the case where no
