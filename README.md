@@ -77,7 +77,7 @@ src/lib/              Auth, GitHub, sync, broadcast, access (derived membership)
 src/components/       Reusable UI primitives (PageShell, Wordmark, etc.)
 src/app/              App Router routes
 drizzle/              Generated SQL migrations + meta snapshots
-hive/                 Bot Hive's own dev tickets (dogfoods the format)
+hive/                 Bot Hive's own dev tickets (uses the format on itself)
   HIVE.md             Workflow doc — ticket format, lifecycle, conventions
   focus.md            Standing order from the human (one line)
   events/             Per-actor lifecycle event logs (one file per agent)
