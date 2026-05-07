@@ -1,9 +1,9 @@
 import { db } from "@/db";
-import { projects, webhookDeliveries } from "@/db/schema";
+import { activeClaims, projects, tickets, webhookDeliveries } from "@/db/schema";
 import { broadcast } from "@/lib/broadcast";
 import { getApp } from "@/lib/github";
 import { initialSync } from "@/lib/sync";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, lte, ne, or } from "drizzle-orm";
 
 export async function verifySignature(rawBody: string, signature: string): Promise<boolean> {
   return getApp().webhooks.verify(rawBody, signature);
@@ -54,6 +54,33 @@ export async function handlePushEvent(payload: PushPayload, deliveryId: string):
         if (existing.length > 0) return;
 
         await initialSync(project.id);
+
+        // HV-090: clear any soft-fence claims that have been canonicalized
+        // by Git. A claim is canonicalized when the ticket file moves out
+        // of `hive/backlog/` (state != "backlog"). Also opportunistically
+        // sweep expired claims so the table stays small.
+        const movedTickets = await db
+          .select({ hvId: tickets.hvId })
+          .from(tickets)
+          .where(and(eq(tickets.projectId, project.id), ne(tickets.state, "backlog")));
+        const movedIds = movedTickets.map((t) => t.hvId);
+        if (movedIds.length > 0) {
+          await db
+            .delete(activeClaims)
+            .where(
+              and(
+                eq(activeClaims.projectId, project.id),
+                or(inArray(activeClaims.hvId, movedIds), lte(activeClaims.expiresAt, new Date())),
+              ),
+            );
+        } else {
+          await db
+            .delete(activeClaims)
+            .where(
+              and(eq(activeClaims.projectId, project.id), lte(activeClaims.expiresAt, new Date())),
+            );
+        }
+
         broadcast({ type: "project-changed", projectId: project.id });
         await db.insert(webhookDeliveries).values({
           projectId: project.id,

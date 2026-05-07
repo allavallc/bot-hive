@@ -115,6 +115,15 @@
   color: #8b5cf6;
 }
 
+.signal[data-type="claim-active"] .glyph {
+  color: #f59e0b;
+}
+
+.signal[data-type="claim-active"] .message {
+  font-style: italic;
+  opacity: 0.85;
+}
+
 .author {
   font-family: var(--mono);
   font-size: 0.7rem;

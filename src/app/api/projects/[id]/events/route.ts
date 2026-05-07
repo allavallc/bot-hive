@@ -14,9 +14,12 @@
 // Read via the GitHub App's installation token; auth is the user's
 // session cookie.
 
+import { db } from "@/db";
+import { activeClaims } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { installationOctokit } from "@/lib/github";
 import { getProjectForUser } from "@/lib/projects";
+import { and, eq, gt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -27,13 +30,18 @@ const MAX_AGE_DAYS = 7;
 const ISO_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\b/;
 
 type Octokit = Awaited<ReturnType<typeof installationOctokit>>;
-type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
+type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans" | "claim-active";
 
 type Entry = {
   kind: EntryKind;
   ts: string;
   actor: string;
   raw: string;
+  // Only set for kind="claim-active" — the ticket the claim covers and
+  // when the claim's TTL expires. Lets the swarm panel render claims
+  // distinctly and lets bot DAG-walks filter them out.
+  hvId?: string;
+  expiresAt?: string;
 };
 
 async function readFile(
@@ -190,6 +198,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       parseNotes(content, actorFromFilename(file.name), "note-to-humans", cutoffMs, sink);
     }
   });
+
+  // HV-090: include unexpired soft-fence claims as transient entries.
+  // Rendered by the swarm panel and used by bot DAG-walks to skip
+  // tickets a peer has just claimed (before the canonical Git move
+  // commits).
+  const now = new Date();
+  const claims = await db
+    .select()
+    .from(activeClaims)
+    .where(and(eq(activeClaims.projectId, project.id), gt(activeClaims.expiresAt, now)));
+  for (const c of claims) {
+    sink.push({
+      kind: "claim-active",
+      ts: c.claimedAt.toISOString(),
+      actor: c.handle,
+      raw: `claim ${c.hvId}`,
+      hvId: c.hvId,
+      expiresAt: c.expiresAt.toISOString(),
+    });
+  }
 
   sink.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
   const entries = sink.slice(0, MAX_LINES);

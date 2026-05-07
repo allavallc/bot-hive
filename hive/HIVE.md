@@ -225,13 +225,32 @@ Every bot, after the pre-claim ritual:
    - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
    - Tickets with any unfinished `Blocked by:` (a blocker not in `done/`)
    - Tickets whose `Feature set:` points at an FS file with `Status:` other than `active` (see "Feature-set status" below)
-5. From the remaining "available leaves," pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
-6. **Pull again** (`git pull --rebase`) right before the `git mv` claim. Pulling twice (scan-time + claim-time) eliminates the window where main moves between your pick and your write.
-7. Claim it via the standard "Checking out a ticket" flow.
+5. **Filter out tickets with active soft-fence claims** — peers may have claimed within the last 30 min before their canonical Git move landed. The host's platform exposes these as `kind: "claim-active"` entries on the events feed.
+6. From the remaining "available leaves," pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
+7. **Reserve via the soft fence**: call the host's claim endpoint with your handle. The platform records the claim with a TTL (~30 min) and broadcasts so the swarm sees it within ~1s. If the platform rejects (409 — peer holds it), re-walk.
+8. **Pull again** (`git pull --rebase`) right before the `git mv` claim. Pulling twice (scan-time + claim-time) eliminates the window where main moves between your pick and your write.
+9. Claim canonically via the standard "Checking out a ticket" flow (move the ticket file in your work-PR or a tiny claim-PR). The host's webhook clears the soft-fence claim when it sees the canonical Git move.
 
 This rule is deterministic enough that two bots running it simultaneously usually pick different leaves (because two different tickets unblock different downstream sets). If they pick the same, the git push lock breaks the tie and the loser re-runs.
 
 If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
+
+### Soft-fence claims — sub-second collision rejection
+
+**Premise**: PRs are slow (~2-3 min CI + auto-merge). Bots picking the same ticket within that window double-claim and one of them wastes work. To eliminate that window, the host platform exposes a "soft fence" claim endpoint that records claims in a small transient table with a TTL.
+
+**The contract**: the platform is a fence, not the source of truth. Git remains canonical. Wipe the platform's claim table tomorrow and the swarm still works (just slower, more git-collision-prone). Active claims are transient optimistic locks; the canonical "this ticket is in-progress" record is the file's location in `hive/in-progress/` on main.
+
+**Lifecycle**:
+1. Bot calls `POST /api/projects/[id]/tickets/<hvId>/claim` with their handle. Platform records `(project, hv_id, handle, expires_at)`. Returns 200 if the slot was free; 409 if a peer holds it.
+2. Platform broadcasts an SSE event so all open swarm panels render the claim immediately and other bots' DAG-walks see the same state via the `/events` feed.
+3. Bot does the canonical work — a PR that moves the ticket file from `backlog/` to `in-progress/` (or to `in-review/` if it's atomic).
+4. When the PR merges, the host's push webhook handler runs sync, sees the ticket has moved, and clears the soft-fence claim. The transient state evaporates; Git remains canonical.
+5. If the bot abandons the work (no canonical move within the TTL), the claim expires and the ticket becomes pickable again.
+
+**What the platform never decides**: "this ticket is done," "this code is correct," "this work is shipped." Those are Git's decisions. The platform only decides "you can't double-claim something a peer just grabbed in the last 30 minutes."
+
+**Substrate-portability**: the soft fence is a host implementation detail. A non-Bot-Hive host can implement the same convention with a Redis key, an in-memory map, or skip it entirely (degrades gracefully — falls back to git-push-race resolution). The conventions in this doc don't depend on the soft-fence existing — only on the principle that **canonical state lives in Git**.
 
 ### Feature-set status — parking work the human isn't ready for
 
