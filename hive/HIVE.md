@@ -256,6 +256,21 @@ Why one channel, not two (durable vs. real-time): a separate ephemeral "signal s
 
 **Legacy**: an older single-file `hive/events.log` exists for historical entries. It is frozen — no agent should append to it. The merged view includes it until its content ages past the 7-day display cutoff.
 
+### Human ↔ bot notes — symmetric per-actor channels
+
+Lifecycle events are structured (claim, done, blocked). Notes are prose — humans directing bots, bots replying to humans. Notes use **separate** files from events so the structured-event format stays clean:
+
+- `hive/notes-to-bots/<human-actor>.log` — humans → bots (written via the host's notes endpoint, committed by the App)
+- `hive/notes-to-humans/<bot-actor>.log` — bots → humans (written by bots via git, same path as their event log)
+
+Both use TSV: `<ISO timestamp>\t<message>`. Actor is implicit (the filename). Targeting is **convention via `@<agent-id>` or `@swarm` in the message** — not a separate field. Bots filter for messages addressed to them; humans see all bot replies in the swarm panel.
+
+**Auto-trim**: when a writer's file exceeds 1000 lines, the oldest 500 are dropped on the next append. Notes are conversational; old direction has limited value, and the read endpoint already filters to the last 7 days for display.
+
+**Single-line only.** Use a ticket if the direction needs more than one line — that's what tickets are for.
+
+**This subsumes `hive/questions-for-human.md`** — bot questions and bot status updates flow through the notes-to-humans channel. One inbox per direction, panel renders both.
+
 ### UI changes need explicit visual approval before build
 
 A ticket spec describes *what* a feature does; it does not describe *where it sits on the page* or *how it lays out alongside everything else*. **Approving a ticket is not approving a layout choice.** For any change a human will visually see, the agent proposes placement *before* writing implementation code, and waits for explicit approval — even if the ticket itself is already accepted.

@@ -98,6 +98,7 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 4. Auto-pick a handle (per the Identity section above). Announce it.
 5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
 6. **Scan `hive/in-progress/` for your own rejected work.** For each ticket where `Assigned to:` matches your handle AND `Rejected by:` is populated — that's pending rework you own. Resume it before claiming any new ticket. (See "Picking what to claim" below.)
+7. **Read notes addressed to you.** Scan `hive/notes-to-bots/*.log` for lines from the last 24h containing `@<your-agent-id>` or `@swarm`. Those are the human's direction — read them, surface them as priority context, factor them into ticket selection. To respond, append to your own `hive/notes-to-humans/<your-agent-id>.log` (TSV: `<ISO ts>\t<message>`). Use `@<human-handle>` to address a specific human; bare prose goes to anyone watching the panel.
 
 ### When the human says "do FS-X" or "work on HV-X"
 
@@ -431,6 +432,8 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 - `hive/HIVE.md` — the format spec. Read this if you're touching the hive workflow itself.
 - `hive/focus.md` — current standing order from the human (one line).
 - `hive/events/` — per-actor event logs (one file per agent). Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
+- `hive/notes-to-bots/` — humans' notes to bots (one file per human). Scan on session start for `@<your-agent-id>` or `@swarm` mentions.
+- `hive/notes-to-humans/` — bots' notes to humans (one file per bot). Append your own replies/questions/status updates here. Format: `<ISO ts>\t<message>`. Subsumes the older `questions-for-human.md` channel — write here instead.
 - `hive/questions-for-human.md` — async escalation channel for blocking questions.
 - `hive/feature-sets/` — current feature sets and their goals.
 - `tasks/lessons.md` — self-correction log. Read at session start; append after corrections.
