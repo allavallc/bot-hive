@@ -8,7 +8,7 @@
 
 import { auth } from "@/lib/auth";
 import { broadcast } from "@/lib/broadcast";
-import { installationOctokit } from "@/lib/github";
+import { graphqlInstallation, installationOctokit } from "@/lib/github";
 import { actorSlug, appendAndTrim, validateMessage } from "@/lib/notes";
 import { getProjectForUser } from "@/lib/projects";
 import { headers } from "next/headers";
@@ -139,10 +139,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ],
     });
 
+    const summary = `note: ${cleaned.slice(0, 60)}${cleaned.length > 60 ? "…" : ""}`;
     const commit = await oct.request("POST /repos/{owner}/{repo}/git/commits", {
       owner,
       repo,
-      message: `note: ${cleaned.slice(0, 60)}${cleaned.length > 60 ? "…" : ""}`,
+      message: summary,
       tree: newTree.data.sha,
       parents: [headSha],
       author: {
@@ -152,20 +153,52 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     });
 
-    await oct.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
+    // Branch protection blocks direct pushes to main; mirror the
+    // accept/reject pattern — push the commit to a fresh branch, open
+    // a PR, enable auto-merge. The PR lands within seconds (CI is
+    // paths-aware and skips for hive-only changes via HV-079).
+    const branchName = `note-${slug}-${Date.now()}`;
+    await oct.request("POST /repos/{owner}/{repo}/git/refs", {
       owner,
       repo,
-      ref: `heads/${branch}`,
+      ref: `refs/heads/${branchName}`,
       sha: commit.data.sha,
     });
 
-    // Optimistic SSE: panel can render the new line instantly without
-    // waiting for the GitHub webhook round-trip. The webhook will still
-    // fire project-changed when the commit propagates; the eventual
-    // refetch reconciles to the canonical view.
+    const pr = await oct.request("POST /repos/{owner}/{repo}/pulls", {
+      owner,
+      repo,
+      title: summary,
+      body: cleaned,
+      head: branchName,
+      base: branch,
+    });
+
+    try {
+      await graphqlInstallation<unknown>(
+        project.installId,
+        `mutation EnableAutoMerge($id: ID!) {
+          enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+            pullRequest { number }
+          }
+        }`,
+        { id: pr.data.node_id },
+      );
+    } catch {
+      // Auto-merge may not be configured on the repo; PR still created.
+    }
+
+    // Optimistic SSE: render the line in the panel right now without
+    // waiting for the PR to land + webhook to fire. The eventual
+    // project-changed broadcast on merge reconciles to canonical state.
     broadcast({ type: "project-changed", projectId });
 
-    return NextResponse.json({ ok: true, ts: isoNow });
+    return NextResponse.json({
+      ok: true,
+      ts: isoNow,
+      prUrl: pr.data.html_url,
+      prNumber: pr.data.number,
+    });
   } catch (err) {
     console.error("[notes] commit failed:", err);
     return NextResponse.json({ error: "failed to write note" }, { status: 500 });
