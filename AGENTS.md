@@ -12,28 +12,27 @@ Every agent session has a unique handle. **Two sessions on the same machine get 
 
 ### On session start
 
-1. **Auto-pick a handle from the curated list** (random selection):
+1. **Read the curated pool** from `hive/handles.txt` (one handle per non-comment line). The pool is data-as-file — not hardcoded prose — so adding handles is a normal PR.
 
+2. **Find the first pool handle that does NOT have a `hive/events/<handle>.log` file.** Each per-actor events file means that handle is taken (for all time — handles are session-unique and never reclaimed). If every pool handle has an events file, append the lowest free numeric suffix to the first pool handle: `falcon-2`, `falcon-3`.
+
+3. **Claim the handle by committing immediately.** Append a presence line to your new events file:
    ```
-   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-   sparrow, finch, robin, wren, fox, otter, badger, mole,
-   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-   falcon, tern, jay
+   echo "<ISO ts> presence <handle> online" >> hive/events/<handle>.log
+   git add hive/events/<handle>.log
+   git commit -m "presence: <handle> online"
+   git push
    ```
 
-2. **Check for collisions** with handles already in active use:
-   - Scan recent commit trailers: `git log --grep "Bot: " -n 50` — extract the `Bot: <handle>` values.
-   - Scan in-progress tickets: read every `hive/in-progress/*.md` and extract the `Assigned to:` field's handle.
-   - If your random pick appears in either set, **re-pick**. Repeat up to 10 times.
-   - If 10 rolls all collide (extremely unlikely), append a numeric suffix: `scout-2`.
+4. **If the push fails (non-fast-forward), the per-actor file is the lock — you collided with a parallel claim.** Run `git pull --rebase`. If the pulled commits include a `presence <handle> online` line by a different commit author, your handle was taken by a parallel bot. Roll back your local commit (`git reset --hard origin/main`), go to step 2, pick a different handle.
 
-3. **Hold the handle in memory** for the session. **Do not** persist it to `git config` or any file. Each session is a fresh roll.
+5. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
 
-4. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
+The git push race IS the lock. There is no separate registry to keep in sync, no heartbeat, no liveness check. Two bots picking the same handle simultaneously will both attempt to commit `hive/events/<handle>.log`; only one push wins.
 
 ### Override
 
-If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`), use that value verbatim — skip the random pick and the collision check. Lets the human lock a session to a specific name.
+If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`), use that value verbatim — skip the pool pick. Lets the human lock a session to a specific name (useful for resuming a logical agent's identity across restarts).
 
 ### Where the handle appears
 
@@ -122,13 +121,19 @@ If no such tickets exist, proceed to the DAG-walk.
 
 **DAG-walk** — once your own rejected work is clear:
 
-1. Read `focus.md`.
-2. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
-3. Filter out: in-progress, blocked, anything with unfinished `Blocked by:`.
-4. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
-5. Claim it.
+1. **`git pull --rebase` immediately before scanning.** Don't trust your session-start snapshot — main may have moved. Stale-clone claims are a real failure mode (a bot picked a ticket that had been routed to `not-doing/` 30 minutes earlier because they hadn't pulled).
+2. Read `focus.md`.
+3. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
+4. Filter out:
+   - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
+   - Anything with unfinished `Blocked by:` (a blocker not in `done/`)
+   - **Anything whose `Feature set:` points at an FS file with `Status:` other than `active`.** A `future` or `parked` FS means the human has explicitly said "not yet" — skip every ticket in that FS, regardless of how attractive the leaf looks.
+5. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
+6. **Pull again** (`git pull --rebase`) right before the `git mv` claim, in case main moved during your scan. Then claim.
 
 This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
+
+**Why pull twice (session-start AND before-claim AND before-mv)?** Stale local state is the single failure mode that causes "bot worked on something already retired" — every pull is cheap (one round-trip), every wasted-work session is expensive. Always-pull-before-state-change.
 
 ### One PR per ticket lifecycle transition
 

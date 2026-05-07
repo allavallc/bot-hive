@@ -1,5 +1,7 @@
 # [feature-set-001] V1 running locally
 
+**Status**: active
+
 ## Goal
 Get a v1 of Bot Hive running on a local dev machine — sign in with GitHub, connect a repo with a `hive/` folder, see a live kanban that updates within ~5s of a commit.
 

@@ -1,5 +1,7 @@
 # [feature-set-005] Production deploy
 
+**Status**: active
+
 ## Goal
 Run Bot Hive on Render with managed Postgres, a public URL, and Sentry error monitoring — turning the local dev v1 into a deployed product anyone can sign into.
 
