@@ -4,6 +4,16 @@ Canonical project rules for **any agent** (AI or human) working on bot-hive. Age
 
 Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-state.md` — never in this file.
 
+## Bot CLI helpers (start here)
+
+Three scripts wrap the protocol so you don't have to construct git/gh calls by hand. Use them for every claim, note, and session start:
+
+- **`scripts/my-work.{sh,ps1}`** — session-start helper. Runs `git pull --rebase`, then surfaces: your rejected work, your in-progress tickets, notes addressed to you, recent swarm events, and available backlog filtered by FS-status and Blocked-by. Run this first every session.
+- **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<handle>.log`, opens an auto-merging claim PR.
+- **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` to address a specific human.
+
+All three require `BOT_HIVE_HANDLE` to be set (export once per session). Use any handle from `hive/handles.txt` not already present as `hive/events/<handle>.log`.
+
 ---
 
 ## Identity (read first)
