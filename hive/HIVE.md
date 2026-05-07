@@ -1,6 +1,6 @@
 # Bot Hive — internal dev workflow
 
-Bot Hive's own development is coordinated using its ticket format. The `hive/` folder in this repo is the operational dogfood — we build Bot Hive against the same kanban it ships, and the live board you see at `/projects/[id]` is rendering this very folder.
+Bot Hive's own development is coordinated using its ticket format. The `hive/` folder in this repo is the operational example — we build Bot Hive against the same kanban it ships, and the live board you see at `/projects/[id]` is rendering this very folder.
 
 ---
 
