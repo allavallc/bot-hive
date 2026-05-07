@@ -91,10 +91,14 @@ for f in hive/backlog/*.md; do
   HV=$(basename "$f" | sed 's/-[0-9]*\.md$//')
   TITLE=$(head -1 "$f" | sed 's/^# \[.*\] //')
   FS=$(grep "^- \*\*Feature set\*\*:" "$f" | sed 's/^- \*\*Feature set\*\*: //' | tr -d '[:space:]')
-  # Filter by FS status if FS file exists.
+  # Filter by FS status + Owner if FS file exists.
   if [ -n "$FS" ] && [ -f "hive/feature-sets/${FS}.md" ]; then
     FS_STATUS=$(grep "^\*\*Status\*\*:" "hive/feature-sets/${FS}.md" | sed 's/^\*\*Status\*\*: //' | awk '{print $1}')
     [ "$FS_STATUS" = "active" ] || continue
+    FS_OWNER=$(grep "^\*\*Owner\*\*:" "hive/feature-sets/${FS}.md" | sed 's/^\*\*Owner\*\*://' | tr -d '[:space:]')
+    if [ -n "$FS_OWNER" ] && [ "$FS_OWNER" != "$HANDLE" ]; then
+      continue
+    fi
   fi
   # Skip if any unfinished Blocked-by.
   BLOCKED=$(grep "^- \*\*Blocked by\*\*:" "$f" | sed 's/^- \*\*Blocked by\*\*: //' | tr -d '[:space:]')

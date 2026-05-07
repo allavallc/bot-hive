@@ -1,6 +1,7 @@
 # [feature-set-010] User Board Engagement
 
 **Status**: active
+**Owner**:
 
 ## Goal
 Make the live board genuinely usable for daily ticket work — not just an at-a-glance view. Reduce friction between "I want to read this ticket" and "I'm reading it"; make ticket interactions feel like a modern kanban (Trello / Linear / GitHub Projects), not a static list.

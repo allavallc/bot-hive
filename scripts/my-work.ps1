@@ -91,12 +91,16 @@ Get-ChildItem -Path "hive/backlog" -Filter "*.md" -ErrorAction SilentlyContinue 
     $hv = $_.BaseName -replace '-\d+$', ''
     $title = (Get-Content $_.FullName -TotalCount 1) -replace '^# \[.*\] ', ''
 
-    # Filter by FS status
+    # Filter by FS status + Owner
     $fs = if ($content -match "(?m)^- \*\*Feature set\*\*:\s*(\S+)") { $Matches[1] } else { "" }
     if ($fs -and (Test-Path "hive/feature-sets/$fs.md")) {
         $fsContent = Get-Content "hive/feature-sets/$fs.md" -Raw
         if ($fsContent -match "(?m)^\*\*Status\*\*:\s*(\w+)") {
             if ($Matches[1] -ne "active") { return }
+        }
+        if ($fsContent -match "(?m)^\*\*Owner\*\*:\s*(\S+)") {
+            $fsOwner = $Matches[1].Trim()
+            if ($fsOwner -and $fsOwner -ne $handle) { return }
         }
     }
 
