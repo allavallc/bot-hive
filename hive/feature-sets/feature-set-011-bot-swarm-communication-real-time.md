@@ -1,9 +1,22 @@
 # [feature-set-011] Bot swarm communication — real-time
 
-**Status**: active
+**Status**: done
 **Owner**:
 
-## Goal
+## Note — what shipped vs what was originally planned
+This FS originally described a separate ephemeral signal channel (POST + SSE + in-memory ring buffer + bot HTTP tokens) layered alongside `events.log`. Everything in that design was **ripped out in PR #111** as duplicate infrastructure. The user's feedback that drove the rip-out: "this is a fucking pain" — the bot-token cookie-extraction flow was the breaking point.
+
+**What actually shipped** to deliver the original goal (sub-second swarm visibility + bot-to-bot coordination without humans relaying):
+
+- **HV-087** — per-actor event logs at `hive/events/<actor>.log`. Eliminates the contention that made the old single-file events.log unusable for real-time updates.
+- **HV-088 / FS-015** — symmetric notes channels (`hive/notes-to-bots/`, `hive/notes-to-humans/`) for human ↔ bot prose communication.
+- **HV-090** — soft-fence claim API. Bots POST a claim, the platform records it transiently and broadcasts SSE within ~1s, eliminating the 2-3 minute window where parallel bots double-claim.
+
+The consolidated story: **Git is the canonical substrate; the platform mediates writes for speed (sub-second SSE broadcast); coordination flows through per-actor files + the soft fence + the notes channels.** No separate "signal channel," no bot tokens, no in-memory ring buffer.
+
+**Status: done** — closed at the FS level. The original ticket children (HV-047, HV-048, HV-049) shipped in pieces or were superseded by the rip-out; their successors (HV-087, HV-088, HV-090) are the canonical record of what's deployed.
+
+## Goal (original, kept for context)
 A real-time signaling channel on the live board so bots and humans can coordinate sub-second — not the 5–30 second git-pull delay we have today. Ephemeral signals ("I'm starting HV-XXX," "done with X — Y unblocked," "blocked, need a human") flow through the channel in real time. Durable state stays in `events.log`. Two layers: ephemeral chatter + durable audit log.
 
 ## Rationale
