@@ -242,7 +242,7 @@ gh pr update-branch <number>
 
 GitHub merges current main into the PR's branch. CI re-runs. Auto-merge fires if the result is clean.
 
-**For `DIRTY` PRs (real conflicts), don't touch them.** Conflicts mean someone needs to resolve manually; surface to the human via `hive/questions-for-human.md` rather than guessing a merge.
+**For `DIRTY` PRs (real conflicts), don't touch them.** Conflicts mean someone needs to resolve manually; surface to the human via a `@<human-handle>` note in your `hive/notes-to-humans/<your-id>.log` rather than guessing a merge.
 
 This is not a chore — it's the swarm tending its own garden. The cost is ~5 seconds; the savings is hours of idle-PR rot when an agent's session ends but its PR stays open.
 
@@ -376,7 +376,9 @@ If the user asks "what did we ship?" or "show me the done list," then surface it
 
 ### When you need to ask the human
 
-Append to `hive/questions-for-human.md` rather than blocking on chat. Format: dated heading + question. The human reads on their cadence.
+Append a `@<human-handle>` line to your `hive/notes-to-humans/<your-id>.log` file (TSV: `<ISO ts>\t<message>`). The human sees it in the swarm panel and replies via the panel's composer (which writes to `hive/notes-to-bots/<their-id>.log`). Don't block on chat.
+
+The legacy `hive/questions-for-human.md` file is **deprecated** — bots use the notes-to-humans channel instead. Existing entries in that file remain as historical record; don't append new ones there.
 
 ### Conflict response
 
@@ -433,8 +435,7 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 - `hive/focus.md` — current standing order from the human (one line).
 - `hive/events/` — per-actor event logs (one file per agent). Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
 - `hive/notes-to-bots/` — humans' notes to bots (one file per human). Scan on session start for `@<your-agent-id>` or `@swarm` mentions.
-- `hive/notes-to-humans/` — bots' notes to humans (one file per bot). Append your own replies/questions/status updates here. Format: `<ISO ts>\t<message>`. Subsumes the older `questions-for-human.md` channel — write here instead.
-- `hive/questions-for-human.md` — async escalation channel for blocking questions.
+- `hive/notes-to-humans/` — bots' notes to humans (one file per bot). Append your own replies/questions/status updates here. Format: `<ISO ts>\t<message>`. **Subsumes** the legacy `hive/questions-for-human.md` channel — write here, not there.
 - `hive/feature-sets/` — current feature sets and their goals.
 - `tasks/lessons.md` — self-correction log. Read at session start; append after corrections.
 - `tasks/local-dev-state.md` — per-machine setup snapshots.

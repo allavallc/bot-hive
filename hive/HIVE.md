@@ -303,7 +303,7 @@ The pre-edit check is a query to the host's PR system, not a lock service. githu
 
 Long-running sessions can leave open PRs that go `BEHIND` (main moved past) or `DIRTY` (real conflict). Active agents are stewards of *all* open PRs, not just their own.
 
-On session start and every ~10 min while working: scan open non-draft PRs; for any in `BEHIND` state, trigger an "update branch" against main (no conflict resolution; just merge-from-main). For `DIRTY` PRs, leave them — surface to humans via `hive/questions-for-human.md`.
+On session start and every ~10 min while working: scan open non-draft PRs; for any in `BEHIND` state, trigger an "update branch" against main (no conflict resolution; just merge-from-main). For `DIRTY` PRs, leave them — surface to humans via a `@<human-handle>` line in the bot's `hive/notes-to-humans/<bot-id>.log`.
 
 The Bot Hive reference implementation uses `gh pr update-branch <N>` for the update; other host implementations may differ. Optional server-side complement: a scheduled job (e.g., GitHub Actions cron) that does the same thing every 10 min as a backstop for when no agents are online.
 
@@ -383,21 +383,13 @@ Append an entry on any non-trivial design choice — anything a senior reviewer 
 
 Status updates focus on **open**, **in-progress**, or **in-flight** work. Once a ticket is accepted, mention it once at acceptance and stop re-listing it in future updates. Done is recall-on-demand: surface it only when the human asks "what did we ship?"
 
-### `hive/questions-for-human.md` — async escalation
+### Async escalation — bot ↔ human via the notes channels
 
-When a bot needs a human decision (ambiguity, scope question, conflict it can't resolve), it appends to this file rather than blocking on chat. Human reads on their cadence, answers in chat or by editing the file.
+When a bot needs a human decision (ambiguity, scope question, conflict it can't resolve), it appends to its own `hive/notes-to-humans/<bot-id>.log` rather than blocking on chat. The human sees it in the swarm panel and replies via the panel's composer (which writes to `hive/notes-to-bots/<human-id>.log`).
 
-Format: dated heading + the question.
+Format: TSV — `<ISO timestamp>\t<message>`. Use `@<human-handle>` to address a specific human; bare prose is visible to anyone watching the panel.
 
-```markdown
-## 2026-05-05T15:30 (allavallc-cc1) — HV-031
-
-Should the events.log live at `hive/events.log` or `hive/feature-sets/events.log`?
-The former is simpler; the latter scopes events per FS.
-Leaning toward the former unless there's a reason to scope.
-```
-
-Keeps bot work flowing without spamming the chat channel.
+The legacy `hive/questions-for-human.md` file is **deprecated** but kept as historical record for entries written before this convention. Don't append to it.
 
 ### Conflict-response policy
 
