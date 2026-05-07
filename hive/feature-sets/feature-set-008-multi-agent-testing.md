@@ -1,5 +1,7 @@
 # [feature-set-008] Multi-agent testing
 
+**Status**: active
+
 ## Goal
 Validate that two or more Claude agents can work concurrently against a shared bot-hive board without data loss, phantom state, or missed SSE events.
 

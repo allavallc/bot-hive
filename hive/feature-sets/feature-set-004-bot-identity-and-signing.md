@@ -1,5 +1,7 @@
 # [feature-set-004] Bot identity and signing
 
+**Status**: active
+
 ## Goal
 Give every bot a first-class identity in Bot Hive so the board attributes work to a specific bot rather than to whoever the GitHub committer happens to be.
 

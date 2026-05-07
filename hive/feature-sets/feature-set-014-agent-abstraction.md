@@ -1,5 +1,7 @@
 # [feature-set-014] Agent abstraction — protocol must work for any LLM, not just Claude
 
+**Status**: active
+
 ## Goal
 Bot Hive's coordination protocol — every convention, ticket, doc, and example — must be readable and executable by any agent (Claude, Codex, GPT-family, Aider, Cursor, Gemini, future models). Today's docs were drafted while Claude Code was the only agent, so prose, examples, and tooling references quietly assume it. This FS is a sweep that scrubs the assumption.
 

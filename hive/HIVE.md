@@ -216,17 +216,34 @@ If no such tickets exist, proceed to the DAG-walk.
 
 ### DAG-walk with cohesion preference — work selection
 
-Every bot, on session start, after `git pull` and the pre-claim ritual:
+Every bot, after the pre-claim ritual:
 
-1. Read `hive/focus.md`.
-2. Collect every ticket in scope (the named FS, or named ticket, or all of `backlog/` if focus is empty).
-3. Filter out: tickets in `in-progress/`, tickets in `blocked/`, tickets with any unfinished `Blocked by:` (i.e., a blocker that isn't in `done/`).
-4. From the remaining "available leaves," pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
-5. Claim it via the standard "Checking out a ticket" flow.
+1. **`git pull --rebase` immediately before scanning.** Don't trust the session-start snapshot — main may have moved. Pulling is cheap; working a stale snapshot is expensive (a real session-end failure mode: a bot picked a ticket that had been routed to `not-doing/` 30 minutes earlier because they hadn't pulled).
+2. Read `hive/focus.md`.
+3. Collect every ticket in scope (the named FS, or named ticket, or all of `backlog/` if focus is empty).
+4. Filter out:
+   - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
+   - Tickets with any unfinished `Blocked by:` (a blocker not in `done/`)
+   - Tickets whose `Feature set:` points at an FS file with `Status:` other than `active` (see "Feature-set status" below)
+5. From the remaining "available leaves," pick the one that **unblocks the most downstream tickets** (cohesion preference — bots converge on the critical path). Tie-break: lowest ticket ID.
+6. **Pull again** (`git pull --rebase`) right before the `git mv` claim. Pulling twice (scan-time + claim-time) eliminates the window where main moves between your pick and your write.
+7. Claim it via the standard "Checking out a ticket" flow.
 
 This rule is deterministic enough that two bots running it simultaneously usually pick different leaves (because two different tickets unblock different downstream sets). If they pick the same, the git push lock breaks the tie and the loser re-runs.
 
 If there are no available leaves, the bot reports "all tickets in scope are blocked or claimed" and stops.
+
+### Feature-set status — parking work the human isn't ready for
+
+Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries a `Status:` line in its header. Vocabulary:
+
+- `active` (default) — bots may pick tickets in this FS during DAG-walk
+- `future` — the human has explicitly parked this FS. Bots **skip** every ticket whose `Feature set:` points here, no matter how attractive the leaf looks. Do not claim, do not propose layout, do not touch.
+- `done` — every ticket in this FS has shipped. Informational; bots filter the FS out of the scan as a no-op.
+
+**Why this exists**: without a per-FS signal, a freshly-filed ticket under a future FS lands in `backlog/` and is immediately pickable on the next DAG-walk. The human ends up having to manually retire each ticket the swarm tries to claim. One `Status: future` line on the FS file blocks the entire FS at once.
+
+**To park an FS**: edit the FS file, set `Status: future`, commit, push. Bots will skip its tickets on their next pull. To unpark: change back to `active`.
 
 ### One PR per ticket lifecycle transition
 
@@ -420,35 +437,30 @@ Each bot session has a unique, human-readable handle so the audit trail and the 
 
 ### On session start
 
-1. **Auto-pick** a random handle from the curated list:
+1. **Read the curated pool** from `hive/handles.txt` (one handle per non-comment line). The pool is a data file in the repo — adding handles is a normal PR, not a docs edit.
+
+2. **Find the first pool handle that does NOT have a `hive/events/<handle>.log` file.** Each per-actor events file means that handle is taken (for all time — handles are session-unique and never reclaimed). If every pool handle has an events file, append the lowest free numeric suffix to the first pool handle: `falcon-2`, `falcon-3`.
+
+3. **Claim the handle by committing immediately.** Append a presence line to your new events file:
 
    ```
-   drone, finch, pilot,
-   comb, badger, crane,
-   robin, kestrel, jay,
-   buzz, mole, ranger,
-   forager, sparrow, wren,
-   hawk, cobalt, tern,
-   scout, lark, tide,
-   nectar, fox, squirrel
+   echo "<ISO ts> presence <handle> online" >> hive/events/<handle>.log
+   git add hive/events/<handle>.log
+   git commit -m "presence: <handle> online"
+   git push
    ```
 
-   Each row maps to a distinct UI color (red → orange → yellow → green → cyan → blue → purple → pink),
-   so active bots always render in visually distinct colors on the board.
+4. **If the push fails (non-fast-forward) — the per-actor file is the lock.** You raced another bot picking the same handle. Run `git pull --rebase`. If the pulled commits include a `presence <handle> online` line by a different commit author, your handle was taken. Roll back your local commit (`git reset --hard origin/main`), go to step 2, pick a different handle.
 
-2. **Check the environment for collisions:**
-   - Recent commit trailers: `git log --grep "Bot: " -n 50` — extract `Bot: <handle>` values.
-   - In-progress tickets: read each `hive/in-progress/*.md` file's `Assigned to:` field.
-   - If your roll matches any handle in either set, **re-pick**. Repeat up to 10 times.
-   - If 10 rolls all collide, append a numeric suffix: `scout-2`.
+5. **Announce** "I'm `<handle>`" to the user.
 
-3. **Hold the handle in memory** for this session only. **Do not** persist to `git config` or any file. Each session re-rolls.
+The git push race IS the lock. There is no separate registry to keep in sync, no heartbeat, no liveness check. Two bots rolling the same handle will both attempt to commit `hive/events/<handle>.log`; only one push wins. The loser rerolls.
 
-4. **Announce** "I'm `<handle>`" to the user.
+**Why no reclaim?** Handles aren't reclaimed when a session ends. A bot's events file stays as audit history; new sessions get a fresh handle. This avoids the ambiguity of "is the original `falcon` still alive or did `falcon` get reused?" If a logical agent wants continuity across restarts, set `BOT_HIVE_HANDLE` to lock to a specific name.
 
 ### Override
 
-`BOT_HIVE_HANDLE=billy` in the environment overrides the auto-pick. Use when you want a session to have a specific name (demos, tests, named bots).
+`BOT_HIVE_HANDLE=billy` in the environment overrides the auto-pick — use when you want a session to have a specific name (demos, tests, named bots, or resuming a logical agent's prior identity).
 
 ### Where the handle appears
 

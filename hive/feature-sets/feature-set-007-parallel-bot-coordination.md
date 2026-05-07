@@ -1,5 +1,7 @@
 # [feature-set-007] Parallel-bot coordination
 
+**Status**: active
+
 ## Goal
 Make Bot Hive safe and effective to develop with multiple bots (and multiple humans) working in parallel — by adopting a swarm coordination model where the git tree is the message bus, bots are independent agents that read and write to it, and coordination emerges from a few simple local rules. CI gates merges so broken code can't reach main; branch protection enforces it.
 

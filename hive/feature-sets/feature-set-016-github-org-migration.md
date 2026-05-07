@@ -1,5 +1,7 @@
 # [feature-set-016] Migrate Bot Hive repo from personal account to a GitHub organization
 
+**Status**: active
+
 ## Goal
 Move the Bot Hive repository from `allavallc/bot-hive` (personal account) to `<org-name>/bot-hive` (GitHub organization) so the project can use **org-level features that GitHub gates behind organization ownership** — notably the merge queue (HV-080), org-level audit log, teams, and SAML/SCIM (if ever needed).
 
