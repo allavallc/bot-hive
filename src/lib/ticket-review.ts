@@ -107,6 +107,7 @@ async function pushBranchAndPR(
   prTitle: string,
   prBody: string,
   commitAuthor: { name: string; email: string },
+  branchName: string,
 ): Promise<{ prUrl: string; prNumber: number }> {
   const newTree = await oct.request("POST /repos/{owner}/{repo}/git/trees", {
     owner,
@@ -130,24 +131,58 @@ async function pushBranchAndPR(
     author: { ...commitAuthor, date: new Date().toISOString() },
   });
 
-  const branchName = `review-${Date.now()}`;
-  await oct.request("POST /repos/{owner}/{repo}/git/refs", {
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: newCommit.data.sha,
-  });
+  // Idempotent ref upsert: try create; on 422 (branch already exists),
+  // force-update so the second Accept click rebases the branch onto
+  // current main instead of opening a duplicate PR. The deterministic
+  // branch name (passed in by caller) makes "one PR per action+ticket"
+  // a structural property — no state lock, no DB, no detection.
+  try {
+    await oct.request("POST /repos/{owner}/{repo}/git/refs", {
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: newCommit.data.sha,
+    });
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status !== 422) throw err;
+    await oct.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
+      owner,
+      repo,
+      ref: `heads/${branchName}`,
+      sha: newCommit.data.sha,
+      force: true,
+    });
+  }
 
-  const pr = await oct.request("POST /repos/{owner}/{repo}/pulls", {
-    owner,
-    repo,
-    title: prTitle,
-    body: prBody,
-    head: branchName,
-    base,
-  });
+  // Idempotent PR upsert: try open; on 422 (PR already exists for this
+  // head), GET the open PR and reuse it.
+  type PrLite = { html_url: string; number: number; node_id: string };
+  let pr: { data: PrLite };
+  try {
+    const created = await oct.request("POST /repos/{owner}/{repo}/pulls", {
+      owner,
+      repo,
+      title: prTitle,
+      body: prBody,
+      head: branchName,
+      base,
+    });
+    pr = { data: created.data as PrLite };
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status !== 422) throw err;
+    const list = await oct.request("GET /repos/{owner}/{repo}/pulls", {
+      owner,
+      repo,
+      head: `${owner}:${branchName}`,
+      state: "open",
+    });
+    if (list.data.length === 0) throw err;
+    pr = { data: list.data[0] as PrLite };
+  }
 
-  // Enable auto-merge via GraphQL (non-fatal if repo doesn't have auto-merge on)
+  // Enable auto-merge (no-op if already enabled)
   try {
     await graphqlInstallation<unknown>(
       installationId,
@@ -159,7 +194,7 @@ async function pushBranchAndPR(
       { id: pr.data.node_id },
     );
   } catch {
-    // Auto-merge may not be enabled on the repo; PR is still created
+    // Already enabled / repo doesn't support it / etc. — non-fatal.
   }
 
   return { prUrl: pr.data.html_url, prNumber: pr.data.number };
@@ -218,6 +253,7 @@ export async function acceptTicket(
     summary,
     `Accepted by ${actorName}.\n\n🤖 Generated with [Bot Hive](https://bot-hive-j0ax.onrender.com)`,
     { name: actorName, email: actorEmail },
+    `accept-${ticket.hvId.toLowerCase()}`,
   );
 }
 
@@ -290,5 +326,6 @@ export async function rejectTicket(
     title,
     `Rejected by ${actorName}.\n\n**Reason:** ${reasonTrimmed}\n\n🤖 Generated with [Bot Hive](https://bot-hive-j0ax.onrender.com)`,
     { name: actorName, email: actorEmail },
+    `reject-${ticket.hvId.toLowerCase()}`,
   );
 }
