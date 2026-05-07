@@ -49,6 +49,36 @@ async function getFileContent(
   return { content, sha: data.sha };
 }
 
+async function getFileContentOrEmpty(
+  oct: Awaited<ReturnType<typeof installationOctokit>>,
+  owner: string,
+  repo: string,
+  path: string,
+): Promise<string> {
+  try {
+    const { content } = await getFileContent(oct, owner, repo, path);
+    return content;
+  } catch (err) {
+    if ((err as { status?: number })?.status === 404) return "";
+    throw err;
+  }
+}
+
+function actorSlug(actorName: string): string {
+  return (
+    actorName
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "anon"
+  );
+}
+
+function appendEventLine(existing: string, line: string): string {
+  const trimmed = existing.trimEnd();
+  return trimmed ? `${trimmed}\n${line}\n` : `${line}\n`;
+}
+
 async function createBlob(
   oct: Awaited<ReturnType<typeof installationOctokit>>,
   owner: string,
@@ -152,17 +182,22 @@ export async function acceptTicket(
     .replace(/^- \*\*Status\*\*:.*$/m, "- **Status**: done")
     .replace(/^- \*\*Completed\*\*:.*$/m, `- **Completed**: ${today}`);
 
-  const { content: eventsContent } = await getFileContent(oct, owner, repo, "hive/events.log");
+  const slug = actorSlug(actorName);
+  const actorLogPath = `hive/events/${slug}.log`;
+  const existingActorLog = await getFileContentOrEmpty(oct, owner, repo, actorLogPath);
   const isoNow = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const updatedEvents = `${eventsContent.trimEnd()}\n${isoNow} ${ticket.hvId} accepted ${actorName}\n`;
+  const updatedActorLog = appendEventLine(
+    existingActorLog,
+    `${isoNow} ${ticket.hvId} accepted ${actorName}`,
+  );
 
   const parts = ticket.filePath.split("/");
   const fileName = parts[parts.length - 1] ?? ticket.hvId;
   const newPath = `hive/done/${fileName}`;
 
-  const [ticketBlobSha, eventsBlobSha] = await Promise.all([
+  const [ticketBlobSha, actorLogBlobSha] = await Promise.all([
     createBlob(oct, owner, repo, updatedTicket),
-    createBlob(oct, owner, repo, updatedEvents),
+    createBlob(oct, owner, repo, updatedActorLog),
   ]);
 
   const summary = `${ticket.hvId}: accepted by ${actorName}`;
@@ -177,7 +212,7 @@ export async function acceptTicket(
     [
       { path: newPath, sha: ticketBlobSha },
       { path: ticket.filePath, sha: null },
-      { path: "hive/events.log", sha: eventsBlobSha },
+      { path: actorLogPath, sha: actorLogBlobSha },
     ],
     `${summary}\n\nAccepted-by: ${actorName}\nTrigger: ${ticket.hvId} accepted`,
     summary,
@@ -207,17 +242,22 @@ export async function rejectTicket(
     .replace(/^- \*\*Rejected\*\*:.*$/m, `- **Rejected**: ${today}`)
     .replace(/^- \*\*Rejection reason\*\*:.*$/m, `- **Rejection reason**: ${reasonTrimmed}`);
 
-  const { content: eventsContent } = await getFileContent(oct, owner, repo, "hive/events.log");
+  const slug = actorSlug(actorName);
+  const actorLogPath = `hive/events/${slug}.log`;
+  const existingActorLog = await getFileContentOrEmpty(oct, owner, repo, actorLogPath);
   const isoNow = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const updatedEvents = `${eventsContent.trimEnd()}\n${isoNow} ${ticket.hvId} rejected ${actorName}\n`;
+  const updatedActorLog = appendEventLine(
+    existingActorLog,
+    `${isoNow} ${ticket.hvId} rejected ${actorName}`,
+  );
 
   const parts = ticket.filePath.split("/");
   const fileName = parts[parts.length - 1] ?? ticket.hvId;
   const newPath = `hive/in-progress/${fileName}`;
 
-  const [ticketBlobSha, eventsBlobSha] = await Promise.all([
+  const [ticketBlobSha, actorLogBlobSha] = await Promise.all([
     createBlob(oct, owner, repo, updatedTicket),
-    createBlob(oct, owner, repo, updatedEvents),
+    createBlob(oct, owner, repo, updatedActorLog),
   ]);
 
   const reasonSummary =
@@ -244,7 +284,7 @@ export async function rejectTicket(
     [
       { path: newPath, sha: ticketBlobSha },
       { path: ticket.filePath, sha: null },
-      { path: "hive/events.log", sha: eventsBlobSha },
+      { path: actorLogPath, sha: actorLogBlobSha },
     ],
     commitMsg,
     title,

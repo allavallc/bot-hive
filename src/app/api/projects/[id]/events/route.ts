@@ -1,17 +1,18 @@
-// GET /api/projects/[id]/events — returns recent `hive/events.log` lines
-// from the connected repo. Read via the GitHub App's installation token; no
-// bot tokens, no setup, no client-side auth beyond the user's session cookie.
+// GET /api/projects/[id]/events — returns recent activity from three sources:
 //
-// Filters server-side:
-//   - Lines older than MAX_AGE_DAYS are dropped (keeps the panel focused on
-//     "what's happening now," lets old activity age out gracefully).
-//   - Header comments (#-prefixed) and malformed lines are dropped.
-//   - Returned newest-first (most recent at index 0) so the swarm panel can
-//     render top-down without re-sorting.
-//   - Capped at MAX_LINES even after filtering.
+//   1. Lifecycle events at hive/events/<actor>.log (per-actor, append-only)
+//   2. Notes from humans to bots at hive/notes-to-bots/<author>.log
+//   3. Notes from bots to humans at hive/notes-to-humans/<author>.log
 //
-// Called on board load and after every `project-changed` broadcast on the
-// existing SSE stream — so newly-pushed events.log lines appear in seconds.
+// All three substrates are plain text + Git, written by per-actor split so
+// parallel writers never conflict on the same file. The panel renders a
+// merged, newest-first view across all three.
+//
+// Note-file format (TSV): <ISO ts>\t<message>
+// Lifecycle-file format: <ISO ts> <hv-id> <action> [unblocked] <actor>
+//
+// Read via the GitHub App's installation token; auth is the user's
+// session cookie.
 
 import { auth } from "@/lib/auth";
 import { installationOctokit } from "@/lib/github";
@@ -24,6 +25,103 @@ export const dynamic = "force-dynamic";
 const MAX_LINES = 200;
 const MAX_AGE_DAYS = 7;
 const ISO_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\b/;
+
+type Octokit = Awaited<ReturnType<typeof installationOctokit>>;
+type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
+
+type Entry = {
+  kind: EntryKind;
+  ts: string;
+  actor: string;
+  raw: string;
+};
+
+async function readFile(
+  oct: Octokit,
+  owner: string,
+  repo: string,
+  path: string,
+): Promise<string | null> {
+  try {
+    const resp = await oct.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      owner,
+      repo,
+      path,
+    });
+    const data = resp.data as { content?: string; encoding?: string };
+    if (!data.content) return null;
+    return Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf8");
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 404) return null;
+    throw err;
+  }
+}
+
+async function listLogFiles(
+  oct: Octokit,
+  owner: string,
+  repo: string,
+  dir: string,
+): Promise<{ path: string; name: string }[]> {
+  try {
+    const resp = await oct.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      owner,
+      repo,
+      path: dir,
+    });
+    const data = resp.data;
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter((entry) => entry.type === "file" && entry.name.endsWith(".log"))
+      .map((entry) => ({ path: entry.path as string, name: entry.name as string }));
+  } catch (err) {
+    const status = (err as { status?: number })?.status;
+    if (status === 404) return [];
+    throw err;
+  }
+}
+
+function actorFromFilename(name: string): string {
+  return name.replace(/\.log$/, "");
+}
+
+function parseLifecycle(content: string, cutoffMs: number, sink: Entry[]): void {
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = ISO_TS_RE.exec(line);
+    if (!match) continue;
+    const tsMs = Date.parse(match[1]);
+    if (Number.isNaN(tsMs) || tsMs < cutoffMs) continue;
+    const parts = line.split(/\s+/);
+    const actor = parts[parts.length - 1] ?? "";
+    sink.push({ kind: "lifecycle", ts: match[1], actor, raw: line });
+  }
+}
+
+function parseNotes(
+  content: string,
+  actor: string,
+  kind: "note-to-bots" | "note-to-humans",
+  cutoffMs: number,
+  sink: Entry[],
+): void {
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const tabIdx = line.indexOf("\t");
+    if (tabIdx === -1) continue;
+    const tsField = line.slice(0, tabIdx);
+    const message = line.slice(tabIdx + 1);
+    const tsMatch = ISO_TS_RE.exec(tsField);
+    if (!tsMatch) continue;
+    const tsMs = Date.parse(tsMatch[1]);
+    if (Number.isNaN(tsMs) || tsMs < cutoffMs) continue;
+    if (!message) continue;
+    sink.push({ kind, ts: tsMatch[1], actor, raw: message });
+  }
+}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
@@ -43,41 +141,58 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "invalid project repo" }, { status: 500 });
   }
 
-  let content: string;
+  const oct = await installationOctokit(project.installId);
+
+  let eventFiles: { path: string; name: string }[];
+  let toBotsFiles: { path: string; name: string }[];
+  let toHumansFiles: { path: string; name: string }[];
+  let legacyEvents: string | null;
   try {
-    const oct = await installationOctokit(project.installId);
-    const resp = await oct.request("GET /repos/{owner}/{repo}/contents/{path}", {
-      owner,
-      repo,
-      path: "hive/events.log",
-    });
-    const data = resp.data as { content: string; encoding: string };
-    content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf8");
+    [eventFiles, toBotsFiles, toHumansFiles, legacyEvents] = await Promise.all([
+      listLogFiles(oct, owner, repo, "hive/events"),
+      listLogFiles(oct, owner, repo, "hive/notes-to-bots"),
+      listLogFiles(oct, owner, repo, "hive/notes-to-humans"),
+      readFile(oct, owner, repo, "hive/events.log"),
+    ]);
   } catch (err) {
-    const status = (err as { status?: number })?.status;
-    if (status === 404) {
-      return NextResponse.json({ entries: [] });
-    }
-    console.error("[events] read failed:", err);
-    return NextResponse.json({ error: "failed to read events.log" }, { status: 500 });
+    console.error("[events] discovery failed:", err);
+    return NextResponse.json({ error: "failed to read events" }, { status: 500 });
+  }
+
+  let eventContents: (string | null)[];
+  let toBotsContents: (string | null)[];
+  let toHumansContents: (string | null)[];
+  try {
+    [eventContents, toBotsContents, toHumansContents] = await Promise.all([
+      Promise.all(eventFiles.map((f) => readFile(oct, owner, repo, f.path))),
+      Promise.all(toBotsFiles.map((f) => readFile(oct, owner, repo, f.path))),
+      Promise.all(toHumansFiles.map((f) => readFile(oct, owner, repo, f.path))),
+    ]);
+  } catch (err) {
+    console.error("[events] per-file read failed:", err);
+    return NextResponse.json({ error: "failed to read events" }, { status: 500 });
   }
 
   const cutoffMs = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const sink: Entry[] = [];
 
-  const recent = content
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("#"))
-    .filter((line) => {
-      const match = ISO_TS_RE.exec(line);
-      if (!match) return false; // malformed line — drop
-      const ts = Date.parse(match[1]);
-      if (Number.isNaN(ts)) return false;
-      return ts >= cutoffMs;
-    });
+  if (legacyEvents) parseLifecycle(legacyEvents, cutoffMs, sink);
+  for (const content of eventContents) {
+    if (content) parseLifecycle(content, cutoffMs, sink);
+  }
+  toBotsFiles.forEach((file, i) => {
+    const content = toBotsContents[i];
+    if (content) parseNotes(content, actorFromFilename(file.name), "note-to-bots", cutoffMs, sink);
+  });
+  toHumansFiles.forEach((file, i) => {
+    const content = toHumansContents[i];
+    if (content) {
+      parseNotes(content, actorFromFilename(file.name), "note-to-humans", cutoffMs, sink);
+    }
+  });
 
-  // Newest first; cap.
-  const newestFirst = recent.slice(-MAX_LINES).reverse();
+  sink.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
+  const entries = sink.slice(0, MAX_LINES);
 
-  return NextResponse.json({ entries: newestFirst });
+  return NextResponse.json({ entries });
 }
