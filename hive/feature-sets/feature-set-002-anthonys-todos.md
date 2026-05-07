@@ -1,6 +1,7 @@
 # [feature-set-002] Anthony's to-dos
 
 **Status**: active
+**Owner**:
 
 ## Goal
 Track the polish, testing, and UX-hint items that were deliberately deferred during Phase 1 so the v1 demo could ship.

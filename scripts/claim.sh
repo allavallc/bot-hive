@@ -49,6 +49,16 @@ if [ -z "$TICKET_FILE" ]; then
   exit 1
 fi
 
+# Owner check: refuse if the ticket's FS is reserved for a different handle.
+TICKET_FS=$(grep "^- \*\*Feature set\*\*:" "$TICKET_FILE" | sed 's/^- \*\*Feature set\*\*: //' | tr -d '[:space:]')
+if [ -n "$TICKET_FS" ] && [ -f "hive/feature-sets/${TICKET_FS}.md" ]; then
+  FS_OWNER=$(grep "^\*\*Owner\*\*:" "hive/feature-sets/${TICKET_FS}.md" | sed 's/^\*\*Owner\*\*://' | tr -d '[:space:]')
+  if [ -n "$FS_OWNER" ] && [ "$FS_OWNER" != "$BOT_HIVE_HANDLE" ]; then
+    echo "error: ${TICKET_FS} is owned by ${FS_OWNER}; ${BOT_HIVE_HANDLE} cannot claim ${HV_ID}." >&2
+    exit 1
+  fi
+fi
+
 # If anyone else already has an open PR for this ticket, bail out.
 EXISTING_PR=$(gh pr list --state open --search "$HV_ID in:title" --json number,title,headRefName --jq '.[] | "\(.number)|\(.headRefName)|\(.title)"' | head -1)
 if [ -n "$EXISTING_PR" ]; then

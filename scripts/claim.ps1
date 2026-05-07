@@ -32,6 +32,22 @@ if (-not $ticketFile) {
     exit 1
 }
 
+# Owner check: refuse if the ticket's FS is reserved for a different handle.
+$ticketContent = Get-Content -Raw $ticketFile.FullName
+if ($ticketContent -match "(?m)^- \*\*Feature set\*\*:\s*(\S+)") {
+    $ticketFs = $Matches[1].Trim()
+    if ($ticketFs -and (Test-Path "hive/feature-sets/$ticketFs.md")) {
+        $fsContent = Get-Content -Raw "hive/feature-sets/$ticketFs.md"
+        if ($fsContent -match "(?m)^\*\*Owner\*\*:\s*(\S+)") {
+            $fsOwner = $Matches[1].Trim()
+            if ($fsOwner -and $fsOwner -ne $handle) {
+                Write-Error "${ticketFs} is owned by ${fsOwner}; ${handle} cannot claim ${HvId}."
+                exit 1
+            }
+        }
+    }
+}
+
 $existingPr = & gh pr list --state open --search "$HvId in:title" --json number,title,headRefName --jq '.[] | "\(.number)|\(.headRefName)|\(.title)"' | Select-Object -First 1
 if ($existingPr) {
     Write-Warning "Open PR already references ${HvId}: $existingPr"

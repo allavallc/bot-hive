@@ -1,6 +1,7 @@
 # [feature-set-003] Multi-user project membership
 
 **Status**: active
+**Owner**:
 
 ## Goal
 Let multiple users share a project's live board so any GitHub collaborator on a connected repo can sign in and watch the same kanban update in real time, without an explicit invite step.

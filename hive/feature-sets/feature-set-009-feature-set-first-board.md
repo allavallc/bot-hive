@@ -1,6 +1,7 @@
 # [feature-set-009] Feature-set-first board view
 
 **Status**: active
+**Owner**:
 
 ## Goal
 Reframe Bot Hive's default board from a Jira-style ticket kanban to a feature-set-first hierarchy. Top-level shows feature sets (goal, progress, status); drilling into one shows its tickets. The existing ticket kanban is preserved as a secondary "all tickets" view, not removed.

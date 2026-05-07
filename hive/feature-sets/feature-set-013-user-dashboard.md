@@ -1,6 +1,7 @@
 # [feature-set-013] User: user dashboard — UI and backend
 
 **Status**: active
+**Owner**:
 
 ## Goal
 A real user dashboard beyond today's project list — surfaces account settings, profile, integrations, usage, billing summary, and any future user-facing self-service. Today `/dashboard` is a flat list of projects; users have nowhere to manage their account, see their own activity, or change settings without an admin's help.

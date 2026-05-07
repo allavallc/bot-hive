@@ -252,6 +252,20 @@ If there are no available leaves, the bot reports "all tickets in scope are bloc
 
 **Substrate-portability**: the soft fence is a host implementation detail. A non-Bot-Hive host can implement the same convention with a Redis key, an in-memory map, or skip it entirely (degrades gracefully — falls back to git-push-race resolution). The conventions in this doc don't depend on the soft-fence existing — only on the principle that **canonical state lives in Git**.
 
+### Feature-set ownership — reserving work for a specific actor
+
+Each `hive/feature-sets/feature-set-NNN-<slug>.md` header may carry an `Owner:` line. Empty = open to any bot. Set to a handle (`Owner: allavallc-cc1`, `Owner: allavallc`, etc.) = reserved.
+
+**DAG-walk filter**: if a candidate ticket's `Feature set:` points at an FS file with a non-empty `Owner:` that isn't your handle, skip the ticket. Don't claim, don't propose, don't touch.
+
+**When a human reassigns ownership mid-flight** (e.g., "you own FS-014 now"):
+
+1. The named bot edits the FS file, sets `Owner:` to their own handle, commits, pushes.
+2. Other bots currently working tickets in that FS **finish their in-progress ticket** (don't abandon work mid-task), then **stop picking new tickets from that FS**.
+3. Owner change is forward-only — no rebasing, no clawback. The DAG-walk just gets a tighter filter on the next pull.
+
+**Why finish-current rather than hard-stop**: abandoning a ticket mid-task creates a stale claim, wastes work, and forces a context-switch when another bot picks it up. Letting the current owner finish keeps continuity. Going forward, only the new owner picks new tickets.
+
 ### Feature-set status — parking work the human isn't ready for
 
 Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries a `Status:` line in its header. Vocabulary:
