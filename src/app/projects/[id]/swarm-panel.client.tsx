@@ -12,15 +12,13 @@ import styles from "./swarm-panel.module.css";
 // writers never conflict. The panel renders a merged, newest-first view.
 // The composer at the top writes notes (use @cc2 or @swarm to target).
 
-type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans" | "claim-active";
+type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
 
 type Entry = {
   kind: EntryKind;
   ts: string;
   actor: string;
   raw: string;
-  hvId?: string;
-  expiresAt?: string;
 };
 
 const STORAGE_KEY = "bot-hive:swarm-panel:open";
@@ -185,8 +183,6 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
             if (e.kind === "lifecycle") {
               const { hvId, action } = parseLifecycle(e.raw);
               body = `${action} ${hvId}`.trim();
-            } else if (e.kind === "claim-active") {
-              body = `claiming ${e.hvId ?? ""}`.trim();
             } else {
               body = e.raw;
             }

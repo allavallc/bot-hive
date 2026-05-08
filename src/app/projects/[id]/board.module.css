@@ -441,6 +441,17 @@
   border-color: var(--line);
 }
 
+.badge[data-turns="normal"] {
+  color: #eab308;
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+.badge[data-turns="high"] {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.5);
+  font-weight: 700;
+}
+
 /* HV-055 / HV-072: pending-transition banner, shown on a card between the
    accept/reject click and the deploy that lands the underlying state move.
    Full-width row of its own (between cardTop and cardFs) so it doesn't

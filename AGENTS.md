@@ -4,6 +4,12 @@ Canonical project rules for **any agent** (AI or human) working on bot-hive. Age
 
 Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-state.md` — never in this file.
 
+## Worktree isolation (preferred)
+
+When the human spawns you via the **"Add a bot"** button on the live board, your session starts in a dedicated git worktree at `worktrees/<your-handle>/` on a feature branch `<handle>-work`. Two bots in two worktrees physically can't edit the same files — coordination protocol catches the rest.
+
+If you weren't spawned via the button (running in the main repo working dir), no harm — Bot Hive's protocol still works without worktrees. The button + worktree flow is a hardening, not a requirement.
+
 ## Bot CLI helpers (start here)
 
 Three scripts wrap the protocol so you don't have to construct git/gh calls by hand. Use them for every claim, note, and session start:

@@ -43,6 +43,13 @@
       "when": 1778199787187,
       "tag": "0005_nosy_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778268202221,
+      "tag": "0006_wise_joseph",
+      "breakpoints": true
     }
   ]
 }

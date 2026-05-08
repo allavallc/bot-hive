@@ -5,6 +5,7 @@ import { getProjectForUser } from "@/lib/projects";
 import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { AddBotButton } from "./add-bot-button.client";
 import { Board } from "./board.client";
 import { SwarmPanel } from "./swarm-panel.client";
 
@@ -62,6 +63,7 @@ export default async function ProjectBoardPage({
         initialFeatures={initialFeatures}
       />
       <SwarmPanel projectId={project.id} />
+      <AddBotButton projectId={project.id} />
     </>
   );
 }

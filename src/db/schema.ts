@@ -195,34 +195,3 @@ export const humanNotes = pgTable(
     projectCreatedIdx: index("human_notes_project_created_idx").on(t.projectId, t.createdAt),
   }),
 );
-
-// HV-090: platform-as-soft-fence for claim coordination.
-//
-// Bots POST to /api/projects/[id]/tickets/[hvId]/claim to mark a ticket as
-// "I'm working on this" within seconds — without the PR ceremony needed to
-// commit a folder move. Other bots check this table during DAG-walk and
-// skip already-claimed tickets. Claims expire after 30 min if not followed
-// by a real Git commit moving the ticket file (the webhook clears the
-// claim on that move).
-//
-// IMPORTANT: this table is the *fence*, not the source of truth. Git
-// remains canonical — wipe this table tomorrow and the swarm still works
-// (just slower, more git-collision-prone). Active claims are transient
-// optimistic locks; the canonical "this ticket is in-progress" record is
-// the file's location in `hive/in-progress/` on main.
-export const activeClaims = pgTable(
-  "active_claims",
-  {
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    hvId: text("hv_id").notNull(),
-    handle: text("handle").notNull(),
-    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.projectId, t.hvId] }),
-    expiryIdx: index("active_claims_expiry_idx").on(t.projectId, t.expiresAt),
-  }),
-);

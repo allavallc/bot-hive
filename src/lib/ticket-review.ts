@@ -272,7 +272,29 @@ export async function rejectTicket(
   const { content: ticketContent } = await getFileContent(oct, owner, repo, ticket.filePath);
   const today = new Date().toISOString().slice(0, 10);
   const reasonTrimmed = reason.trim();
-  const updatedTicket = ticketContent
+
+  // Increment Turns counter on every rejection (HV-094-followup). Tickets
+  // without a Turns field are treated as 0; we add the field if missing.
+  const turnsMatch = ticketContent.match(/^- \*\*Turns\*\*:\s*(\d+)/m);
+  const currentTurns = turnsMatch ? Number.parseInt(turnsMatch[1], 10) : 0;
+  const newTurns = currentTurns + 1;
+  let withTurns: string;
+  if (turnsMatch) {
+    withTurns = ticketContent.replace(/^- \*\*Turns\*\*:.*$/m, `- **Turns**: ${newTurns}`);
+  } else {
+    // Insert Turns line after Rejection reason (last frontmatter field) if present,
+    // otherwise after Failure mode, otherwise just before the first ## heading.
+    if (/^- \*\*Rejection reason\*\*:/m.test(ticketContent)) {
+      withTurns = ticketContent.replace(
+        /^- \*\*Rejection reason\*\*:.*$/m,
+        (line) => `${line}\n- **Turns**: ${newTurns}`,
+      );
+    } else {
+      withTurns = ticketContent.replace(/^(##\s)/m, `- **Turns**: ${newTurns}\n\n$1`);
+    }
+  }
+
+  const updatedTicket = withTurns
     .replace(/^- \*\*Status\*\*:.*$/m, "- **Status**: in-progress")
     .replace(/^- \*\*Rejected by\*\*:.*$/m, `- **Rejected by**: ${actorName}`)
     .replace(/^- \*\*Rejected\*\*:.*$/m, `- **Rejected**: ${today}`)
