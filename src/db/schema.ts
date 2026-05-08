@@ -170,6 +170,32 @@ export const syncState = pgTable("sync_state", {
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
 });
 
+// HV-094: notes from humans to bots — DB-backed transient state, not Git.
+//
+// Notes are conversational direction, not canonical state. Storing them as
+// Git commits creates PR queue noise + 2-3 min visibility lag. This table
+// is the source of truth for human-to-bot notes; the read endpoint joins
+// it into the panel's stream so notes appear within ~1s of a Send click.
+//
+// Bot→human notes still flow through Git (`hive/notes-to-humans/<bot>.log`)
+// because bots have existing git auth but no API auth — asymmetry is
+// intentional for v1.
+export const humanNotes = pgTable(
+  "human_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    actor: text("actor").notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    projectCreatedIdx: index("human_notes_project_created_idx").on(t.projectId, t.createdAt),
+  }),
+);
+
 // HV-090: platform-as-soft-fence for claim coordination.
 //
 // Bots POST to /api/projects/[id]/tickets/[hvId]/claim to mark a ticket as

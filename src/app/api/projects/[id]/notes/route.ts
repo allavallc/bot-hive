@@ -1,83 +1,26 @@
-// POST /api/projects/[id]/notes — append a human-authored note to
-// hive/notes-to-bots/<actor>.log on main, via the GitHub App.
+// POST /api/projects/[id]/notes — record a human-to-bot note in the
+// human_notes table and broadcast SSE so the swarm panel renders it in ~1s.
 //
-// Auth: session cookie. The actor is the logged-in user.
-// Body: { message: string }  (single line, max 280 chars; tabs/newlines stripped)
-// Targeting: convention via @<agent-id> or @swarm in the message itself.
-// Auto-trim: when a writer's file exceeds 1000 lines, the oldest 500 are dropped.
+// HV-094 rip-out: previously committed each note to Git via PR + auto-merge.
+// That's the wrong primitive for advisory chat — it created PR queue noise
+// and ~2-3 min visibility lag. Notes are conversational, not canonical
+// state, and belong in transient DB rows. Wipe `human_notes` tomorrow and
+// the swarm still works (just loses chat history).
+//
+// Bot→human direction still flows through Git (`hive/notes-to-humans/<bot>.log`)
+// because bots have existing git auth but no API session — asymmetric on
+// purpose for v1.
 
+import { db } from "@/db";
+import { humanNotes } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { broadcast } from "@/lib/broadcast";
-import { graphqlInstallation, installationOctokit } from "@/lib/github";
-import { actorSlug, appendAndTrim, validateMessage } from "@/lib/notes";
+import { validateMessage } from "@/lib/notes";
 import { getProjectForUser } from "@/lib/projects";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-type Octokit = Awaited<ReturnType<typeof installationOctokit>>;
-
-async function getDefaultBranch(oct: Octokit, owner: string, repo: string): Promise<string> {
-  const info = await oct.request("GET /repos/{owner}/{repo}", { owner, repo });
-  return info.data.default_branch;
-}
-
-async function getHeadState(
-  oct: Octokit,
-  owner: string,
-  repo: string,
-  branch: string,
-): Promise<{ headSha: string; baseTreeSha: string }> {
-  const refResp = await oct.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
-    owner,
-    repo,
-    ref: `heads/${branch}`,
-  });
-  const headSha = refResp.data.object.sha;
-  const commitResp = await oct.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", {
-    owner,
-    repo,
-    commit_sha: headSha,
-  });
-  return { headSha, baseTreeSha: commitResp.data.tree.sha };
-}
-
-async function getFileContentOrEmpty(
-  oct: Octokit,
-  owner: string,
-  repo: string,
-  path: string,
-): Promise<string> {
-  try {
-    const resp = await oct.request("GET /repos/{owner}/{repo}/contents/{path}", {
-      owner,
-      repo,
-      path,
-    });
-    const data = resp.data as { content?: string };
-    if (!data.content) return "";
-    return Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf8");
-  } catch (err) {
-    if ((err as { status?: number })?.status === 404) return "";
-    throw err;
-  }
-}
-
-async function createBlob(
-  oct: Octokit,
-  owner: string,
-  repo: string,
-  content: string,
-): Promise<string> {
-  const blob = await oct.request("POST /repos/{owner}/{repo}/git/blobs", {
-    owner,
-    repo,
-    content,
-    encoding: "utf-8",
-  });
-  return blob.data.sha;
-}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = await params;
@@ -103,104 +46,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
-  const cleaned = validation.message;
 
-  const [owner, repo] = project.githubRepo.split("/");
-  if (!owner || !repo) {
-    return NextResponse.json({ error: "invalid project repo" }, { status: 500 });
-  }
+  const actor = session.user.name || session.user.email || "user";
+  const [row] = await db
+    .insert(humanNotes)
+    .values({
+      projectId: project.id,
+      actor,
+      message: validation.message,
+    })
+    .returning();
 
-  const actorName = session.user.name || session.user.email || "user";
-  const slug = actorSlug(actorName);
-  const filePath = `hive/notes-to-bots/${slug}.log`;
-  const isoNow = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const newLine = `${isoNow}\t${cleaned}`;
+  broadcast({ type: "project-changed", projectId });
 
-  try {
-    const oct = await installationOctokit(project.installId);
-    const branch = await getDefaultBranch(oct, owner, repo);
-    const { headSha, baseTreeSha } = await getHeadState(oct, owner, repo, branch);
-
-    const existing = await getFileContentOrEmpty(oct, owner, repo, filePath);
-    const updated = appendAndTrim(existing, newLine);
-    const blobSha = await createBlob(oct, owner, repo, updated);
-
-    const newTree = await oct.request("POST /repos/{owner}/{repo}/git/trees", {
-      owner,
-      repo,
-      base_tree: baseTreeSha,
-      tree: [
-        {
-          path: filePath,
-          mode: "100644" as const,
-          type: "blob" as const,
-          sha: blobSha,
-        },
-      ],
-    });
-
-    const summary = `note: ${cleaned.slice(0, 60)}${cleaned.length > 60 ? "…" : ""}`;
-    const commit = await oct.request("POST /repos/{owner}/{repo}/git/commits", {
-      owner,
-      repo,
-      message: summary,
-      tree: newTree.data.sha,
-      parents: [headSha],
-      author: {
-        name: actorName,
-        email: session.user.email,
-        date: new Date().toISOString(),
-      },
-    });
-
-    // Branch protection blocks direct pushes to main; mirror the
-    // accept/reject pattern — push the commit to a fresh branch, open
-    // a PR, enable auto-merge. The PR lands within seconds (CI is
-    // paths-aware and skips for hive-only changes via HV-079).
-    const branchName = `note-${slug}-${Date.now()}`;
-    await oct.request("POST /repos/{owner}/{repo}/git/refs", {
-      owner,
-      repo,
-      ref: `refs/heads/${branchName}`,
-      sha: commit.data.sha,
-    });
-
-    const pr = await oct.request("POST /repos/{owner}/{repo}/pulls", {
-      owner,
-      repo,
-      title: summary,
-      body: cleaned,
-      head: branchName,
-      base: branch,
-    });
-
-    try {
-      await graphqlInstallation<unknown>(
-        project.installId,
-        `mutation EnableAutoMerge($id: ID!) {
-          enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
-            pullRequest { number }
-          }
-        }`,
-        { id: pr.data.node_id },
-      );
-    } catch {
-      // Auto-merge may not be configured on the repo; PR still created.
-    }
-
-    // Optimistic SSE: render the line in the panel right now without
-    // waiting for the PR to land + webhook to fire. The eventual
-    // project-changed broadcast on merge reconciles to canonical state.
-    broadcast({ type: "project-changed", projectId });
-
-    return NextResponse.json({
-      ok: true,
-      ts: isoNow,
-      prUrl: pr.data.html_url,
-      prNumber: pr.data.number,
-    });
-  } catch (err) {
-    console.error("[notes] commit failed:", err);
-    return NextResponse.json({ error: "failed to write note" }, { status: 500 });
-  }
+  return NextResponse.json({
+    ok: true,
+    id: row.id,
+    actor: row.actor,
+    message: row.message,
+    createdAt: row.createdAt.toISOString(),
+  });
 }

@@ -74,54 +74,24 @@
   line-height: 1.4;
 }
 
-.signal {
+.row {
   display: grid;
-  grid-template-columns: 16px auto 1fr auto;
-  gap: 6px;
+  grid-template-columns: 12px auto 1fr auto;
+  gap: 8px;
   align-items: baseline;
   padding: 4px 14px;
   font-size: 0.8rem;
   line-height: 1.3;
 }
 
-.signal:hover {
+.row:hover {
   background: var(--bg);
 }
 
-.glyph {
-  font-family: var(--mono);
-  font-size: 0.85rem;
+.bullet {
+  font-size: 0.7rem;
   text-align: center;
-  color: var(--ink-dim);
-}
-
-.signal[data-type="claim"] .glyph {
-  color: #3b82f6;
-}
-
-.signal[data-type="done"] .glyph {
-  color: #22c55e;
-}
-
-.signal[data-type="blocked"] .glyph {
-  color: var(--accent);
-}
-
-.signal[data-type="question"] .glyph {
-  color: #eab308;
-}
-
-.signal[data-type="handoff"] .glyph {
-  color: #8b5cf6;
-}
-
-.signal[data-type="claim-active"] .glyph {
-  color: #f59e0b;
-}
-
-.signal[data-type="claim-active"] .message {
-  font-style: italic;
-  opacity: 0.85;
+  line-height: 1;
 }
 
 .author {
@@ -188,28 +158,6 @@
 
 .sendButton:not(:disabled):hover {
   background: rgba(196, 114, 74, 0.1);
-}
-
-.note {
-  display: grid;
-  grid-template-columns: 16px auto 1fr auto;
-  gap: 6px;
-  align-items: baseline;
-  padding: 4px 14px;
-  font-size: 0.8rem;
-  line-height: 1.3;
-}
-
-.note:hover {
-  background: var(--bg);
-}
-
-.note[data-direction="note-to-bots"] .glyph {
-  color: #8b5cf6;
-}
-
-.note[data-direction="note-to-humans"] .glyph {
-  color: #eab308;
 }
 
 .noteMessage {
