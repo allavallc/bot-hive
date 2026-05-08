@@ -30,35 +30,49 @@ function detectPlatform(): Platform {
   return "linux";
 }
 
-function commandFor(platform: Platform, handle: string): string {
+// HV-100 ADR: Each step is ONE shell. Don't compose commands across shells —
+// PowerShell's variable substitution happens at every layer and ate
+// $env:BOT_HIVE_HANDLE before it reached the inner shell. Three pastes,
+// each in one shell, no escaping interaction. Boring but bulletproof.
+
+type StepCommand = { command: string; runIn: string };
+
+function step1Command(platform: Platform, handle: string): StepCommand {
   const branch = `${handle}-work`;
   const worktreeDir = `worktrees/${handle}`;
   if (platform === "windows") {
-    // Idempotent: if the worktree directory exists from a previous failed
-    // attempt, remove it; then `-B` force-resets the branch (creates if
-    // missing, reuses if exists). The inner semicolon must be escaped as
-    // \; so wt.exe passes it through to PowerShell instead of treating
-    // it as wt.exe's own command separator.
-    // (https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments)
-    return [
-      `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }`,
-      `git worktree add ${worktreeDir} -B ${branch}`,
-      `wt.exe new-tab -d "${worktreeDir}" pwsh -NoExit -Command "$env:BOT_HIVE_HANDLE='${handle}'\\; claude"`,
-    ].join("; ");
+    // Idempotent: clear any leftover worktree dir, then -B (force-reset
+    // branch). Open a new terminal tab IN the worktree dir — no inner
+    // shell command, just a fresh prompt. wt.exe with -d alone has no
+    // escaping issues.
+    return {
+      command: `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }; git worktree add ${worktreeDir} -B ${branch}; wt.exe new-tab -d "${worktreeDir}"`,
+      runIn: "your main bot-hive terminal",
+    };
   }
   if (platform === "mac") {
-    return [
-      `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi`,
-      `git worktree add ${worktreeDir} -B ${branch}`,
-      `osascript -e 'tell app "Terminal" to do script "cd ${worktreeDir} && export BOT_HIVE_HANDLE=${handle} && claude"'`,
-    ].join(" && ");
+    return {
+      command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && osascript -e 'tell app "Terminal" to do script "cd ${worktreeDir}"'`,
+      runIn: "your main bot-hive terminal",
+    };
   }
-  return [
-    `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi`,
-    `git worktree add ${worktreeDir} -B ${branch}`,
-    "# Open a new terminal, then run:",
-    `cd ${worktreeDir} && export BOT_HIVE_HANDLE=${handle} && claude`,
-  ].join("\n");
+  return {
+    command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch}\n# Then open a new terminal manually in ${worktreeDir}`,
+    runIn: "your main bot-hive terminal",
+  };
+}
+
+function step2Command(platform: Platform, handle: string): StepCommand {
+  if (platform === "windows") {
+    return {
+      command: `$env:BOT_HIVE_HANDLE = '${handle}'; claude`,
+      runIn: "the new terminal that just opened",
+    };
+  }
+  return {
+    command: `export BOT_HIVE_HANDLE=${handle} && claude`,
+    runIn: "the new terminal that just opened",
+  };
 }
 
 export function AddBotButton({ projectId }: { projectId: string; repoSlug?: string }) {
@@ -67,7 +81,7 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [platform, setPlatform] = useState<Platform>("linux");
-  const [copied, setCopied] = useState<"command" | "bootstrap" | null>(null);
+  const [copied, setCopied] = useState<"step1" | "step2" | "step3" | null>(null);
 
   useEffect(() => {
     setPlatform(detectPlatform());
@@ -97,23 +111,10 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
     void fetchHandle();
   }, [fetchHandle]);
 
-  const onCopyCommand = useCallback(async () => {
-    if (!data) return;
+  const copyText = useCallback(async (text: string, marker: "step1" | "step2" | "step3") => {
     try {
-      await navigator.clipboard.writeText(commandFor(platform, data.nextHandle));
-      setCopied("command");
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      // User can manually select + copy if clipboard API blocked
-    }
-  }, [data, platform]);
-
-  const onCopyBootstrap = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(
-        "Read hive/bot-startup.md and tell me what you're going to work on.",
-      );
-      setCopied("bootstrap");
+      await navigator.clipboard.writeText(text);
+      setCopied(marker);
       setTimeout(() => setCopied(null), 2000);
     } catch {
       // User can manually select + copy if clipboard API blocked
@@ -183,32 +184,64 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
                     </select>
                   </div>
 
-                  <div className={styles.step}>
-                    <h3 className={styles.stepTitle}>Step 1</h3>
-                    <p className={styles.stepInstructions}>
-                      Copy this and paste it into <strong>your main bot-hive terminal</strong>. A
-                      new terminal window will open with Claude Code running.
-                    </p>
-                    <pre className={styles.code}>{commandFor(platform, data.nextHandle)}</pre>
-                    <button type="button" className={styles.copyButton} onClick={onCopyCommand}>
-                      {copied === "command" ? "Copied ✓" : "Copy"}
-                    </button>
-                  </div>
+                  {(() => {
+                    const s1 = step1Command(platform, data.nextHandle);
+                    const s2 = step2Command(platform, data.nextHandle);
+                    const s3 = "Read hive/bot-startup.md and tell me what you're going to work on.";
+                    return (
+                      <>
+                        <div className={styles.step}>
+                          <h3 className={styles.stepTitle}>Step 1 — create the worktree</h3>
+                          <p className={styles.stepInstructions}>
+                            Copy this and paste it into <strong>{s1.runIn}</strong>. It creates a
+                            new git worktree at <code>worktrees/{data.nextHandle}/</code> and opens
+                            a new terminal window in that directory.
+                          </p>
+                          <pre className={styles.code}>{s1.command}</pre>
+                          <button
+                            type="button"
+                            className={styles.copyButton}
+                            onClick={() => copyText(s1.command, "step1")}
+                          >
+                            {copied === "step1" ? "Copied ✓" : "Copy"}
+                          </button>
+                        </div>
 
-                  <div className={styles.step}>
-                    <h3 className={styles.stepTitle}>Step 2</h3>
-                    <p className={styles.stepInstructions}>
-                      Once Claude Code is running, copy this and paste it into{" "}
-                      <strong>the new terminal</strong>. The bot will read the startup guide and
-                      pick its first task.
-                    </p>
-                    <pre className={styles.codeSecondary}>
-                      Read hive/bot-startup.md and tell me what you're going to work on.
-                    </pre>
-                    <button type="button" className={styles.copyButton} onClick={onCopyBootstrap}>
-                      {copied === "bootstrap" ? "Copied ✓" : "Copy"}
-                    </button>
-                  </div>
+                        <div className={styles.step}>
+                          <h3 className={styles.stepTitle}>Step 2 — start Claude Code</h3>
+                          <p className={styles.stepInstructions}>
+                            Copy this and paste it into <strong>{s2.runIn}</strong>. It sets the
+                            bot's handle and launches Claude Code.
+                          </p>
+                          <pre className={styles.code}>{s2.command}</pre>
+                          <button
+                            type="button"
+                            className={styles.copyButton}
+                            onClick={() => copyText(s2.command, "step2")}
+                          >
+                            {copied === "step2" ? "Copied ✓" : "Copy"}
+                          </button>
+                        </div>
+
+                        <div className={styles.step}>
+                          <h3 className={styles.stepTitle}>Step 3 — bootstrap the bot</h3>
+                          <p className={styles.stepInstructions}>
+                            Once Claude Code is running, copy this and paste it{" "}
+                            <strong>into the Claude Code chat</strong>. The bot will read the
+                            startup guide and pick its first task.
+                          </p>
+                          <pre className={styles.codeSecondary}>{s3}</pre>
+                          <button
+                            type="button"
+                            className={styles.copyButton}
+                            onClick={() => copyText(s3, "step3")}
+                          >
+                            {copied === "step3" ? "Copied ✓" : "Copy"}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   <hr className={styles.divider} />
 
