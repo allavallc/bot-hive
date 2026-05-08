@@ -174,21 +174,32 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
                     </select>
                   </div>
 
-                  <p className={styles.dim}>1. Paste this in your main bot-hive terminal:</p>
-                  <pre className={styles.code}>{commandFor(platform, data.nextHandle)}</pre>
-                  <button type="button" className={styles.copyButton} onClick={onCopyCommand}>
-                    {copied === "command" ? "Copied ✓" : "Copy"}
-                  </button>
+                  <div className={styles.step}>
+                    <h3 className={styles.stepTitle}>Step 1</h3>
+                    <p className={styles.stepInstructions}>
+                      Copy this and paste it into <strong>your main bot-hive terminal</strong>.
+                      A new terminal window will open with Claude Code running.
+                    </p>
+                    <pre className={styles.code}>{commandFor(platform, data.nextHandle)}</pre>
+                    <button type="button" className={styles.copyButton} onClick={onCopyCommand}>
+                      {copied === "command" ? "Copied ✓" : "Copy"}
+                    </button>
+                  </div>
 
-                  <p className={styles.dim} style={{ marginTop: 16 }}>
-                    2. Then in the new terminal that opens, paste:
-                  </p>
-                  <pre className={styles.codeSecondary}>
-                    Read hive/bot-startup.md and tell me what you're going to work on.
-                  </pre>
-                  <button type="button" className={styles.copyButton} onClick={onCopyBootstrap}>
-                    {copied === "bootstrap" ? "Copied ✓" : "Copy"}
-                  </button>
+                  <div className={styles.step}>
+                    <h3 className={styles.stepTitle}>Step 2</h3>
+                    <p className={styles.stepInstructions}>
+                      Once Claude Code is running, copy this and paste it into{" "}
+                      <strong>the new terminal</strong>. The bot will read the startup guide and
+                      pick its first task.
+                    </p>
+                    <pre className={styles.codeSecondary}>
+                      Read hive/bot-startup.md and tell me what you're going to work on.
+                    </pre>
+                    <button type="button" className={styles.copyButton} onClick={onCopyBootstrap}>
+                      {copied === "bootstrap" ? "Copied ✓" : "Copy"}
+                    </button>
+                  </div>
 
                   <hr className={styles.divider} />
 
