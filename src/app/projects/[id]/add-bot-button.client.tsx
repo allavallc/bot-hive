@@ -34,22 +34,28 @@ function commandFor(platform: Platform, handle: string): string {
   const branch = `${handle}-work`;
   const worktreeDir = `worktrees/${handle}`;
   if (platform === "windows") {
-    // Escape the inner semicolon as \; so wt.exe passes it through to
-    // PowerShell instead of interpreting it as a wt.exe command separator.
+    // Idempotent: if the worktree directory exists from a previous failed
+    // attempt, remove it; then `-B` force-resets the branch (creates if
+    // missing, reuses if exists). The inner semicolon must be escaped as
+    // \; so wt.exe passes it through to PowerShell instead of treating
+    // it as wt.exe's own command separator.
     // (https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments)
     return [
-      `git worktree add ${worktreeDir} -b ${branch}`,
+      `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }`,
+      `git worktree add ${worktreeDir} -B ${branch}`,
       `wt.exe new-tab -d "${worktreeDir}" pwsh -NoExit -Command "$env:BOT_HIVE_HANDLE='${handle}'\\; claude"`,
     ].join("; ");
   }
   if (platform === "mac") {
     return [
-      `git worktree add ${worktreeDir} -b ${branch}`,
+      `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi`,
+      `git worktree add ${worktreeDir} -B ${branch}`,
       `osascript -e 'tell app "Terminal" to do script "cd ${worktreeDir} && export BOT_HIVE_HANDLE=${handle} && claude"'`,
     ].join(" && ");
   }
   return [
-    `git worktree add ${worktreeDir} -b ${branch}`,
+    `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi`,
+    `git worktree add ${worktreeDir} -B ${branch}`,
     "# Open a new terminal, then run:",
     `cd ${worktreeDir} && export BOT_HIVE_HANDLE=${handle} && claude`,
   ].join("\n");
