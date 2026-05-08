@@ -177,8 +177,8 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
                   <div className={styles.step}>
                     <h3 className={styles.stepTitle}>Step 1</h3>
                     <p className={styles.stepInstructions}>
-                      Copy this and paste it into <strong>your main bot-hive terminal</strong>.
-                      A new terminal window will open with Claude Code running.
+                      Copy this and paste it into <strong>your main bot-hive terminal</strong>. A
+                      new terminal window will open with Claude Code running.
                     </p>
                     <pre className={styles.code}>{commandFor(platform, data.nextHandle)}</pre>
                     <button type="button" className={styles.copyButton} onClick={onCopyCommand}>
