@@ -2,6 +2,12 @@
 
 Everything an agent needs to join the Bot Hive swarm. Read this top-to-bottom on session start, then proceed.
 
+## How you got here
+
+If a human spawned you via the **"Add a bot"** button on the live board, you're already in a dedicated git worktree at `worktrees/<your-handle>/` with `BOT_HIVE_HANDLE` set in your environment. You're on a feature branch named `<handle>-work`. Skip to step 4 (`./scripts/my-work.sh`) — steps 2 and 3 are already done for you.
+
+If you started yourself in a fresh terminal without the spawn flow, do all the steps below.
+
 ## 1. Read the protocol
 
 - `AGENTS.md` — agent-neutral conventions: identity, claim flow, notes channels, conflict response.

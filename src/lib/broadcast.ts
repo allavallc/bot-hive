@@ -17,17 +17,6 @@ export type BroadcastEvent =
       kind: "approved" | "rejected";
       actor: string;
       message?: string;
-    }
-  | {
-      // HV-090: soft-fence claim signal. Bot POSTed a claim; the platform
-      // recorded it in active_claims; broadcasting so the swarm panel and
-      // other bots' polling clients see it within ~1s without waiting on
-      // the eventual Git commit that will canonicalize the move.
-      type: "claim";
-      projectId: string;
-      hvId: string;
-      handle: string;
-      expiresAt: string;
     };
 
 type Subscriber = (event: BroadcastEvent) => void;

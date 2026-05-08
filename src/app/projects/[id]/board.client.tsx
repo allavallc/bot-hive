@@ -527,6 +527,15 @@ function Card({
               </span>
             )}
             {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
+            {fm.Turns && Number.parseInt(fm.Turns, 10) > 0 && (
+              <span
+                className={styles.badge}
+                data-turns={Number.parseInt(fm.Turns, 10) > 3 ? "high" : "normal"}
+                title={`${fm.Turns} reject cycle${fm.Turns === "1" ? "" : "s"}`}
+              >
+                ↺{fm.Turns}
+              </span>
+            )}
           </span>
         </span>
         {pendingTransition && (
