@@ -34,9 +34,12 @@ function commandFor(platform: Platform, handle: string): string {
   const branch = `${handle}-work`;
   const worktreeDir = `worktrees/${handle}`;
   if (platform === "windows") {
+    // Escape the inner semicolon as \; so wt.exe passes it through to
+    // PowerShell instead of interpreting it as a wt.exe command separator.
+    // (https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments)
     return [
       `git worktree add ${worktreeDir} -b ${branch}`,
-      `wt.exe new-tab -d "${worktreeDir}" pwsh -NoExit -Command "$env:BOT_HIVE_HANDLE='${handle}'; claude"`,
+      `wt.exe new-tab -d "${worktreeDir}" pwsh -NoExit -Command "$env:BOT_HIVE_HANDLE='${handle}'\\; claude"`,
     ].join("; ");
   }
   if (platform === "mac") {
