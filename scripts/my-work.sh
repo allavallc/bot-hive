@@ -8,28 +8,49 @@
 #   4. Recent swarm activity from hive/events/*.log
 #   5. Open backlog tickets you could DAG-walk to (filtered by FS Status)
 #
-# Requires: BOT_HIVE_HANDLE env var.
+# Reads identity from .bot-hive-identity (ADR-003), or falls back to
+# BOT_HIVE_HANDLE for transitional compatibility.
 
 set -euo pipefail
 
-if [ -z "${BOT_HIVE_HANDLE:-}" ]; then
-  echo "error: BOT_HIVE_HANDLE not set." >&2
+# Resolve bot identity. Prefer .bot-hive-identity in the worktree.
+BOT_HIVE_COLONY=""
+BOT_HIVE_HANDLE_RESOLVED=""
+if [ -f .bot-hive-identity ]; then
+  while IFS='=' read -r key value; do
+    case "$key" in
+      colony) BOT_HIVE_COLONY="$value" ;;
+      handle) BOT_HIVE_HANDLE_RESOLVED="$value" ;;
+    esac
+  done < .bot-hive-identity
+fi
+HANDLE="${BOT_HIVE_HANDLE_RESOLVED:-${BOT_HIVE_HANDLE:-}}"
+
+if [ -z "$HANDLE" ]; then
+  echo "error: bot identity not found (no .bot-hive-identity, no BOT_HIVE_HANDLE)." >&2
   exit 2
 fi
-
-HANDLE="$BOT_HIVE_HANDLE"
+# Colony defaults to handle for legacy single-colony state.
+COLONY="${BOT_HIVE_COLONY:-$HANDLE}"
+ACTOR="${COLONY}.${HANDLE}"
 
 # Mandatory pre-action pull.
 git pull --rebase origin main >/dev/null
 
-echo "=== you are: $HANDLE ==="
+echo "=== you are: $ACTOR ==="
+
+# Assigned-to matcher: the field can carry either the legacy bare handle
+# or the new <colony>.<handle> form (ADR-003). Match both for now.
+assigned_to_me() {
+  grep -qE "^- \*\*Assigned to\*\*: (${HANDLE}|${COLONY}\.${HANDLE})\$" "$1"
+}
 
 echo
 echo "=== your rejected work (claim before any new ticket) ==="
 REJECTED_FOUND=0
 for f in hive/in-progress/*.md; do
   [ -f "$f" ] || continue
-  if grep -q "^- \*\*Assigned to\*\*: $HANDLE" "$f" && grep -q "^- \*\*Rejected by\*\*: \S" "$f"; then
+  if assigned_to_me "$f" && grep -q "^- \*\*Rejected by\*\*: \S" "$f"; then
     HV=$(basename "$f" | sed 's/-[0-9]*\.md$//')
     REASON=$(grep "^- \*\*Rejection reason\*\*:" "$f" | sed 's/^- \*\*Rejection reason\*\*: //')
     echo "  $HV — rejected: $REASON"
@@ -43,7 +64,7 @@ echo "=== your in-progress (not rejected) ==="
 INPROG_FOUND=0
 for f in hive/in-progress/*.md; do
   [ -f "$f" ] || continue
-  if grep -q "^- \*\*Assigned to\*\*: $HANDLE" "$f" && ! grep -q "^- \*\*Rejected by\*\*: \S" "$f"; then
+  if assigned_to_me "$f" && ! grep -q "^- \*\*Rejected by\*\*: \S" "$f"; then
     HV=$(basename "$f" | sed 's/-[0-9]*\.md$//')
     TITLE=$(head -1 "$f" | sed 's/^# \[.*\] //')
     echo "  $HV — $TITLE"
@@ -62,7 +83,7 @@ if [ -d hive/notes-to-bots ]; then
     TS=$(echo "$line" | cut -f1)
     MSG=$(echo "$line" | cut -f2-)
     [ "$TS" \< "$CUTOFF" ] && continue
-    if echo "$MSG" | grep -qE "@${HANDLE}\b|@swarm\b"; then
+    if echo "$MSG" | grep -qE "@${HANDLE}\b|@${COLONY}\.${HANDLE}\b|@swarm\b"; then
       AUTHOR=$(echo "$line" | sed -n 's|.*FROM://\(.*\)|\1|p')
       echo "  [$TS] $MSG"
       NOTES_FOUND=1
@@ -95,8 +116,10 @@ for f in hive/backlog/*.md; do
   if [ -n "$FS" ] && [ -f "hive/feature-sets/${FS}.md" ]; then
     FS_STATUS=$(grep "^\*\*Status\*\*:" "hive/feature-sets/${FS}.md" | sed 's/^\*\*Status\*\*: //' | awk '{print $1}')
     [ "$FS_STATUS" = "active" ] || continue
+    # ADR-003: FS Owner is now a colony name, not a bot handle. A bot's
+    # colony can pick from any FS owned by that colony, or unowned FSs.
     FS_OWNER=$(grep "^\*\*Owner\*\*:" "hive/feature-sets/${FS}.md" | sed 's/^\*\*Owner\*\*://' | tr -d '[:space:]')
-    if [ -n "$FS_OWNER" ] && [ "$FS_OWNER" != "$HANDLE" ]; then
+    if [ -n "$FS_OWNER" ] && [ "$FS_OWNER" != "$COLONY" ]; then
       continue
     fi
   fi
