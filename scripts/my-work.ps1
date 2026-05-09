@@ -1,4 +1,4 @@
-# scripts/my-work.ps1 — Windows PowerShell version of the bot session-start helper.
+# scripts/my-work.ps1 - Windows PowerShell version of the bot session-start helper.
 # See scripts/my-work.sh for the full description.
 
 [CmdletBinding()]
@@ -17,7 +17,7 @@ git pull --rebase origin main | Out-Null
 
 Write-Host "=== you are: $handle ==="
 
-# Section 1 — your own rejected work
+# Section 1 - your own rejected work
 Write-Host ""
 Write-Host "=== your rejected work (claim before any new ticket) ==="
 $rejected = @()
@@ -27,12 +27,12 @@ Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyConti
         $content -match "(?m)^- \*\*Rejected by\*\*:\s*\S") {
         $hv = $_.BaseName -replace '-\d+$', ''
         $reason = if ($content -match "(?m)^- \*\*Rejection reason\*\*:\s*(.+)$") { $Matches[1].Trim() } else { "" }
-        $rejected += "  $hv — rejected: $reason"
+        $rejected += "  $hv - rejected: $reason"
     }
 }
 if ($rejected.Count -eq 0) { Write-Host "  (none)" } else { $rejected | ForEach-Object { Write-Host $_ } }
 
-# Section 2 — in-progress (not rejected)
+# Section 2 - in-progress (not rejected)
 Write-Host ""
 Write-Host "=== your in-progress (not rejected) ==="
 $inprog = @()
@@ -42,12 +42,12 @@ Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyConti
         -not ($content -match "(?m)^- \*\*Rejected by\*\*:\s*\S")) {
         $hv = $_.BaseName -replace '-\d+$', ''
         $title = (Get-Content $_.FullName -TotalCount 1) -replace '^# \[.*\] ', ''
-        $inprog += "  $hv — $title"
+        $inprog += "  $hv - $title"
     }
 }
 if ($inprog.Count -eq 0) { Write-Host "  (none)" } else { $inprog | ForEach-Object { Write-Host $_ } }
 
-# Section 3 — notes addressed to you
+# Section 3 - notes addressed to you
 Write-Host ""
 Write-Host "=== notes addressed to you (last 24h) ==="
 $cutoff = (Get-Date).ToUniversalTime().AddHours(-24)
@@ -70,7 +70,7 @@ if (Test-Path "hive/notes-to-bots") {
 }
 if ($notes.Count -eq 0) { Write-Host "  (none)" } else { $notes | ForEach-Object { Write-Host $_ } }
 
-# Section 4 — recent swarm activity
+# Section 4 - recent swarm activity
 Write-Host ""
 Write-Host "=== recent swarm activity (last 50 events) ==="
 if (Test-Path "hive/events") {
@@ -82,7 +82,7 @@ if (Test-Path "hive/events") {
     Write-Host "  (no events yet)"
 }
 
-# Section 5 — available backlog
+# Section 5 - available backlog
 Write-Host ""
 Write-Host "=== available backlog (DAG-walk leaves, FS-active only) ==="
 $leaves = @()
@@ -120,10 +120,10 @@ Get-ChildItem -Path "hive/backlog" -Filter "*.md" -ErrorAction SilentlyContinue 
         }
     }
 
-    $leaves += "  $hv — $title"
+    $leaves += "  $hv - $title"
 }
 if ($leaves.Count -eq 0) {
-    Write-Host "  (none — all blocked, claimed, or in non-active FSs)"
+    Write-Host "  (none - all blocked, claimed, or in non-active FSs)"
 } else {
     $leaves | ForEach-Object { Write-Host $_ }
 }

@@ -1,4 +1,4 @@
-# Stale-claim reclaim (HV-066) — PowerShell variant.
+# Stale-claim reclaim (HV-066) - PowerShell variant.
 #
 # Usage:
 #   .\scripts\reclaim-stale-claims.ps1            # dry-run; lists stale claims
@@ -90,7 +90,7 @@ $summary = ($stale | ForEach-Object { "- $($_.Id) (last touched $($_.LastTouched
 git commit -m "hive: reclaim stale claims (HV-066 cron)" -m $summary
 git push -u origin $branch
 
-$prTitle = "hive: reclaim $($stale.Count) stale claim(s) — HV-066 cron"
+$prTitle = "hive: reclaim $($stale.Count) stale claim(s) - HV-066 cron"
 $prBody = "## Summary`n`nReclaim cron found stale in-progress tickets and returned them to backlog/:`n`n$summary`n`nPer the 2h Last-touched rule (HIVE.md). See HV-066 for the convention."
 gh pr create --title $prTitle --body $prBody
 if ($LASTEXITCODE -eq 0) {

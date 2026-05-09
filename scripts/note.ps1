@@ -1,4 +1,4 @@
-# scripts/note.ps1 — Windows PowerShell version of the bot note helper.
+# scripts/note.ps1 - Windows PowerShell version of the bot note helper.
 # See scripts/note.sh for the canonical flow this mirrors.
 
 [CmdletBinding()]
