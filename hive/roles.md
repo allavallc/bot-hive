@@ -36,16 +36,22 @@ The PM bot is the highest-tier role and **sheds responsibilities as more bots ar
 
 ### How a bot determines its role
 
-1. On session start (or after a peer joins/leaves), count active bots in the colony.
-2. A bot is **active** if `hive/events/<handle>.log` exists and has a recent entry (within the stale-claim threshold, currently 2 hours per HV-089).
-3. Apply the table above. The bot's position is determined by how recent its first claim/presence event is — earlier = higher tier.
+Roles are assigned **within a colony**, not across the whole hive. Each colony does its own consolidation calculation independently — the user's colony having one bot doesn't affect Tony's colony's role assignment.
+
+1. On session start (or after a peer joins/leaves), read `.bot-hive-identity` to know which colony you belong to.
+2. Count active bots **in your colony**. A bot is active if `hive/events/<colony>.<handle>.log` exists and has a recent entry (within the stale-claim threshold, currently 2 hours per HV-089).
+3. Apply the table above. The bot's position is determined by how recent its first claim/presence event is — earlier = higher tier within the colony.
 4. Read the rubric file(s) for the role(s) you're now responsible for.
 
 ### Mid-session role changes
 
-If a peer joins the colony, the bot's role can transition mid-session. **Finish the current task under the existing role context, then apply the new rule on the next claim.** Matches the "finish-current, don't abandon" pattern from the FS-Owner reassignment rule (HV-093).
+If a peer joins your colony, the bot's role can transition mid-session. **Finish the current task under the existing role context, then apply the new rule on the next claim.** Matches the "finish-current, don't abandon" pattern from the FS-Owner reassignment rule (HV-093).
 
-If a peer goes stale (no events for >2h), the bot may pick up the responsibilities the stale peer was covering — same logic as the stale-claim watchdog.
+If a peer in your colony goes stale (no events for >2h), the bot may pick up the responsibilities the stale peer was covering — same logic as the stale-claim watchdog.
+
+### Colony-level FS ownership and the cascade rule
+
+Roles operate within colonies; **claiming work** also operates at the colony level via the FS claim cascade (see `hive/HIVE.md` "Hive ↔ colony ↔ bot hierarchy"). A bot can claim a ticket only if its colony has claimed the ticket's FS — or the ticket has no FS at all (free-for-all). FS claims are recorded in the `Owner:` field on each FS file (set to the colony's GitHub login). 48-hour dormancy releases an FS claim.
 
 ---
 
@@ -53,9 +59,16 @@ If a peer goes stale (no events for >2h), the bot may pick up the responsibiliti
 
 Coder/tester bots can **suggest** new tickets or priority changes via the notes channel. They do not file tickets directly.
 
-Mechanism: write a note tagged `@<pm-handle>` (or `@swarm` if the colony has only one PM-bearing bot). PM picks up suggestions on session start, decides whether to file or escalate to the human.
+Mechanism: write a note tagged `@<colony>.<pm-handle>` (e.g., `@allavallc.kestrel-pm`). The qualifier is required — never just `@pm`. PM picks up suggestions on session start, applies the colony's `always_ask` policy:
 
-Latency: PM-only review pass on session start, typically once per work cycle. For urgent suggestions, ping the human directly via `@<human-handle>` in the same notes channel.
+- **`always_ask = true` (default)**: PM creates a suggestion entry in the panel inbox. Human approves/rejects per question. On approve, PM files the ticket. On reject, PM writes a reason note back to the suggesting bot.
+- **`always_ask = false` (future)**: PM applies its rubric (`hive/skills/pm.md`) to decide whether to auto-file or escalate.
+
+The `always_ask` flag is per-colony (not per-user). Two humans on the same project can have different policies.
+
+Latency: PM-only review pass on session start, typically once per work cycle. For urgent suggestions, ping the human directly via `@<colony>.<human-handle>` in the same notes channel.
+
+Decision record: [`hive/decisions/ADR-004-pm-suggestions-inbox.md`](./decisions/ADR-004-pm-suggestions-inbox.md).
 
 ---
 

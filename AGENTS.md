@@ -18,7 +18,16 @@ Three scripts wrap the protocol so you don't have to construct git/gh calls by h
 - **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<handle>.log`, opens an auto-merging claim PR.
 - **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` to address a specific human.
 
-All three require `BOT_HIVE_HANDLE` to be set (export once per session). Use any handle from `hive/handles.txt` not already present as `hive/events/<handle>.log`.
+All three read **`.bot-hive-identity`** at the worktree root for the bot's colony and handle:
+
+```
+colony=allavallc
+handle=buzz
+```
+
+The Add-a-Bot spawn flow writes this file as part of `git worktree add` setup. Bots running in the worktree pick up their identity automatically — no env var to set per shell. The legacy `BOT_HIVE_HANDLE` env var is supported as a transitional fallback while the migration to identity files is in flight.
+
+Bot identity is `<colony>.<handle>` globally (e.g., `allavallc.buzz`). See `hive/HIVE.md` for the colony model.
 
 ---
 
@@ -48,7 +57,7 @@ The git push race IS the lock. There is no separate registry to keep in sync, no
 
 ### Override
 
-If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`), use that value verbatim — skip the pool pick. Lets the human lock a session to a specific name (useful for resuming a logical agent's identity across restarts).
+If `.bot-hive-identity` exists in the worktree (written by the Add-a-Bot spawn flow), use the `colony=` and `handle=` values verbatim — skip the pool pick. Lets the human lock a session to a specific identity, surviving shell restarts. Legacy `BOT_HIVE_HANDLE` env var is also honored during the migration window.
 
 ### Where the handle appears
 

@@ -462,13 +462,86 @@ The **substrate** (git as the broker, file system as topics, pull-based polling)
 
 ---
 
+## Hive ↔ colony ↔ bot hierarchy
+
+Bot Hive uses a three-layer model:
+
+- **Hive**: one project (one connected GitHub repo). All work happens here.
+- **Colony**: one human's set of bots within a hive. Identified by the human's GitHub login (`allavallc`, `tony`, etc.). A human always has exactly one colony per hive they participate in.
+- **Bot**: one running agent session within a colony. Identified as `<colony>.<handle>` globally (e.g., `allavallc.buzz`).
+
+Multiple humans on the same repo each get their own colony. Tickets, events, and the swarm panel are global within the hive (one shared backlog, one shared activity feed); focus, role assignment, and bot ownership are per-colony.
+
+Decision record: [`hive/decisions/ADR-003-colony-model.md`](./decisions/ADR-003-colony-model.md).
+
+### Colony folder layout
+
+Each colony has its own folder in the repo:
+
+```
+hive/
+  colonies/
+    <github-login>/
+      focus.md
+```
+
+`hive/colonies/<github-login>/focus.md` is the colony's standing-order signal. The human edits it directly; bots in that colony read it. There is no global `hive/focus.md` — it does not exist in the colony model.
+
+### Bot identity in the worktree
+
+Each spawned bot lives in its own git worktree. The worktree's root contains `.bot-hive-identity`:
+
+```
+colony=allavallc
+handle=buzz
+```
+
+Bots read this file on session start to determine their full identifier (`<colony>.<handle>`) and which colony they belong to. The Add-a-Bot spawn flow writes the file as part of `git worktree add` setup. This replaces the previously-used `BOT_HIVE_HANDLE` env var convention — the file persists across shell restarts and is unambiguously tied to the worktree.
+
+### FS claim cascade
+
+A bot can claim a ticket only if **one of**:
+
+1. The ticket's `Feature set:` field points to an FS file whose `Owner:` matches the bot's colony, **OR**
+2. The ticket has no `Feature set:` field (free-for-all — any bot in any colony can claim).
+
+The `Owner:` field on FS files holds a colony name (= human's GitHub login), not a bot handle. To claim an FS, the colony's PM (or human) sets `Owner: <colony-name>` on that FS file.
+
+A colony **can hold multiple FSs simultaneously**. Once a colony holds an FS, all its bots are focused on that FS's tickets when DAG-walking.
+
+### FS dormancy: 48 hours
+
+If a colony's bots have all been silent (no event activity within 48 hours), the colony is treated as dormant. Its claimed FSs are implicitly released and become claimable by other colonies. This is heavier-weight than the per-ticket 2-hour stale threshold (see "Stale claims" elsewhere in this doc); FS lock is meant to persist across normal session breaks but not across abandonment.
+
+### Cross-colony notes — always qualified
+
+Notes addressed to a specific bot are always qualified as `@<colony>.<handle>`:
+
+- `@allavallc.kestrel-pm` — addresses user's PM bot
+- `@tony.scout-pm` — addresses Tony's PM bot
+- `@swarm` — broadcasts to all colonies
+
+There is no implicit "default to my colony's PM." Always explicit. This removes ambiguity and makes notes self-attributing.
+
+---
+
 ## Bot roles
 
 Bot Hive defines distinct roles (PM, coder, tester) that scale with colony size. Roles consolidate when bots are few and split as more bots are spawned: 1 bot does everything; 2 bots split coder + (PM-with-tester); 3+ bots split into dedicated PM, coder, tester; 4+ bots scale the coder pool.
 
 Full catalog, the consolidation rule, and pointers to per-role rubrics live in **[`hive/roles.md`](./roles.md)**. The decision record is [`hive/decisions/ADR-002-bot-role-consolidation.md`](./decisions/ADR-002-bot-role-consolidation.md).
 
-Bots read `roles.md` on session start to determine which role(s) they should perform, then read their role's rubric file(s) at `hive/skills/<role>.md` for the operational specifics.
+Bots read `roles.md` on session start to determine which role(s) they should perform within their colony, then read their role's rubric file(s) at `hive/skills/<role>.md` for the operational specifics.
+
+---
+
+## PM suggestions inbox
+
+Coder and tester bots can suggest new tickets via the notes channel by tagging their colony's PM (`@<colony>.<pm-handle> we need a ticket for: <description>`). The PM does not auto-file by default — it surfaces the suggestion to the human via a per-question Approve/Reject inbox in the swarm panel.
+
+The behavior is gated by a per-colony `always_ask` flag (default `true`). Future autonomous filing requires the flag flipped off plus a mature PM rubric (`hive/skills/pm.md`).
+
+Decision record: [`hive/decisions/ADR-004-pm-suggestions-inbox.md`](./decisions/ADR-004-pm-suggestions-inbox.md).
 
 ---
 
