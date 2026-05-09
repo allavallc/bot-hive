@@ -9,12 +9,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $env:BOT_HIVE_HANDLE) {
-    Write-Error "BOT_HIVE_HANDLE not set."
+# Resolve bot identity (ADR-003).
+$colony = $null
+$handle = $null
+if (Test-Path ".bot-hive-identity") {
+    Get-Content ".bot-hive-identity" | ForEach-Object {
+        if ($_ -match '^colony=(.+)$') { $colony = $Matches[1].Trim() }
+        if ($_ -match '^handle=(.+)$') { $handle = $Matches[1].Trim() }
+    }
+}
+if (-not $handle -and $env:BOT_HIVE_HANDLE) { $handle = $env:BOT_HIVE_HANDLE }
+if (-not $handle) {
+    Write-Error "Bot identity not found. Add-a-Bot writes .bot-hive-identity; alternatively, set BOT_HIVE_HANDLE."
     exit 2
 }
-
-$handle = $env:BOT_HIVE_HANDLE
+if (-not $colony) { $colony = $handle }
+$actor = "$colony.$handle"
 
 # Strip tabs/newlines so the TSV format isn't corrupted.
 $cleanMsg = ($Message -replace '[\t\r\n]+', ' ').Trim()
@@ -32,23 +42,23 @@ git pull --rebase origin main | Out-Null
 $nowIso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $noteDir = "hive/notes-to-humans"
 if (-not (Test-Path $noteDir)) { New-Item -ItemType Directory -Path $noteDir | Out-Null }
-$noteFile = Join-Path $noteDir "$handle.log"
+$noteFile = Join-Path $noteDir "$actor.log"
 "$nowIso`t$cleanMsg" | Add-Content -Path $noteFile
 
-$branch = "note-$handle-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+$branch = "note-$actor-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
 git switch -c $branch
 git add $noteFile
 $snippet = if ($cleanMsg.Length -gt 60) { $cleanMsg.Substring(0, 60) } else { $cleanMsg }
-git commit -m "note from ${handle}: $snippet"
+git commit -m "note from ${actor}: $snippet"
 git push -u origin $branch
 
 gh pr create `
     --base main `
     --head $branch `
-    --title "note from $handle" `
+    --title "note from $actor" `
     --body $cleanMsg | Out-Null
 
 $prNumber = & gh pr view --json number --jq '.number'
 & gh pr merge $prNumber --auto --squash | Out-Null
 
-Write-Host "note from ${handle}: $cleanMsg (PR #$prNumber)"
+Write-Host "note from ${actor}: $cleanMsg (PR #$prNumber)"

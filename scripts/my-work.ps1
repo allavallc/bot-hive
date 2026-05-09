@@ -6,16 +6,31 @@ param()
 
 $ErrorActionPreference = "Stop"
 
-if (-not $env:BOT_HIVE_HANDLE) {
-    Write-Error "BOT_HIVE_HANDLE not set."
+# Resolve bot identity (ADR-003). Prefer .bot-hive-identity in the
+# worktree; fall back to BOT_HIVE_HANDLE for backward compatibility.
+$colony = $null
+$handle = $null
+if (Test-Path ".bot-hive-identity") {
+    Get-Content ".bot-hive-identity" | ForEach-Object {
+        if ($_ -match '^colony=(.+)$') { $colony = $Matches[1].Trim() }
+        if ($_ -match '^handle=(.+)$') { $handle = $Matches[1].Trim() }
+    }
+}
+if (-not $handle -and $env:BOT_HIVE_HANDLE) { $handle = $env:BOT_HIVE_HANDLE }
+if (-not $handle) {
+    Write-Error "Bot identity not found. Add-a-Bot writes .bot-hive-identity; alternatively, set BOT_HIVE_HANDLE."
     exit 2
 }
-
-$handle = $env:BOT_HIVE_HANDLE
+if (-not $colony) { $colony = $handle }
+$actor = "$colony.$handle"
 
 git pull --rebase origin main | Out-Null
 
-Write-Host "=== you are: $handle ==="
+Write-Host "=== you are: $actor ==="
+
+# Assigned-to matcher: field can carry legacy bare handle or new
+# <colony>.<handle> form (ADR-003). Match both for now.
+$assignedRe = "^- \*\*Assigned to\*\*: ($([regex]::Escape($handle))|$([regex]::Escape($actor)))\s*$"
 
 # Section 1 - your own rejected work
 Write-Host ""
@@ -23,7 +38,7 @@ Write-Host "=== your rejected work (claim before any new ticket) ==="
 $rejected = @()
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
-    if ($content -match "(?m)^- \*\*Assigned to\*\*: $([regex]::Escape($handle))" -and
+    if ($content -match "(?m)$assignedRe" -and
         $content -match "(?m)^- \*\*Rejected by\*\*:\s*\S") {
         $hv = $_.BaseName -replace '-\d+$', ''
         $reason = if ($content -match "(?m)^- \*\*Rejection reason\*\*:\s*(.+)$") { $Matches[1].Trim() } else { "" }
@@ -38,7 +53,7 @@ Write-Host "=== your in-progress (not rejected) ==="
 $inprog = @()
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
-    if ($content -match "(?m)^- \*\*Assigned to\*\*: $([regex]::Escape($handle))" -and
+    if ($content -match "(?m)$assignedRe" -and
         -not ($content -match "(?m)^- \*\*Rejected by\*\*:\s*\S")) {
         $hv = $_.BaseName -replace '-\d+$', ''
         $title = (Get-Content $_.FullName -TotalCount 1) -replace '^# \[.*\] ', ''
@@ -61,7 +76,7 @@ if (Test-Path "hive/notes-to-bots") {
                 $msg = $Matches[2]
                 try { $tsDate = [datetime]::Parse($ts).ToUniversalTime() } catch { return }
                 if ($tsDate -lt $cutoff) { return }
-                if ($msg -match "@$([regex]::Escape($handle))\b" -or $msg -match '@swarm\b') {
+                if ($msg -match "@$([regex]::Escape($handle))\b" -or $msg -match "@$([regex]::Escape($actor))\b" -or $msg -match '@swarm\b') {
                     $notes += "  [$ts from $author] $msg"
                 }
             }
@@ -99,8 +114,9 @@ Get-ChildItem -Path "hive/backlog" -Filter "*.md" -ErrorAction SilentlyContinue 
             if ($Matches[1] -ne "active") { return }
         }
         if ($fsContent -match "(?m)^\*\*Owner\*\*:\s*(\S+)") {
+            # ADR-003: FS Owner is now a colony name, not a bot handle.
             $fsOwner = $Matches[1].Trim()
-            if ($fsOwner -and $fsOwner -ne $handle) { return }
+            if ($fsOwner -and $fsOwner -ne $colony) { return }
         }
     }
 

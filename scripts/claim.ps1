@@ -11,8 +11,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $env:BOT_HIVE_HANDLE) {
-    Write-Error "BOT_HIVE_HANDLE not set. Pick a handle from hive/handles.txt and set it before claiming."
+# Resolve bot identity (ADR-003). Prefer .bot-hive-identity in the
+# worktree; fall back to env var for backward compatibility.
+$colony = $null
+$handle = $null
+if (Test-Path ".bot-hive-identity") {
+    Get-Content ".bot-hive-identity" | ForEach-Object {
+        if ($_ -match '^colony=(.+)$') { $colony = $Matches[1].Trim() }
+        if ($_ -match '^handle=(.+)$') { $handle = $Matches[1].Trim() }
+    }
+}
+if (-not $handle -and $env:BOT_HIVE_HANDLE) { $handle = $env:BOT_HIVE_HANDLE }
+
+if (-not $handle) {
+    Write-Error "Bot identity not found. The Add-a-Bot spawn flow writes .bot-hive-identity; alternatively, set BOT_HIVE_HANDLE."
     exit 2
 }
 
@@ -20,8 +32,6 @@ if ($HvId -notmatch '^HV-\d+$') {
     Write-Error "Ticket id must look like HV-<number>; got '$HvId'"
     exit 2
 }
-
-$handle = $env:BOT_HIVE_HANDLE
 
 # Fresh state.
 git pull --rebase origin main | Out-Null

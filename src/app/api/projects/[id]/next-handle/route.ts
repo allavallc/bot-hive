@@ -99,9 +99,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const takenSet = new Set(takenHandles);
   const next = pickHandle(pool, takenSet);
 
+  // Colony name = the human's GitHub login (per ADR-003). Better Auth's
+  // session.user.name is the GitHub login when the user signed in via
+  // the GitHub OAuth provider, which is Bot Hive's only supported auth.
+  const colony = session.user.name || "unknown";
+
   return NextResponse.json({
     nextHandle: next,
     activeHandles: takenHandles.sort(),
     poolSize: pool.length,
+    colony,
   });
 }

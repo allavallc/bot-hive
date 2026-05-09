@@ -18,6 +18,7 @@ type NextHandleResp = {
   nextHandle: string;
   activeHandles: string[];
   poolSize: number;
+  colony: string;
 };
 
 type Platform = "windows" | "mac" | "linux";
@@ -34,43 +35,43 @@ function detectPlatform(): Platform {
 // PowerShell's variable substitution happens at every layer and ate
 // $env:BOT_HIVE_HANDLE before it reached the inner shell. Three pastes,
 // each in one shell, no escaping interaction. Boring but bulletproof.
+//
+// ADR-003: Step 1 also writes .bot-hive-identity in the worktree so the
+// bot's identity (colony + handle) survives shell restarts and isn't tied
+// to env vars. Step 2 simplifies to just `claude` — the file is there.
 
 type StepCommand = { command: string; runIn: string };
 
-function step1Command(platform: Platform, handle: string): StepCommand {
+function step1Command(platform: Platform, handle: string, colony: string): StepCommand {
   const branch = `${handle}-work`;
   const worktreeDir = `worktrees/${handle}`;
   if (platform === "windows") {
     // Idempotent: clear any leftover worktree dir, then -B (force-reset
-    // branch). Open a new terminal tab IN the worktree dir — no inner
-    // shell command, just a fresh prompt. wt.exe with -d alone has no
-    // escaping issues.
+    // branch). Write .bot-hive-identity. Open a new terminal tab in the
+    // worktree dir — no inner shell command, just a fresh prompt. wt.exe
+    // with -d alone has no escaping issues.
     return {
-      command: `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }; git worktree add ${worktreeDir} -B ${branch}; wt.exe new-tab -d "${worktreeDir}"`,
+      command: `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }; git worktree add ${worktreeDir} -B ${branch}; Set-Content -Path ${worktreeDir}/.bot-hive-identity -Value "colony=${colony}\`nhandle=${handle}"; wt.exe new-tab -d "${worktreeDir}"`,
       runIn: "your main bot-hive terminal",
     };
   }
   if (platform === "mac") {
     return {
-      command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && osascript -e 'tell app "Terminal" to do script "cd ${worktreeDir}"'`,
+      command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && printf 'colony=${colony}\\nhandle=${handle}\\n' > ${worktreeDir}/.bot-hive-identity && osascript -e 'tell app "Terminal" to do script "cd ${worktreeDir}"'`,
       runIn: "your main bot-hive terminal",
     };
   }
   return {
-    command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch}\n# Then open a new terminal manually in ${worktreeDir}`,
+    command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && printf 'colony=${colony}\\nhandle=${handle}\\n' > ${worktreeDir}/.bot-hive-identity\n# Then open a new terminal manually in ${worktreeDir}`,
     runIn: "your main bot-hive terminal",
   };
 }
 
-function step2Command(platform: Platform, handle: string): StepCommand {
-  if (platform === "windows") {
-    return {
-      command: `$env:BOT_HIVE_HANDLE = '${handle}'; claude`,
-      runIn: "the new terminal that just opened",
-    };
-  }
+function step2Command(_platform: Platform, _handle: string): StepCommand {
+  // ADR-003: identity file is already in the worktree from Step 1, so no
+  // env var to set. Just run claude.
   return {
-    command: `export BOT_HIVE_HANDLE=${handle} && claude`,
+    command: "claude",
     runIn: "the new terminal that just opened",
   };
 }
@@ -185,7 +186,7 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
                   </div>
 
                   {(() => {
-                    const s1 = step1Command(platform, data.nextHandle);
+                    const s1 = step1Command(platform, data.nextHandle, data.colony);
                     const s2 = step2Command(platform, data.nextHandle);
                     const s3 = "Read hive/bot-startup.md and tell me what you're going to work on.";
                     return (
