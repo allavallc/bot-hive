@@ -462,6 +462,16 @@ The **substrate** (git as the broker, file system as topics, pull-based polling)
 
 ---
 
+## Bot roles
+
+Bot Hive defines distinct roles (PM, coder, tester) that scale with colony size. Roles consolidate when bots are few and split as more bots are spawned: 1 bot does everything; 2 bots split coder + (PM-with-tester); 3+ bots split into dedicated PM, coder, tester; 4+ bots scale the coder pool.
+
+Full catalog, the consolidation rule, and pointers to per-role rubrics live in **[`hive/roles.md`](./roles.md)**. The decision record is [`hive/decisions/ADR-002-bot-role-consolidation.md`](./decisions/ADR-002-bot-role-consolidation.md).
+
+Bots read `roles.md` on session start to determine which role(s) they should perform, then read their role's rubric file(s) at `hive/skills/<role>.md` for the operational specifics.
+
+---
+
 ## Bot identity
 
 Each bot session has a unique, human-readable handle so the audit trail and the live board can distinguish individual agents — even when two sessions run the same model **on the same machine**.
