@@ -13,6 +13,26 @@ The path from ideas → backlog is: humans + orchestrator discuss the idea, agre
 
 ## Format
 
-Plain markdown, no frontmatter required. Filename describes the topic (e.g. `swarm-kickoff.md`, `cross-colony-templates.md`). Keep each file short — one idea per file. If an idea grows multiple sub-questions, split into multiple files.
+**One file: `ideas.md`.** All live ideas live there as sections so you can scan them at once.
 
-If an idea matures into actual work, link from the new ticket / FS back to the originating idea file in the body, then delete the idea file. The ticket is the source of truth from then on.
+Each section follows this shape:
+
+```markdown
+## [YYYY-MM-DD] @<github-handle> — <one-line title>
+
+1-3 short paragraphs of context.
+
+**Open questions**
+- ...
+- ...
+
+**Status:** parking | discussing | ready-to-file
+```
+
+The date and handle attribute the idea so it persists across humans (e.g. another colony owner can see it was `@allavallc` who suggested it on a specific date).
+
+When an idea is promoted to a backlog ticket or feature-set, **delete its whole section from `ideas.md`**. The ticket / FS is the source of truth from that point on; the idea file holds only what's still in parking-lot state.
+
+## Future direction
+
+The DB-backed suggestions inbox (FS-025) will eventually absorb the formal-track ideas — see the entry in `ideas.md` for the proposal. When that lands, this folder stays as the casual parking lot for orchestrator-conversation captures, and the DB inbox becomes the addressable "idea #X" path.
