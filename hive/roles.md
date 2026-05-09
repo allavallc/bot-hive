@@ -10,7 +10,7 @@ This is the **operational doc** — what bots read when picking up their role on
 
 | Role | Owns | Does NOT do |
 |---|---|---|
-| **PM (product manager)** | Writes tickets and FSs. Sets `focus.md`. Triages coder/tester suggestions. Coordinates the team. | Doesn't write code (when other coders exist). Doesn't make strategic priority calls without the human's input. |
+| **PM (product manager)** | Writes tickets and FSs. Sets the colony's `focus.md` (`hive/colonies/<colony>/focus.md`). Triages coder/tester suggestions. Coordinates the team. | Doesn't write code (when other coders exist). Doesn't make strategic priority calls without the human's input. |
 | **Tester** | Reviews `in-review/` tickets against their "Done when." Approves or rejects with one specific reason citing the ticket. | Doesn't redesign work. Doesn't suggest style improvements. Doesn't write code. |
 | **Coder** | Claims `backlog/` tickets per DAG-walk. Writes the code, the tests, the docs needed to ship. | Doesn't write tickets (only suggests via notes). Doesn't review peers' work as a tester. |
 

@@ -117,16 +117,16 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 ### On every session start
 
 1. `git pull` (subscribe to durable state).
-2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
+2. Read `.bot-hive-identity` to get your colony, then read `hive/colonies/<colony>/focus.md` — that's your colony's standing order. (Empty / missing = "anything in backlog.")
 3. Read recent activity across all agents — `cat hive/events/*.log | sort | tail -50` — to see what's been happening.
 4. Auto-pick a handle (per the Identity section above). Announce it.
-5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
+5. Subscribe to the real-time signal stream for the project named in your colony's focus file (see "Real-time channel" below). Replay the last ~100 signals as context.
 6. **Scan `hive/in-progress/` for your own rejected work.** For each ticket where `Assigned to:` matches your handle AND `Rejected by:` is populated — that's pending rework you own. Resume it before claiming any new ticket. (See "Picking what to claim" below.)
 7. **Read notes addressed to you.** Scan `hive/notes-to-bots/*.log` for lines from the last 24h containing `@<your-agent-id>` or `@swarm`. Those are the human's direction — read them, surface them as priority context, factor them into ticket selection. To respond, append to your own `hive/notes-to-humans/<your-agent-id>.log` (TSV: `<ISO ts>\t<message>`). Use `@<human-handle>` to address a specific human; bare prose goes to anyone watching the panel.
 
 ### When the human says "do FS-X" or "work on HV-X"
 
-The agent they're chatting with **also writes that to `hive/focus.md`** so the other agents pick up the same intent on their next session start. The chat message is a hint; `focus.md` is the source of truth across agents.
+The agent they're chatting with **also writes that to `hive/colonies/<that-human's-colony>/focus.md`** so other agents in that colony pick up the same intent on their next session start. The chat message is a hint; the colony's focus file is the source of truth within the colony.
 
 ### Picking what to claim
 
@@ -147,7 +147,7 @@ If no such tickets exist, proceed to the DAG-walk.
 **DAG-walk** — once your own rejected work is clear:
 
 1. **`git pull --rebase` immediately before scanning.** Don't trust your session-start snapshot — main may have moved. Stale-clone claims are a real failure mode (a bot picked a ticket that had been routed to `not-doing/` 30 minutes earlier because they hadn't pulled).
-2. Read `focus.md`.
+2. Read your colony's focus file (`hive/colonies/<colony>/focus.md`).
 3. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
 4. Filter out:
    - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
@@ -231,7 +231,7 @@ A "hot file" is one that multiple parallel agents edit, where parallel PRs relia
 
 - `AGENTS.md`
 - `hive/HIVE.md`
-- `hive/focus.md`
+- `hive/colonies/<your-colony>/focus.md`
 - `tasks/lessons.md`
 - `render.yaml`
 - `package.json`
@@ -364,7 +364,7 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 
 **Append** an entry whenever you make a non-trivial design choice in an FS. "Non-trivial" = anything you'd debate in a senior code review; pure mechanical edits don't qualify.
 
-**Read** the relevant FS's section on session start, **after** `focus.md` and the merged event view. If `focus.md` names an FS, that FS's decisions are mandatory pre-reading.
+**Read** the relevant FS's section on session start, **after** your colony's focus file and the merged event view. If the focus file names an FS, that FS's decisions are mandatory pre-reading.
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
 
@@ -465,8 +465,8 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 ## Pointers
 
 - `hive/HIVE.md` — the format spec. Read this if you're touching the hive workflow itself.
-- `hive/focus.md` — current standing order from the human (one line).
-- `hive/events/` — per-actor event logs (one file per agent). Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
+- `hive/colonies/<colony>/focus.md` — current standing order from the human who owns this colony (one line). The colony comes from `.bot-hive-identity` in your worktree.
+- `hive/events/` — per-actor event logs, keyed by `<colony>.<handle>.log`. Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
 - `hive/notes-to-bots/` — humans' notes to bots (one file per human). Scan on session start for `@<your-agent-id>` or `@swarm` mentions.
 - `hive/notes-to-humans/` — bots' notes to humans (one file per bot). Append your own replies/questions/status updates here. Format: `<ISO ts>\t<message>`. **Subsumes** the legacy `hive/questions-for-human.md` channel — write here, not there.
 - `hive/feature-sets/` — current feature sets and their goals.

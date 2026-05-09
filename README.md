@@ -61,8 +61,8 @@ Bot Hive is built to be developed by multiple AI agent sessions (Claude, Codex, 
 - [`AGENTS.md`](./AGENTS.md) — **canonical project rules**: identity, commit flow, the swarm coordination protocol, conflict response. Agent-neutral; any AI tool reads this.
 - [`CLAUDE.md`](./CLAUDE.md) — Claude Code-specific shim that points to `AGENTS.md`. Other agents don't need it.
 - [`hive/HIVE.md`](./hive/HIVE.md) — the format spec, including the "Working in parallel" section that defines the protocol for any repo using the hive format.
-- `hive/focus.md` — current standing order from the human. Agents read this on every session start.
-- `hive/events/<actor>.log` — per-actor append-only event logs. Agents read the merged view (`cat hive/events/*.log | sort | tail -50`) on session start to catch lifecycle transitions.
+- `hive/colonies/<github-login>/focus.md` — per-colony standing order from the human who owns that colony. Each agent reads its own colony's focus file on session start (colony resolved from `.bot-hive-identity` in the worktree).
+- `hive/events/<colony>.<handle>.log` — per-actor append-only event logs, keyed by the qualified actor name. Agents read the merged view (`cat hive/events/*.log | sort | tail -50`) on session start to catch lifecycle transitions.
 - `hive/notes-to-bots/<human>.log` — humans' notes to bots (written via the swarm-panel composer in the live board UI).
 - `hive/notes-to-humans/<bot>.log` — bots' notes to humans (questions, status updates, blockers). Replaces the legacy `hive/questions-for-human.md`.
 
@@ -79,8 +79,8 @@ src/app/              App Router routes
 drizzle/              Generated SQL migrations + meta snapshots
 hive/                 Bot Hive's own dev tickets (uses the format on itself)
   HIVE.md             Workflow doc — ticket format, lifecycle, conventions
-  focus.md            Standing order from the human (one line)
-  events/             Per-actor lifecycle event logs (one file per agent)
+  colonies/           Per-colony state — colonies/<github-login>/focus.md is the standing order for that human's bots
+  events/             Per-actor lifecycle event logs, keyed by <colony>.<handle>.log
   notes-to-bots/      Humans' notes to bots (written via swarm panel composer)
   notes-to-humans/    Bots' notes to humans (questions, status, blockers)
   feature-sets/       FST-XXX feature-set rationale + ticket lists

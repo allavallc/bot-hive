@@ -180,9 +180,9 @@ The unified PR-and-CI flow is the cost of having branch protection enforce the r
 
 If a host doesn't have branch protection (e.g., a self-hosted setup, or a fork without the protection set up yet), the rules are advisory; bots SHOULD follow the same flow but the host won't enforce it.
 
-### `hive/focus.md` — alignment signal
+### `hive/colonies/<colony>/focus.md` — alignment signal (per colony)
 
-A one-line file the human edits to tell the swarm what to work on. Both bots read it on every session start and treat it as their working scope.
+A one-line file the human edits to tell their colony's bots what to work on. Each bot reads its own colony's focus file on every session start and treats it as the working scope. The colony comes from `.bot-hive-identity` in the bot's worktree (set by the Add-a-Bot spawn flow).
 
 ```
 current = feature-set-007
@@ -202,7 +202,7 @@ current = backlog
 
 (Empty string or missing file = "anything in backlog is fair game.")
 
-When the human says "do FS-007" in chat, the bot they're chatting with **also updates `focus.md`** so the other bot picks up the same intent on its next session start. The chat message is a hint; the file is the source of truth.
+When the human says "do FS-007" in chat, the bot they're chatting with **also updates `hive/colonies/<that-human's-colony>/focus.md`** so other bots in that colony pick up the same intent on their next session start. The chat message is a hint; the colony's focus file is the source of truth within the colony.
 
 ### Pre-claim ritual: pick up your own rejected work first
 
@@ -219,7 +219,7 @@ If no such tickets exist, proceed to the DAG-walk.
 Every bot, after the pre-claim ritual:
 
 1. **`git pull --rebase` immediately before scanning.** Don't trust the session-start snapshot — main may have moved. Pulling is cheap; working a stale snapshot is expensive (a real session-end failure mode: a bot picked a ticket that had been routed to `not-doing/` 30 minutes earlier because they hadn't pulled).
-2. Read `hive/focus.md`.
+2. Read your colony's focus file (`hive/colonies/<colony>/focus.md`).
 3. Collect every ticket in scope (the named FS, or named ticket, or all of `backlog/` if focus is empty).
 4. Filter out:
    - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
@@ -427,7 +427,7 @@ Entry format (compact ADR-style):
 **Reference:** <HV-XXX / PR #N>
 ```
 
-Append an entry on any non-trivial design choice — anything a senior reviewer would debate. Read the section on session start *after* `focus.md` and the merged event view. **Append-only** by convention: never edit or delete past entries.
+Append an entry on any non-trivial design choice — anything a senior reviewer would debate. Read the section on session start *after* your colony's focus file and the merged event view. **Append-only** by convention: never edit or delete past entries.
 
 ### Reporting status
 

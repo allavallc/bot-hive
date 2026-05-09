@@ -111,5 +111,5 @@ Then proceed per step 5.
 |---|---|
 | Protocol details | `AGENTS.md`, `hive/HIVE.md` |
 | Handle pool | `hive/handles.txt` |
-| Standing order from human | `hive/focus.md` |
+| Standing order from human | `hive/colonies/<your-colony>/focus.md` (colony from `.bot-hive-identity`) |
 | Lessons from past mistakes | `tasks/lessons.md` |
