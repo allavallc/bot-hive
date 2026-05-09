@@ -1,4 +1,4 @@
-# scripts/claim.ps1 — Windows PowerShell version of the bot claim helper.
+# scripts/claim.ps1 - Windows PowerShell version of the bot claim helper.
 # See scripts/claim.sh for the canonical flow this mirrors.
 
 [CmdletBinding()]
@@ -83,14 +83,14 @@ if (-not (Test-Path "hive/events")) { New-Item -ItemType Directory -Path "hive/e
 "$nowIso $HvId claim $handle" | Add-Content -Path "hive/events/$handle.log"
 
 git add hive/
-git commit -m "${HvId}: claim — $handle"
+git commit -m "${HvId}: claim - $handle"
 git push -u origin $branch
 
 gh pr create `
     --base main `
     --head $branch `
-    --title "${HvId}: claim — $handle" `
-    --body "Claim signal — moves $HvId from backlog/ to in-progress/. Subsequent commits on this branch carry the work."
+    --title "${HvId}: claim - $handle" `
+    --body "Claim signal - moves $HvId from backlog/ to in-progress/. Subsequent commits on this branch carry the work."
 
 $prNumber = & gh pr view --json number --jq '.number'
 & gh pr merge $prNumber --auto --squash | Out-Null
