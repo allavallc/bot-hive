@@ -41,7 +41,7 @@ Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyConti
     if ($content -match "(?m)$assignedRe" -and
         $content -match "(?m)^- \*\*Rejected by\*\*:\s*\S") {
         $hv = $_.BaseName -replace '-\d+$', ''
-        $reason = if ($content -match "(?m)^- \*\*Rejection reason\*\*:\s*(.+)$") { $Matches[1].Trim() } else { "" }
+        $reason = if ($content -match "(?m)^- \*\*Rejection reason\*\*:[ \t]*(.+)$") { $Matches[1].Trim() } else { "" }
         $rejected += "  $hv - rejected: $reason"
     }
 }
@@ -106,22 +106,25 @@ Get-ChildItem -Path "hive/backlog" -Filter "*.md" -ErrorAction SilentlyContinue 
     $hv = $_.BaseName -replace '-\d+$', ''
     $title = (Get-Content $_.FullName -TotalCount 1) -replace '^# \[.*\] ', ''
 
-    # Filter by FS status + Owner
-    $fs = if ($content -match "(?m)^- \*\*Feature set\*\*:\s*(\S+)") { $Matches[1] } else { "" }
+    # Filter by FS status + Owner. Use [ \t]* (not \s*) so the regex
+    # never crosses line boundaries — \s eats CR/LF and would capture
+    # the next field's content when this field is empty.
+    $fs = if ($content -match "(?m)^- \*\*Feature set\*\*:[ \t]*(\S+)") { $Matches[1] } else { "" }
     if ($fs -and (Test-Path "hive/feature-sets/$fs.md")) {
         $fsContent = Get-Content "hive/feature-sets/$fs.md" -Raw
-        if ($fsContent -match "(?m)^\*\*Status\*\*:\s*(\w+)") {
+        if ($fsContent -match "(?m)^\*\*Status\*\*:[ \t]*(\w+)") {
             if ($Matches[1] -ne "active") { return }
         }
-        if ($fsContent -match "(?m)^\*\*Owner\*\*:\s*(\S+)") {
+        if ($fsContent -match "(?m)^\*\*Owner\*\*:[ \t]*(\S+)") {
             # ADR-003: FS Owner is now a colony name, not a bot handle.
             $fsOwner = $Matches[1].Trim()
             if ($fsOwner -and $fsOwner -ne $colony) { return }
         }
     }
 
-    # Filter by Blocked-by
-    if ($content -match "(?m)^- \*\*Blocked by\*\*:\s*(.+)$") {
+    # Filter by Blocked-by. Same [ \t]* fix; an empty field must NOT
+    # capture the next line's content.
+    if ($content -match "(?m)^- \*\*Blocked by\*\*:[ \t]*(.+)$") {
         $blockers = $Matches[1].Trim()
         if ($blockers) {
             $unfinished = $false

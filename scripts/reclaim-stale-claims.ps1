@@ -29,8 +29,8 @@ $stale = @()
 Get-ChildItem $inProgress -Filter '*.md' | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     if ($content -match '^# \[(HV-\d+)\]') { $ticketId = $Matches[1] } else { return }
-    if ($content -match '(?m)^- \*\*Last touched\*\*:\s*(\S+)') { $ts = $Matches[1] } else { return }
-    if ($content -match '(?m)^- \*\*Assigned to\*\*:\s*(.*)$') { $assigned = $Matches[1].Trim() } else { $assigned = 'unknown' }
+    if ($content -match '(?m)^- \*\*Last touched\*\*:[ \t]*(\S+)') { $ts = $Matches[1] } else { return }
+    if ($content -match '(?m)^- \*\*Assigned to\*\*:[ \t]*(.*)$') { $assigned = $Matches[1].Trim() } else { $assigned = 'unknown' }
 
     try {
         $lastTouched = [DateTimeOffset]::Parse($ts)
