@@ -1,10 +1,14 @@
 # ADR-001: PM bot semantics with multiple humans on the same repo
 
-**Status**: Proposed
+**Status**: Superseded by ADR-003
 
 **Date**: 2026-05-08
 
+**Superseded**: 2026-05-09
+
 **Authors**: allavallc-cc1 (drafted), allavallc (deciding)
+
+> **Note on supersession**: After this ADR was drafted, the user's pushback led to the **colony model** as a cleaner answer than any of the four options (A/B/C/D) considered here. ADR-003 captures that decision and operational details. Read ADR-003 for the current architectural direction; this document is preserved for historical context only.
 
 ---
 
