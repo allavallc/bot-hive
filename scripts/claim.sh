@@ -78,6 +78,8 @@ BRANCH="hv-${HV_ID#HV-}-${SUFFIX}"
 NEW_PATH="hive/in-progress/$(basename "$TICKET_FILE")"
 
 git switch -c "$BRANCH"
+# Ensure parent dir exists; first claim on a fresh repo won't have hive/in-progress/ yet.
+mkdir -p hive/in-progress
 git mv "$TICKET_FILE" "$NEW_PATH"
 
 # Patch the frontmatter in-place. Each line is replaced if present, otherwise
@@ -114,16 +116,16 @@ fi
 echo "${NOW_ISO} ${HV_ID} claim ${EVENT_ACTOR}" >> "$EVENTS_FILE"
 
 git add hive/
-git commit -m "${HV_ID}: claim — ${HANDLE}"
+git commit -m "${HV_ID}: claim - ${ASSIGNED_TO}"
 git push -u origin "$BRANCH"
 
 gh pr create \
   --base main \
   --head "$BRANCH" \
-  --title "${HV_ID}: claim — ${HANDLE}" \
-  --body "Claim signal — moves ${HV_ID} from backlog/ to in-progress/. Subsequent commits on this branch carry the work."
+  --title "${HV_ID}: claim - ${ASSIGNED_TO}" \
+  --body "Claim signal - moves ${HV_ID} from backlog/ to in-progress/. Subsequent commits on this branch carry the work."
 
 PR_NUMBER=$(gh pr view --json number --jq '.number')
 gh pr merge "$PR_NUMBER" --auto --squash >/dev/null || true
 
-echo "claimed: $HV_ID by $HANDLE on branch $BRANCH (PR #$PR_NUMBER)"
+echo "claimed: $HV_ID by $ASSIGNED_TO on branch $BRANCH (PR #$PR_NUMBER)"
