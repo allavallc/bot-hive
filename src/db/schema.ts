@@ -195,3 +195,57 @@ export const humanNotes = pgTable(
     projectCreatedIdx: index("human_notes_project_created_idx").on(t.projectId, t.createdAt),
   }),
 );
+
+// ADR-004: bot-to-PM ticket suggestions inbox.
+//
+// When a coder/tester bot writes a `@<colony>.<pm-handle> we need a ticket
+// for X` note, the PM creates a row here. Default policy is `always_ask`
+// (see `colonySettings`) — the suggestion appears in the swarm panel inbox
+// for the human to Approve or Reject. Approve files a real ticket; Reject
+// sends a reason note back to the suggesting bot.
+export const botSuggestions = pgTable(
+  "bot_suggestions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    suggesterActor: text("suggester_actor").notNull(),
+    targetPmActor: text("target_pm_actor").notNull(),
+    message: text("message").notNull(),
+    status: text("status").notNull().default("pending"),
+    rejectionReason: text("rejection_reason"),
+    approvedTicketId: text("approved_ticket_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => ({
+    projectStatusIdx: index("bot_suggestions_project_status_idx").on(t.projectId, t.status),
+  }),
+);
+
+// ADR-003 + ADR-004: per-colony settings.
+//
+// A colony is identified by the human's GitHub login (e.g., "allavallc",
+// "tony"). Settings are scoped to a (project, colony) pair so the same
+// human can have different policies in different projects, and two
+// humans on the same project can have different policies in their own
+// colonies. Currently holds the `always_ask` flag for ADR-004's
+// suggestion-approval flow; future colony-level flags land here too.
+export const colonySettings = pgTable(
+  "colony_settings",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    colony: text("colony").notNull(),
+    alwaysAsk: boolean("always_ask").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectId, t.colony] }),
+  }),
+);
