@@ -249,3 +249,39 @@ export const colonySettings = pgTable(
     pk: primaryKey({ columns: [t.projectId, t.colony] }),
   }),
 );
+
+// FS-022: swarm health monitoring anomalies.
+//
+// A periodic cron walks repo state + DB and writes a row here whenever an
+// always-on invariant is violated (qualified-actor names, FS Owner format,
+// stale orphans, etc.). One row per (project, code, dedup_key) — the cron
+// upserts: existing row sees lastSeenAt bumped; new violation gets a fresh
+// row with firstSeenAt = now. When the violation goes away on a subsequent
+// run, resolvedAt is set.
+//
+// dedupKey is a stable hash of (code + key parts of details) so the same
+// violation across runs collapses into one row. Without it, the cron would
+// create a new row every 5 min for every persistent violation.
+//
+// Severity drives panel sort order: critical > warning > info.
+export const swarmAnomalies = pgTable(
+  "swarm_anomalies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    severity: text("severity").notNull(),
+    message: text("message").notNull(),
+    details: jsonb("details").notNull().default({}),
+    dedupKey: text("dedup_key").notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => ({
+    projectDedupUnique: unique("swarm_anomalies_project_dedup_unique").on(t.projectId, t.dedupKey),
+    projectOpenIdx: index("swarm_anomalies_project_open_idx").on(t.projectId, t.resolvedAt),
+  }),
+);
