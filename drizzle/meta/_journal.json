@@ -57,6 +57,13 @@
       "when": 1778349715326,
       "tag": "0007_youthful_bloodaxe",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778383110191,
+      "tag": "0008_closed_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }
