@@ -720,7 +720,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 20;
+  /* HV-103: above the Add-a-Bot trigger (60) so the panel's close affordance is reachable. */
+  z-index: 80;
   transform: translateX(100%);
   visibility: hidden;
   transition: transform 0.22s ease-out, visibility 0s linear 0.22s;
