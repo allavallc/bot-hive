@@ -58,6 +58,7 @@ hive/
   blocked/       ← tickets that cannot proceed
   not-doing/     ← tickets explicitly rejected (hidden from board by default)
   feature-sets/  ← feature-set-XXX-<slug>.md grouping docs
+  ideas-to-consider/ ← parking lot for ideas / discussions; bots do NOT pick from here
   HIVE.md        ← this file
 ```
 
