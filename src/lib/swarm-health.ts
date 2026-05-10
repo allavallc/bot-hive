@@ -311,6 +311,100 @@ export function checkEventVsFileLocation(state: RepoState): AnomalyDetection[] {
   return out;
 }
 
+// FS-023: role consolidation invariants. Reads the colony's active bots
+// (sorted by tenure — first event-log timestamp ascending), maps each
+// bot's role per the consolidation table from hive/roles.md, and flags
+// any bot whose in-progress claims contradict its role:
+//
+// - 1 bot: PM + coder + tester. No constraints.
+// - 2 bots: bot 1 (older) = PM + tester; bot 2 = coder. The PM bot
+//   should NOT have in-progress claims at this size.
+// - 3+ bots: bot 1 = PM, bot 2 = coder, bot 3 = tester, 4+ = coders.
+//   The PM should NOT claim. The tester should NOT claim. Coders do.
+//
+// Mid-session role drift (bot N takes a claim that doesn't fit its
+// current role) shows up here on the next cron tick.
+const STALE_BOT_MS = 2 * 60 * 60 * 1000;
+export function checkRoleConsolidation(state: RepoState): AnomalyDetection[] {
+  // Build active-bots-per-colony from event logs.
+  const colonyBots = new Map<string, { handle: string; firstSeen: number }[]>();
+  for (const log of state.eventLogs) {
+    const m = log.basename.match(/^([^.]+)\.(.+)$/);
+    if (!m) continue;
+    const [, colony, handle] = m;
+    let firstSeen = Number.POSITIVE_INFINITY;
+    let lastSeen = 0;
+    for (const e of log.entries) {
+      const ts = Date.parse(e.timestamp);
+      if (Number.isNaN(ts)) continue;
+      if (ts < firstSeen) firstSeen = ts;
+      if (ts > lastSeen) lastSeen = ts;
+    }
+    if (lastSeen === 0) continue;
+    if (state.now.getTime() - lastSeen > STALE_BOT_MS) continue;
+    const list = colonyBots.get(colony) ?? [];
+    list.push({ handle, firstSeen });
+    colonyBots.set(colony, list);
+  }
+  for (const [, list] of colonyBots) {
+    list.sort((a, b) => a.firstSeen - b.firstSeen);
+  }
+
+  // Build per-actor in-progress claim list.
+  const claimsByActor = new Map<string, string[]>();
+  for (const t of state.tickets) {
+    if (t.state !== "in-progress") continue;
+    const actor = (t.frontmatter["Assigned to"] || "").split(/\s/)[0];
+    if (!actor) continue;
+    const list = claimsByActor.get(actor) ?? [];
+    list.push(t.hvId);
+    claimsByActor.set(actor, list);
+  }
+
+  const out: AnomalyDetection[] = [];
+  for (const [colony, bots] of colonyBots) {
+    if (bots.length < 2) continue; // Single-bot colony has no role constraints.
+
+    const pmActor = `${colony}.${bots[0].handle}`;
+    const pmClaims = claimsByActor.get(pmActor) ?? [];
+
+    if (bots.length === 2) {
+      if (pmClaims.length > 0) {
+        out.push({
+          code: "ROLE_PM_CLAIMING_2BOT",
+          severity: "warning",
+          message: `colony of 2: PM/tester bot '${pmActor}' has in-progress claim(s) ${pmClaims.join(", ")}; coder owns claiming at this size`,
+          details: { colony, pmActor, claims: pmClaims, colonySize: 2 },
+          dedupKey: `ROLE_PM_CLAIMING_2BOT:${pmActor}`,
+        });
+      }
+    } else {
+      // 3+ bots
+      if (pmClaims.length > 0) {
+        out.push({
+          code: "ROLE_PM_CLAIMING_3PLUS",
+          severity: "warning",
+          message: `colony of ${bots.length}: PM bot '${pmActor}' has in-progress claim(s) ${pmClaims.join(", ")}; PM coordinates only at this size`,
+          details: { colony, pmActor, claims: pmClaims, colonySize: bots.length },
+          dedupKey: `ROLE_PM_CLAIMING_3PLUS:${pmActor}`,
+        });
+      }
+      const testerActor = `${colony}.${bots[2].handle}`;
+      const testerClaims = claimsByActor.get(testerActor) ?? [];
+      if (testerClaims.length > 0) {
+        out.push({
+          code: "ROLE_TESTER_CLAIMING",
+          severity: "warning",
+          message: `colony of ${bots.length}: tester bot '${testerActor}' has in-progress claim(s) ${testerClaims.join(", ")}; tester reviews, doesn't claim`,
+          details: { colony, testerActor, claims: testerClaims, colonySize: bots.length },
+          dedupKey: `ROLE_TESTER_CLAIMING:${testerActor}`,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 // Top-level evaluator: runs every invariant and concatenates the results.
 export function evaluate(state: RepoState): AnomalyDetection[] {
   return [
@@ -320,5 +414,6 @@ export function evaluate(state: RepoState): AnomalyDetection[] {
     ...checkInProgressFreshness(state),
     ...checkFsColonyDormancy(state),
     ...checkEventVsFileLocation(state),
+    ...checkRoleConsolidation(state),
   ];
 }

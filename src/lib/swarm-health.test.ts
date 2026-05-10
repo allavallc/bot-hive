@@ -10,6 +10,7 @@ import {
   checkFsColonyDormancy,
   checkFsOwnerIsLogin,
   checkInProgressFreshness,
+  checkRoleConsolidation,
   evaluate,
   parseEventLine,
 } from "./swarm-health";
@@ -241,6 +242,99 @@ describe("checkEventVsFileLocation (the buzz dropped-in-review-move bug class)",
       eventLogs: [eventLog("allavallc.buzz", ["2026-05-10T02:00:00Z HV-1 claim allavallc.buzz"])],
     });
     expect(checkEventVsFileLocation(state)).toHaveLength(0);
+  });
+});
+
+describe("checkRoleConsolidation (FS-023 role-aware invariants)", () => {
+  // Helpers: timestamps relative to NOW. Bots whose latest event is
+  // within 2h are "active"; first-event timestamp orders tenure.
+  const recent = (offsetMin: number) =>
+    new Date(NOW.getTime() - offsetMin * 60 * 1000).toISOString();
+
+  it("does not flag a 1-bot colony (no role constraints)", () => {
+    const state = makeState({
+      tickets: [ticket("HV-1", "in-progress", { "Assigned to": "allavallc.buzz" })],
+      eventLogs: [eventLog("allavallc.buzz", [`${recent(60)} HV-1 claim allavallc.buzz`])],
+    });
+    const out = checkRoleConsolidation(state);
+    expect(out).toHaveLength(0);
+  });
+
+  it("flags PM bot in 2-colony with an in-progress claim", () => {
+    // bot 1 (older, PM+tester) has a claim — should not at this size.
+    const state = makeState({
+      tickets: [ticket("HV-1", "in-progress", { "Assigned to": "allavallc.buzz" })],
+      eventLogs: [
+        eventLog("allavallc.buzz", [
+          // Older bot
+          `${recent(180)} HV-0 presence allavallc.buzz`,
+          `${recent(60)} HV-1 claim allavallc.buzz`,
+        ]),
+        eventLog("allavallc.dart", [
+          // Newer bot (coder)
+          `${recent(30)} HV-2 presence allavallc.dart`,
+        ]),
+      ],
+    });
+    const out = checkRoleConsolidation(state);
+    expect(out.some((a) => a.code === "ROLE_PM_CLAIMING_2BOT")).toBe(true);
+  });
+
+  it("does not flag in 2-colony when only the coder claims", () => {
+    const state = makeState({
+      tickets: [ticket("HV-1", "in-progress", { "Assigned to": "allavallc.dart" })],
+      eventLogs: [
+        eventLog("allavallc.buzz", [`${recent(180)} HV-0 presence allavallc.buzz`]),
+        eventLog("allavallc.dart", [`${recent(30)} HV-1 claim allavallc.dart`]),
+      ],
+    });
+    const out = checkRoleConsolidation(state);
+    expect(out).toHaveLength(0);
+  });
+
+  it("flags PM and tester in 3-colony when either has a claim", () => {
+    const state = makeState({
+      tickets: [
+        ticket("HV-1", "in-progress", { "Assigned to": "allavallc.buzz" }), // PM claim
+        ticket("HV-2", "in-progress", { "Assigned to": "allavallc.dart" }), // coder, OK
+        ticket("HV-3", "in-progress", { "Assigned to": "allavallc.raven" }), // tester claim
+      ],
+      eventLogs: [
+        eventLog("allavallc.buzz", [
+          `${recent(300)} HV-0 presence allavallc.buzz`,
+          `${recent(50)} HV-1 claim allavallc.buzz`,
+        ]),
+        eventLog("allavallc.dart", [
+          `${recent(200)} HV-X presence allavallc.dart`,
+          `${recent(40)} HV-2 claim allavallc.dart`,
+        ]),
+        eventLog("allavallc.raven", [
+          `${recent(100)} HV-Y presence allavallc.raven`,
+          `${recent(30)} HV-3 claim allavallc.raven`,
+        ]),
+      ],
+    });
+    const out = checkRoleConsolidation(state);
+    const codes = out.map((a) => a.code);
+    expect(codes).toContain("ROLE_PM_CLAIMING_3PLUS");
+    expect(codes).toContain("ROLE_TESTER_CLAIMING");
+  });
+
+  it("excludes stale bots (>2h) from role assignment", () => {
+    // buzz was the PM but has been stale for >2h. dart (newer) is now
+    // the only active bot, so it's a 1-bot colony — no constraints.
+    const state = makeState({
+      tickets: [ticket("HV-1", "in-progress", { "Assigned to": "allavallc.dart" })],
+      eventLogs: [
+        eventLog("allavallc.buzz", [
+          // Stale: last event 5h ago.
+          `${recent(300)} HV-0 presence allavallc.buzz`,
+        ]),
+        eventLog("allavallc.dart", [`${recent(30)} HV-1 claim allavallc.dart`]),
+      ],
+    });
+    const out = checkRoleConsolidation(state);
+    expect(out).toHaveLength(0);
   });
 });
 
