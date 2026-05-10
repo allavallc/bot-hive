@@ -6,6 +6,7 @@ import { Wordmark } from "@/components/wordmark";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { effectiveState } from "./board-state";
 import styles from "./board.module.css";
 
 type Ticket = {
@@ -198,7 +199,16 @@ export function Board({
   const cols = showNotDoing ? [...COLUMNS, NOT_DOING] : COLUMNS;
   const byColumn = new Map<string, Ticket[]>();
   for (const c of cols) byColumn.set(c.state, []);
-  for (const t of visible) byColumn.get(t.state)?.push(t);
+  // HV-075: render the card in its optimistic destination column
+  // (in-progress for rejected, done for approved) the moment the
+  // human clicks Accept or Reject. The pending banner already explains
+  // the move is in flight server-side. SSE refresh clears the pending
+  // entry once ticket.state catches up.
+  for (const t of visible) {
+    const pending = pendingTransitions.get(t.hvId);
+    const state = effectiveState(t.state, pending?.kind);
+    byColumn.get(state)?.push(t);
+  }
 
   const openTicket = openTicketId ? (tickets.find((t) => t.id === openTicketId) ?? null) : null;
 
