@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AddBotButton } from "./add-bot-button.client";
 import { Board } from "./board.client";
+import { SuggestionsInbox } from "./suggestions-inbox.client";
 import { SwarmHealthPanel } from "./swarm-health-panel.client";
 import { SwarmPanel } from "./swarm-panel.client";
 
@@ -52,9 +53,10 @@ export default async function ProjectBoardPage({
     body: f.body,
   }));
 
-  // FS-022 admin gate: only allavallc sees the swarm-health panel during
-  // the rollout. Other Bot Hive customers see no health UI at all.
-  const isHealthAdmin = session.user.name === "allavallc";
+  // FS-022 + FS-025 admin gate: only allavallc sees the swarm-health
+  // panel + suggestions inbox during the rollout. Other Bot Hive
+  // customers see no admin UI at all.
+  const isAdmin = session.user.name === "allavallc";
 
   return (
     <>
@@ -67,7 +69,8 @@ export default async function ProjectBoardPage({
         initialTickets={initialTickets}
         initialFeatures={initialFeatures}
       />
-      {isHealthAdmin && <SwarmHealthPanel projectId={project.id} />}
+      {isAdmin && <SuggestionsInbox projectId={project.id} />}
+      {isAdmin && <SwarmHealthPanel projectId={project.id} />}
       <SwarmPanel projectId={project.id} />
       <AddBotButton projectId={project.id} />
     </>
