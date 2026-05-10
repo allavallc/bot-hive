@@ -61,6 +61,8 @@ export function Board({
   const [showNotDoing, setShowNotDoing] = useState(false);
   const [connected, setConnected] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date>(new Date());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showTopButton, setShowTopButton] = useState(false);
   const [animating, setAnimating] = useState<Map<string, "arrived" | "new" | "in-review">>(
     new Map(),
   );
@@ -164,6 +166,16 @@ export function Board({
     };
   }, [project.id, computeAnimations]);
 
+  // Show "Back to top" button after the page has scrolled enough that
+  // the user might want it. ~400px is roughly past the masthead + subnav
+  // + a column header — far enough that scrolling back is worth a click.
+  useEffect(() => {
+    const onScroll = () => setShowTopButton(window.scrollY > 400);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Hard timeout: drop badges older than 10 minutes. Protects against a stuck
   // CI / deploy that never lands the underlying state change.
   useEffect(() => {
@@ -259,24 +271,45 @@ export function Board({
           <span className={styles.subnavRepo}>{project.githubRepo}</span>
         </nav>
 
-        <section className={styles.filters}>
-          <FilterSelect
-            label="Priority"
-            value={filterPriority}
-            options={PRIORITIES}
-            onChange={(v) => setFilter("priority", v || null)}
-          />
-          <FilterSelect
-            label="Feature set"
-            value={filterFeature}
-            options={features.map((f) => ({
-              value: f.fsId,
-              label: f.fsId.replace(/^feature-set-/, "fs-"),
-            }))}
-            onChange={(v) => setFilter("feature", v || null)}
-          />
-          <FilterToggle label="Show not-doing" active={showNotDoing} onChange={setShowNotDoing} />
-        </section>
+        <div className={styles.filtersBar}>
+          <button
+            type="button"
+            className={styles.filtersToggle}
+            data-active={filtersOpen}
+            data-has-active={Boolean(filterPriority || filterFeature || showNotDoing)}
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+            aria-controls="board-filters"
+          >
+            {filtersOpen ? "▾" : "▸"} Filters
+            {(filterPriority || filterFeature || showNotDoing) && (
+              <span className={styles.filtersToggleBadge} aria-hidden="true">
+                ●
+              </span>
+            )}
+          </button>
+        </div>
+
+        {filtersOpen && (
+          <section id="board-filters" className={styles.filters}>
+            <FilterSelect
+              label="Priority"
+              value={filterPriority}
+              options={PRIORITIES}
+              onChange={(v) => setFilter("priority", v || null)}
+            />
+            <FilterSelect
+              label="Feature set"
+              value={filterFeature}
+              options={features.map((f) => ({
+                value: f.fsId,
+                label: f.fsId.replace(/^feature-set-/, "fs-"),
+              }))}
+              onChange={(v) => setFilter("feature", v || null)}
+            />
+            <FilterToggle label="Show not-doing" active={showNotDoing} onChange={setShowNotDoing} />
+          </section>
+        )}
 
         <section
           className={styles.board}
@@ -313,6 +346,17 @@ export function Board({
       </main>
 
       <TicketPanel ticket={openTicket} projectId={project.id} onClose={handlePanelClose} />
+
+      {showTopButton && (
+        <button
+          type="button"
+          className={styles.topButton}
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Back to top"
+        >
+          ↑ Top
+        </button>
+      )}
     </div>
   );
 }
