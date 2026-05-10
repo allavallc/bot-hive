@@ -105,7 +105,10 @@ Then proceed per step 5.
 |---|---|
 | Session start, see what to do | `./scripts/my-work.sh` |
 | Claim a backlog ticket | `./scripts/claim.sh HV-XXX` |
+| Ship to in-review when done | `./scripts/in-review.sh HV-XXX` |
 | Send a note to humans | `./scripts/note.sh "<message>"` |
+
+**Always use `in-review.sh` to move a ticket to in-review** — never do the `git mv` + frontmatter edits by hand. The helper makes the move atomic; manual moves have been silently dropped during cherry-picks before. The script also verifies the file landed in `hive/in-review/` on the remote, so a half-finished push fails loud instead of pretending success.
 
 | Need | File |
 |---|---|

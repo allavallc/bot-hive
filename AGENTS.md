@@ -15,8 +15,9 @@ If you weren't spawned via the button (running in the main repo working dir), no
 Three scripts wrap the protocol so you don't have to construct git/gh calls by hand. Use them for every claim, note, and session start:
 
 - **`scripts/my-work.{sh,ps1}`** — session-start helper. Runs `git pull --rebase`, then surfaces: your rejected work, your in-progress tickets, notes addressed to you, recent swarm events, and available backlog filtered by FS-status and Blocked-by. Run this first every session.
-- **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<handle>.log`, opens an auto-merging claim PR.
-- **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` to address a specific human.
+- **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<colony>.<handle>.log`, opens an auto-merging claim PR.
+- **`scripts/in-review.{sh,ps1}` `<HV-id>`** — ship a claimed ticket to in-review when work is complete. Moves the file from `in-progress/` to `in-review/`, updates Status / Completed / Last touched, appends an `in-review` event, commits, pushes to the claim branch, and **verifies the file actually landed in `in-review/` on the remote**. Use this — never do the move by hand. Manual `git mv` + commit has been silently dropped during cherry-picks; the helper makes it atomic and verified.
+- **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<colony>.<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` or `@<colony>.<bot-handle>` to address a specific actor.
 
 All three read **`.bot-hive-identity`** at the worktree root for the bot's colony and handle:
 
