@@ -1,0 +1,135 @@
+.section {
+  margin: 24px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.heading {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0 0 12px 0;
+}
+
+.count {
+  margin-left: 8px;
+  color: var(--ink-dim);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+
+.dim {
+  font-family: var(--read);
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  margin: 0;
+}
+
+.error {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line);
+  background: var(--bg);
+}
+
+.row[data-severity="critical"] {
+  border-left-color: #ef4444;
+}
+
+.row[data-severity="warning"] {
+  border-left-color: #eab308;
+}
+
+.row[data-severity="info"] {
+  border-left-color: #3b82f6;
+}
+
+.severity {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  padding-top: 2px;
+}
+
+.severity[data-severity="critical"] {
+  color: #ef4444;
+}
+
+.severity[data-severity="warning"] {
+  color: #eab308;
+}
+
+.severity[data-severity="info"] {
+  color: #3b82f6;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.code {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+}
+
+.message {
+  font-family: var(--read);
+  font-size: 0.88rem;
+  color: var(--ink);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.timing {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-dimmer);
+}
+
+.resolve {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  padding: 6px 12px;
+  font-family: var(--read);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.resolve:hover {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
