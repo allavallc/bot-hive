@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AddBotButton } from "./add-bot-button.client";
 import { Board } from "./board.client";
+import { SwarmHealthPanel } from "./swarm-health-panel.client";
 import { SwarmPanel } from "./swarm-panel.client";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,10 @@ export default async function ProjectBoardPage({
     body: f.body,
   }));
 
+  // FS-022 admin gate: only allavallc sees the swarm-health panel during
+  // the rollout. Other Bot Hive customers see no health UI at all.
+  const isHealthAdmin = session.user.name === "allavallc";
+
   return (
     <>
       <Board
@@ -62,6 +67,7 @@ export default async function ProjectBoardPage({
         initialTickets={initialTickets}
         initialFeatures={initialFeatures}
       />
+      {isHealthAdmin && <SwarmHealthPanel projectId={project.id} />}
       <SwarmPanel projectId={project.id} />
       <AddBotButton projectId={project.id} />
     </>
