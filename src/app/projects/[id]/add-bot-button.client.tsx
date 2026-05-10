@@ -254,25 +254,6 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
 
                   <hr className={styles.divider} />
 
-                  {data.activeHandles.length > 0 ? (
-                    <div className={styles.activeBots}>
-                      <span className={styles.dim}>Currently active:</span>
-                      <div className={styles.activeBotsList}>
-                        {data.activeHandles.map((h) => (
-                          <span
-                            key={h}
-                            className={styles.activeBotPill}
-                            style={{ color: robotColor(h) }}
-                          >
-                            ● {h}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className={styles.dim}>No bots currently active.</p>
-                  )}
-
                   <p className={styles.disclaimer}>
                     ⚠ Each bot consumes from your Claude subscription/credits — N parallel bots ≈ N×
                     the rate-limit consumption. Heavy parallel usage can throttle on Pro/Max or rack
