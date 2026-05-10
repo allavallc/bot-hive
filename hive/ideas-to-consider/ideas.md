@@ -40,3 +40,22 @@ When this lands, the markdown file becomes the casual parking lot for orchestrat
 - When an idea is promoted, do we auto-delete from the markdown file or just mark it `Status: promoted (#<id>)` for trail?
 
 **Status:** parking — depends on FS-025 landing first
+
+---
+
+## [2026-05-10] @allavallc — Deterministic "done" enforcement via per-ticket check scripts
+
+Problem: bots report "shipped X" without actually shipping X. Markdown "Done when" lists are prose, self-attested, easy to lie about. The HV-075 incident on 2026-05-10 had a bot report "moved to in-review + cherry-picked the code" when its PR contained zero code changes. Trust-but-verify failed because there was nothing to verify against.
+
+Proposal: every ticket carries a small bash check script at `hive/checks/HV-XXX.sh`. The script returns 0 (done) or 1 (not done). Two enforcement points run the same script: a per-worktree pre-commit hook (refuses commits referencing the ticket if the check fails) and a CI gate (refuses PR merge). Bot literally cannot ship without the script returning 0.
+
+Researched ~17 alternatives (failing-test-first, mutation testing, spec-as-code, diff-must-touch, two-phase commit, tester-bot review, etc.). Per-ticket bash scripts won on simplicity + lightweight + no new DSL + composes with existing CI.
+
+**Open questions**
+- **PM authoring overhead is the biggest scaling concern.** With 100s of tickets, who writes 100s of check scripts? Mitigations explored: ticket-type templates (UI bug, schema migration, doc-only), PM bot drafts the check as part of ticket creation, CI rejects trivial scripts (≤3 lines or just `exit 0`). Still — the PM writing real assertions is the bottleneck.
+- Stale checks: paths/test names move; checks break months later on unrelated reorgs. Need a check-script linter and treat broken checks as their own bug ticket.
+- Adoption friction for other Bot Hive customers — every customer would need to author check scripts. Templates per ticket type help but it's still onboarding work.
+- Could the PM bot reliably draft check scripts? If yes, scaling resolves. If no, the whole thing is bottlenecked.
+
+**Status:** parking — direction is right but the PM-bot-must-write-the-check chokepoint isn't solved. Revisit when PM bot rubric (FS-023) is more defined; if PM can reliably author checks, this becomes the next big swing.
+
