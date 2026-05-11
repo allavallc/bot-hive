@@ -580,7 +580,6 @@ function Card({
                 {fm.Priority}
               </span>
             )}
-            {fm.Effort && <span className={styles.badge}>{fm.Effort}</span>}
             {fm.Turns && Number.parseInt(fm.Turns, 10) > 0 && (
               <span
                 className={styles.badge}
