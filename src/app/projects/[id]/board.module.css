@@ -358,6 +358,46 @@
   padding: 12px 0;
 }
 
+/* HV-113: FS section headers within the In-review column. */
+
+.fsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fsSectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.fsSection:first-child .fsSectionHeader {
+  padding-top: 0;
+  border-top: none;
+}
+
+.fsSectionCode {
+  color: var(--ink-soft);
+}
+
+.fsSectionTitle {
+  color: var(--ink-dimmer);
+  letter-spacing: 0.05em;
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 /* Cards */
 
 .card {
@@ -373,6 +413,21 @@
 .card:hover {
   border-color: var(--ink-dim);
   background: var(--bg-2);
+}
+
+/* HV-113: grey out cards with unfinished Blocked-by references (backlog + in-review). */
+
+.card[data-blocked="true"] {
+  opacity: 0.4;
+}
+
+.card[data-blocked="true"]:hover {
+  border-color: var(--line);
+  background: transparent;
+}
+
+.card[data-blocked="true"] .cardButton {
+  cursor: not-allowed;
 }
 
 /* State-conditional borders */
