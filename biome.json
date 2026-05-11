@@ -19,6 +19,6 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", ".next", "drizzle", "build", "out", "next-env.d.ts"]
+    "ignore": ["node_modules", ".next", "drizzle", "build", "out", "next-env.d.ts", "worktrees"]
   }
 }

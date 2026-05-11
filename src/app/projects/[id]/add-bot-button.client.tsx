@@ -50,8 +50,12 @@ type StepCommand = { command: string; runIn: string };
 const claudeSettingsPosix = (worktreeDir: string) =>
   `mkdir -p ${worktreeDir}/.claude && printf '{\\n  "statusLine": {\\n    "type": "command",\\n    "command": "bash ./scripts/claude-statusline.sh"\\n  }\\n}\\n' > ${worktreeDir}/.claude/settings.json`;
 
+// One-line JSON on purpose. Single-quoted PowerShell strings are literal
+// — backtick escapes (`n) are NOT expanded. Older multi-line attempt
+// wrote the literal characters `n into the file, breaking JSON parse.
+// One-liner sidesteps the entire escape-interpretation problem.
 const claudeSettingsWindows = (worktreeDir: string) =>
-  `New-Item -ItemType Directory -Force -Path ${worktreeDir}/.claude | Out-Null; Set-Content -Path ${worktreeDir}/.claude/settings.json -Value '{\`n  "statusLine": {\`n    "type": "command",\`n    "command": "powershell -NoProfile -File ./scripts/claude-statusline.ps1"\`n  }\`n}'`;
+  `New-Item -ItemType Directory -Force -Path ${worktreeDir}/.claude | Out-Null; Set-Content -Path ${worktreeDir}/.claude/settings.json -Value '{"statusLine":{"type":"command","command":"powershell -NoProfile -File ./scripts/claude-statusline.ps1"}}'`;
 
 function step1Command(platform: Platform, handle: string, colony: string): StepCommand {
   const branch = `${handle}-work`;
