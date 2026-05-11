@@ -42,6 +42,18 @@ git pull --rebase origin main >/dev/null
 # colony — no manual re-check needed.
 ./scripts/whoami.sh
 
+# Surface the colony's standing order (ADR-003: focus is per-colony).
+FOCUS_FILE="hive/colonies/${COLONY}/focus.md"
+echo
+if [ -f "$FOCUS_FILE" ]; then
+  FOCUS_CONTENT=$(grep -v '^[[:space:]]*$' "$FOCUS_FILE" | head -1)
+  echo "=== colony focus (${FOCUS_FILE}) ==="
+  echo "  ${FOCUS_CONTENT:-(empty)}"
+else
+  echo "=== colony focus ==="
+  echo "  (no focus file at ${FOCUS_FILE} — anything in backlog is fair game)"
+fi
+
 # Assigned-to matcher: the field can carry either the legacy bare handle
 # or the new <colony>.<handle> form (ADR-003). Match both for now.
 assigned_to_me() {

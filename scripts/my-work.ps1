@@ -31,6 +31,18 @@ git pull --rebase origin main | Out-Null
 # colony - no manual re-check needed.
 & "$PSScriptRoot/whoami.ps1"
 
+# Surface the colony's standing order (ADR-003: focus is per-colony).
+$focusFile = "hive/colonies/$colony/focus.md"
+Write-Host ""
+if (Test-Path $focusFile) {
+    $focusContent = (Get-Content $focusFile | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
+    Write-Host "=== colony focus ($focusFile) ==="
+    if ($focusContent) { Write-Host "  $focusContent" } else { Write-Host "  (empty)" }
+} else {
+    Write-Host "=== colony focus ==="
+    Write-Host "  (no focus file at $focusFile - anything in backlog is fair game)"
+}
+
 # Assigned-to matcher: field can carry legacy bare handle or new
 # <colony>.<handle> form (ADR-003). Match both for now.
 $assignedRe = "^- \*\*Assigned to\*\*: ($([regex]::Escape($handle))|$([regex]::Escape($actor)))\s*$"
