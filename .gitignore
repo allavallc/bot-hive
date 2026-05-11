@@ -43,3 +43,6 @@ Thumbs.db
 
 # Claude Code per-project state
 .claude/
+
+# Per-bot identity file (ADR-003) — local-only; each checkout writes its own
+.bot-hive-identity
