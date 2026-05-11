@@ -59,6 +59,18 @@ if [ -n "$ASSIGNED" ] && [ "$ASSIGNED" != "$ACTOR" ] && [ "$ASSIGNED" != "$HANDL
   echo "warn: $HV_ID is assigned to '$ASSIGNED', not '$ACTOR'. Continuing." >&2
 fi
 
+# HV-112: User-facing must be set explicitly before in-review/. The flag
+# routes who reviews: yes -> human via Accept; no -> tester bot.
+USER_FACING=$(grep "^- \*\*User-facing\*\*:" "$TICKET_FILE" | head -1 | sed 's/^- \*\*User-facing\*\*://' | tr -d '[:space:]')
+if [ -z "$USER_FACING" ]; then
+  echo "error: $HV_ID has no User-facing value. Set 'User-facing: yes' or 'User-facing: no' in the ticket frontmatter before shipping - it routes the review (human vs tester bot)." >&2
+  exit 1
+fi
+if [ "$USER_FACING" != "yes" ] && [ "$USER_FACING" != "no" ]; then
+  echo "error: $HV_ID has User-facing='$USER_FACING'; must be 'yes' or 'no' (lowercase)." >&2
+  exit 1
+fi
+
 NOW_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 TODAY=$(date -u +%Y-%m-%d)
 NEW_PATH="hive/in-review/$(basename "$TICKET_FILE")"

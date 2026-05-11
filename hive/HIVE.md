@@ -53,7 +53,7 @@ Tickets belong to **feature sets** — a feature set is a coherent collection of
 hive/
   backlog/       ← tickets waiting to be picked up
   in-progress/   ← tickets currently being worked on
-  in-review/     ← User-facing: yes tickets awaiting tester signoff
+  in-review/     ← all completed work awaits review here; routed by User-facing flag (yes → human, no → tester bot)
   done/          ← completed tickets
   blocked/       ← tickets that cannot proceed
   not-doing/     ← tickets explicitly rejected (hidden from board by default)
@@ -821,32 +821,30 @@ Why a new ticket rather than picking one of the originals? Two reasons: it surfa
 
 ## When work is complete
 
-> **`User-facing: yes`?** Skip this section and go to [Acceptance loop](#acceptance-loop) below — user-facing tickets pause in `in-review/` for a tester pass before they reach `done/`.
+All completed tickets — `User-facing: yes` and `User-facing: no` alike — stop in `hive/in-review/` for a review pass before reaching `done/`. The `User-facing` flag routes who reviews:
 
-1. Tell the user what was done in plain language
-2. Move the ticket file from `hive/in-progress/` to `hive/done/`
-3. Update the file — set status to `done`, add completion date, set `**Verification**` (default `bot-claimed`; use `tests-passed` if you ran the tests yourself and they passed), add notes about decisions made or issues encountered
-4. Run:
-   ```
-   git add hive/
-   git commit -m "HV-XXX: done"
-   git push
-   ```
+- `User-facing: yes` → the human reviews and clicks **Accept** on the board → ticket moves to `done/`.
+- `User-facing: no` → the tester bot reviews against "Done when" → ticket moves to `done/` (or back to `in-progress/` on reject).
 
-`**Verification**` allowed values:
+Dev bots ship every ticket via `./scripts/in-review.sh HV-XXX` (or `.ps1`). The helper refuses the move if the ticket's `User-facing` field is empty — set `yes` or `no` explicitly first. See [Acceptance loop](#acceptance-loop) for the full handoff steps.
 
-- **`bot-claimed`** — the bot says it's done. Default when no further verification has happened. Lowest trust level.
-- **`tests-passed`** — bot ran the tests and they passed. Higher trust than `bot-claimed`.
-- **`bot-reviewed`** — a *separate* bot reviewed the work and signed off. Higher again.
-- **`human-reviewed`** — a human eyeballed the diff and approved. Highest trust.
+`**Verification**` allowed values (set exclusively by the reviewer at acceptance time — never self-set by the dev bot):
 
-The field is orthogonal to status: status describes workflow stage; verification describes trust level on the contents of a done ticket. Bots producing the work on `User-facing: no` tickets self-set `bot-claimed` or `tests-passed`. The `bot-reviewed` and `human-reviewed` values are produced exclusively by the acceptance loop below — a dev bot must not self-set them on `User-facing: yes` work.
+- **`bot-reviewed`** — the tester bot reviewed the work and signed off (the `User-facing: no` path).
+- **`human-reviewed`** — a human reviewed and approved via the Accept button (the `User-facing: yes` path).
+
+(Legacy values `bot-claimed` and `tests-passed` survive on tickets predating HV-112; new tickets land at one of the two above.)
 
 ---
 
 ## Acceptance loop
 
-Tickets with `**User-facing**: yes` route through `in-review/` between `in-progress/` and `done/`. A *separate* tester (human or bot — never the bot that built the ticket) reads the dev bot's `## How to test` instructions, executes them, and either approves (→ `done/`) or rejects (→ `in-progress/`).
+All tickets route through `in-review/` between `in-progress/` and `done/`. The `User-facing` flag (set on the ticket; required at handoff) routes who acts as the *separate* reviewer (never the dev bot):
+
+- `User-facing: yes` → the human is the reviewer. They click **Accept** on the board → ticket moves to `done/` with `Verification: human-reviewed`. The tester bot must not touch these.
+- `User-facing: no` → the tester bot is the reviewer. It reads `## How to test`, executes the steps, and either accepts (→ `done/` with `Verification: bot-reviewed`) or rejects (→ `in-progress/` with `Rejection reason`).
+
+`./scripts/in-review.sh HV-XXX` enforces this routing at the gate: it refuses to move a ticket to `in-review/` unless `User-facing` is set to `yes` or `no`. Dev bots set the field at ticket-creation time; missing it is a hard error at handoff.
 
 Bot-tester entry point: each agent host may ship a tester helper that walks a bot through the steps below, including the tester ≠ dev bot identity check. If yours does, use it; otherwise follow the steps directly. Humans testing manually follow the same steps regardless.
 
@@ -893,7 +891,7 @@ Bot-tester entry point: each agent host may ship a tester helper that walks a bo
 
 The dev bot picks the ticket back up from `in-progress/`, fixes the rejection, and goes back to handoff.
 
-`User-facing: no` tickets are unaffected by this section — they go in-progress → done as documented in "When work is complete" above.
+`User-facing: no` tickets follow the same handoff/acceptance/rejection steps; the reviewer is the tester bot rather than the human, and `Verification:` lands as `bot-reviewed` instead of `human-reviewed`.
 
 ---
 
@@ -929,7 +927,7 @@ HV-004-1736847392.md
 - **Completed**: <YYYY-MM-DD or blank>
 - **Verification**: <bot-claimed | tests-passed | bot-reviewed | human-reviewed> (set on `done/` tickets; blank otherwise)
 - **Failure mode**: <failed-tests | merge-conflict | context-exceeded | unmet-dep | needs-human> (required when ticket is in `blocked/`, blank otherwise)
-- **User-facing**: yes | no (default `no`; set `yes` when the ticket changes something a user sees or interacts with — UI, copy, a flow, observable behaviour. Triggers the acceptance loop.)
+- **User-facing**: yes | no (set `yes` when the ticket changes something a user sees or interacts with — UI, copy, a flow, observable behaviour. Routes the in-review pass: `yes` → human reviewer via Accept; `no` → tester bot. Must be explicit before `scripts/in-review.sh` will accept the handoff.)
 - **Rejected by**: <name or blank>
 - **Rejected**: <YYYY-MM-DD or blank>
 - **Rejection reason**: <reason or blank>
