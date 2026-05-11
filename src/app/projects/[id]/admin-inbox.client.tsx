@@ -62,7 +62,6 @@ export function AdminInbox({ projectId, isAdmin }: { projectId: string; isAdmin:
   if (!isAdmin) return null;
 
   const total = suggestionsCount + healthCount;
-  if (total === 0 && !open) return null;
 
   return (
     <>
