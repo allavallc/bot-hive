@@ -1,0 +1,36 @@
+# Swarm health cron — calls /api/health/cron every 5 minutes so the
+# server-side health monitor walks repo + DB state and writes anomalies
+# to the swarm_anomalies table. Without this scheduler, the FS-022
+# health monitor never fires and the rung-2 / rung-3 test plan
+# checkboxes ("no ROLE_PM_CLAIMING_2BOT fires") are meaningless.
+#
+# Requires repo secret SWARM_HEALTH_CRON_SECRET matching the same
+# env var on Render. Add it under: Settings → Secrets and variables →
+# Actions → New repository secret.
+
+name: swarm-health-cron
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: POST /api/health/cron
+        env:
+          SECRET: ${{ secrets.SWARM_HEALTH_CRON_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "::error::SWARM_HEALTH_CRON_SECRET repo secret not set"
+            exit 1
+          fi
+          curl -fsS -X POST https://bot-hive-j0ax.onrender.com/api/health/cron \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 60 \
+            -o /tmp/response.json -w "HTTP %{http_code}\n"
+          cat /tmp/response.json
