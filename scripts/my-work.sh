@@ -37,7 +37,10 @@ ACTOR="${COLONY}.${HANDLE}"
 # Mandatory pre-action pull.
 git pull --rebase origin main >/dev/null
 
-echo "=== you are: $ACTOR ==="
+# Identity + role re-resolved on every cycle. whoami.sh scans
+# hive/events/<colony>.*.log so role splits when bots join/leave the
+# colony — no manual re-check needed.
+./scripts/whoami.sh
 
 # Surface the colony's standing order (ADR-003: focus is per-colony).
 FOCUS_FILE="hive/colonies/${COLONY}/focus.md"

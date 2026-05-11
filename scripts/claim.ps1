@@ -48,11 +48,11 @@ if (-not $ticketFile) {
 # Owner check (ADR-003): FS Owner field holds a colony name. Refuse if
 # the FS is owned by a different colony than ours.
 $ticketContent = Get-Content -Raw $ticketFile.FullName
-if ($ticketContent -match "(?m)^- \*\*Feature set\*\*:\s*(\S+)") {
+if ($ticketContent -match "(?m)^- \*\*Feature set\*\*:[ \t]*(\S+)") {
     $ticketFs = $Matches[1].Trim()
     if ($ticketFs -and (Test-Path "hive/feature-sets/$ticketFs.md")) {
         $fsContent = Get-Content -Raw "hive/feature-sets/$ticketFs.md"
-        if ($fsContent -match "(?m)^\*\*Owner\*\*:\s*(\S+)") {
+        if ($fsContent -match "(?m)^\*\*Owner\*\*:[ \t]*(\S+)") {
             $fsOwner = $Matches[1].Trim()
             if ($fsOwner -and $fsOwner -ne $colony) {
                 Write-Error "${ticketFs} is owned by colony ${fsOwner}; your colony (${colony}) cannot claim ${HvId}."
