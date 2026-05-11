@@ -1,0 +1,40 @@
+# Curated handle pool for bot sessions.
+# One handle per non-comment line. Bots auto-pick the first handle in this list
+# that does NOT have a `hive/events/<handle>.log` file in the repo.
+#
+# When the pool is exhausted (every handle has an events file), bots append
+# the lowest free numeric suffix: e.g., falcon-2, falcon-3.
+#
+# Handles are session-unique and never reclaimed. A bot whose session ends
+# leaves their events log behind as audit history; new sessions get a new
+# handle. Use BOT_HIVE_HANDLE=<name> to override (e.g., for continuity across
+# restarts of the same logical agent).
+#
+# Adding to this list is a normal PR — no migration required.
+
+buzz
+scout
+forager
+drone
+comb
+pollen
+nectar
+waggle
+sparrow
+finch
+robin
+wren
+fox
+otter
+badger
+mole
+squirrel
+hare
+sentinel
+pilot
+ranger
+watcher
+kestrel
+falcon
+tern
+jay

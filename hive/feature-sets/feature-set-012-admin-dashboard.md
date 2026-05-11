@@ -1,5 +1,8 @@
 # [feature-set-012] Admin: admin dashboard — UI and backend
 
+**Status**: active
+**Owner**:
+
 ## Goal
 A first-class admin surface for managing the Bot Hive product itself — users, projects, billing/seats, system health, and any future operator concerns. Today there's no admin UI; product administration happens via direct DB access, raw `gh api` calls, and ticket-file edits. As Bot Hive grows past pre-launch, an admin dashboard becomes the durable surface for operator work.
 

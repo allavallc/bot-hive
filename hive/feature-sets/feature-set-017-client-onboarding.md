@@ -1,5 +1,8 @@
 # [feature-set-017] Client onboarding — getting a new project from "I want this" to "live board with their tickets"
 
+**Status**: active
+**Owner**:
+
 ## Goal
 Make Bot Hive adoptable by a new project in under 10 minutes, end-to-end, with no shoulder-surfing from the Bot Hive maintainer. Today the connect flow exists but a new client has no walkthrough, no seed for the `hive/` folder, no migration path from competing tools, no UX for collaborators who lack the repo-admin permissions GitHub App install requires, and no empty-state guidance on the dashboard. This FS closes those gaps.
 
