@@ -46,6 +46,21 @@ if ($ticketContent -match "(?m)^- \*\*Assigned to\*\*:[ \t]*(\S+)") {
     }
 }
 
+# HV-112: User-facing must be set explicitly before in-review/. The flag
+# routes who reviews: yes -> human via Accept; no -> tester bot.
+$userFacing = ""
+if ($ticketContent -match "(?m)^- \*\*User-facing\*\*:[ \t]*(\S+)") {
+    $userFacing = $Matches[1].Trim()
+}
+if (-not $userFacing) {
+    Write-Error "$HvId has no User-facing value. Set 'User-facing: yes' or 'User-facing: no' in the ticket frontmatter before shipping - it routes the review (human vs tester bot)."
+    exit 1
+}
+if ($userFacing -cne "yes" -and $userFacing -cne "no") {
+    Write-Error "$HvId has User-facing='$userFacing'; must be 'yes' or 'no' (lowercase)."
+    exit 1
+}
+
 $nowIso = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $today = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
 $ticketName = $ticketFile.Name
