@@ -1,5 +1,8 @@
 # [feature-set-006] Ticket attachments and references
 
+**Status**: active
+**Owner**:
+
 ## Goal
 Let tickets carry richer content than plain text — images, embedded designs, URLs to Figma / Notion / decks, and arbitrary file attachments — so UX-heavy and design-driven work can keep its primary references inside the ticket itself.
 

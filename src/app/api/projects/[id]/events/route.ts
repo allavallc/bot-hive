@@ -14,9 +14,12 @@
 // Read via the GitHub App's installation token; auth is the user's
 // session cookie.
 
+import { db } from "@/db";
+import { humanNotes } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { installationOctokit } from "@/lib/github";
 import { getProjectForUser } from "@/lib/projects";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -144,13 +147,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const oct = await installationOctokit(project.installId);
 
   let eventFiles: { path: string; name: string }[];
-  let toBotsFiles: { path: string; name: string }[];
   let toHumansFiles: { path: string; name: string }[];
   let legacyEvents: string | null;
   try {
-    [eventFiles, toBotsFiles, toHumansFiles, legacyEvents] = await Promise.all([
+    [eventFiles, toHumansFiles, legacyEvents] = await Promise.all([
       listLogFiles(oct, owner, repo, "hive/events"),
-      listLogFiles(oct, owner, repo, "hive/notes-to-bots"),
       listLogFiles(oct, owner, repo, "hive/notes-to-humans"),
       readFile(oct, owner, repo, "hive/events.log"),
     ]);
@@ -160,12 +161,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   let eventContents: (string | null)[];
-  let toBotsContents: (string | null)[];
   let toHumansContents: (string | null)[];
   try {
-    [eventContents, toBotsContents, toHumansContents] = await Promise.all([
+    [eventContents, toHumansContents] = await Promise.all([
       Promise.all(eventFiles.map((f) => readFile(oct, owner, repo, f.path))),
-      Promise.all(toBotsFiles.map((f) => readFile(oct, owner, repo, f.path))),
       Promise.all(toHumansFiles.map((f) => readFile(oct, owner, repo, f.path))),
     ]);
   } catch (err) {
@@ -180,16 +179,30 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   for (const content of eventContents) {
     if (content) parseLifecycle(content, cutoffMs, sink);
   }
-  toBotsFiles.forEach((file, i) => {
-    const content = toBotsContents[i];
-    if (content) parseNotes(content, actorFromFilename(file.name), "note-to-bots", cutoffMs, sink);
-  });
   toHumansFiles.forEach((file, i) => {
     const content = toHumansContents[i];
     if (content) {
       parseNotes(content, actorFromFilename(file.name), "note-to-humans", cutoffMs, sink);
     }
   });
+
+  // HV-094: human-to-bot notes from DB (replaces the old hive/notes-to-bots
+  // Git read path). Source of truth is the human_notes table.
+  const cutoffDate = new Date(cutoffMs);
+  const noteRows = await db
+    .select()
+    .from(humanNotes)
+    .where(and(eq(humanNotes.projectId, project.id), gt(humanNotes.createdAt, cutoffDate)))
+    .orderBy(desc(humanNotes.createdAt))
+    .limit(MAX_LINES);
+  for (const n of noteRows) {
+    sink.push({
+      kind: "note-to-bots",
+      ts: n.createdAt.toISOString(),
+      actor: n.actor,
+      raw: n.message,
+    });
+  }
 
   sink.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
   const entries = sink.slice(0, MAX_LINES);

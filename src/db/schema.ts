@@ -169,3 +169,119 @@ export const syncState = pgTable("sync_state", {
   lastSha: text("last_sha"),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
 });
+
+// HV-094: notes from humans to bots — DB-backed transient state, not Git.
+//
+// Notes are conversational direction, not canonical state. Storing them as
+// Git commits creates PR queue noise + 2-3 min visibility lag. This table
+// is the source of truth for human-to-bot notes; the read endpoint joins
+// it into the panel's stream so notes appear within ~1s of a Send click.
+//
+// Bot→human notes still flow through Git (`hive/notes-to-humans/<bot>.log`)
+// because bots have existing git auth but no API auth — asymmetry is
+// intentional for v1.
+export const humanNotes = pgTable(
+  "human_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    actor: text("actor").notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    projectCreatedIdx: index("human_notes_project_created_idx").on(t.projectId, t.createdAt),
+  }),
+);
+
+// ADR-004: bot-to-PM ticket suggestions inbox.
+//
+// When a coder/tester bot writes a `@<colony>.<pm-handle> we need a ticket
+// for X` note, the PM creates a row here. Default policy is `always_ask`
+// (see `colonySettings`) — the suggestion appears in the swarm panel inbox
+// for the human to Approve or Reject. Approve files a real ticket; Reject
+// sends a reason note back to the suggesting bot.
+export const botSuggestions = pgTable(
+  "bot_suggestions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    suggesterActor: text("suggester_actor").notNull(),
+    targetPmActor: text("target_pm_actor").notNull(),
+    message: text("message").notNull(),
+    status: text("status").notNull().default("pending"),
+    rejectionReason: text("rejection_reason"),
+    approvedTicketId: text("approved_ticket_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => ({
+    projectStatusIdx: index("bot_suggestions_project_status_idx").on(t.projectId, t.status),
+  }),
+);
+
+// ADR-003 + ADR-004: per-colony settings.
+//
+// A colony is identified by the human's GitHub login (e.g., "allavallc",
+// "tony"). Settings are scoped to a (project, colony) pair so the same
+// human can have different policies in different projects, and two
+// humans on the same project can have different policies in their own
+// colonies. Currently holds the `always_ask` flag for ADR-004's
+// suggestion-approval flow; future colony-level flags land here too.
+export const colonySettings = pgTable(
+  "colony_settings",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    colony: text("colony").notNull(),
+    alwaysAsk: boolean("always_ask").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectId, t.colony] }),
+  }),
+);
+
+// FS-022: swarm health monitoring anomalies.
+//
+// A periodic cron walks repo state + DB and writes a row here whenever an
+// always-on invariant is violated (qualified-actor names, FS Owner format,
+// stale orphans, etc.). One row per (project, code, dedup_key) — the cron
+// upserts: existing row sees lastSeenAt bumped; new violation gets a fresh
+// row with firstSeenAt = now. When the violation goes away on a subsequent
+// run, resolvedAt is set.
+//
+// dedupKey is a stable hash of (code + key parts of details) so the same
+// violation across runs collapses into one row. Without it, the cron would
+// create a new row every 5 min for every persistent violation.
+//
+// Severity drives panel sort order: critical > warning > info.
+export const swarmAnomalies = pgTable(
+  "swarm_anomalies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    severity: text("severity").notNull(),
+    message: text("message").notNull(),
+    details: jsonb("details").notNull().default({}),
+    dedupKey: text("dedup_key").notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => ({
+    projectDedupUnique: unique("swarm_anomalies_project_dedup_unique").on(t.projectId, t.dedupKey),
+    projectOpenIdx: index("swarm_anomalies_project_open_idx").on(t.projectId, t.resolvedAt),
+  }),
+);

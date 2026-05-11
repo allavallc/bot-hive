@@ -34,20 +34,6 @@ function ago(iso: string): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-const ACTION_GLYPH: Record<string, string> = {
-  claim: "→",
-  done: "✓",
-  blocked: "⊘",
-  reclaim: "↺",
-  reverted: "↺",
-  filed: "+",
-  "in-progress": "·",
-  "in-review": "▸",
-  accepted: "✓",
-  rejected: "✗",
-  "not-doing": "—",
-};
-
 type Lifecycle = { hvId: string; action: string };
 
 function parseLifecycle(raw: string): Lifecycle {
@@ -191,42 +177,24 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
         ) : (
           entries.map((e, i) => {
             const key = `${e.kind}|${e.ts}|${e.actor}|${i}`;
+            const color = e.actor ? robotColor(e.actor) : undefined;
+            const isNote = e.kind === "note-to-bots" || e.kind === "note-to-humans";
+            let body: string;
             if (e.kind === "lifecycle") {
               const { hvId, action } = parseLifecycle(e.raw);
-              return (
-                <div key={key} className={styles.signal} data-type={action}>
-                  <span className={styles.glyph} aria-hidden="true">
-                    {ACTION_GLYPH[action] ?? "·"}
-                  </span>
-                  <span
-                    className={styles.author}
-                    style={{ color: e.actor ? robotColor(e.actor) : undefined }}
-                  >
-                    {e.actor || "?"}
-                  </span>
-                  <span className={styles.message}>
-                    {action} {hvId}
-                  </span>
-                  <span className={styles.time} title={e.ts}>
-                    {ago(e.ts)}
-                  </span>
-                </div>
-              );
+              body = `${action} ${hvId}`.trim();
+            } else {
+              body = e.raw;
             }
-            // notes — to-bots or to-humans
-            const arrow = e.kind === "note-to-bots" ? "→" : "←";
             return (
-              <div key={key} className={styles.note} data-direction={e.kind}>
-                <span className={styles.glyph} aria-hidden="true">
-                  {arrow}
+              <div key={key} className={styles.row}>
+                <span className={styles.bullet} style={{ color }} aria-hidden="true">
+                  ●
                 </span>
-                <span
-                  className={styles.author}
-                  style={{ color: e.actor ? robotColor(e.actor) : undefined }}
-                >
+                <span className={styles.author} style={{ color }}>
                   {e.actor || "?"}
                 </span>
-                <span className={styles.noteMessage}>{e.raw}</span>
+                <span className={isNote ? styles.noteMessage : styles.message}>{body}</span>
                 <span className={styles.time} title={e.ts}>
                   {ago(e.ts)}
                 </span>

@@ -4,6 +4,32 @@ Canonical project rules for **any agent** (AI or human) working on bot-hive. Age
 
 Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-state.md` — never in this file.
 
+## Worktree isolation (preferred)
+
+When the human spawns you via the **"Add a bot"** button on the live board, your session starts in a dedicated git worktree at `worktrees/<your-handle>/` on a feature branch `<handle>-work`. Two bots in two worktrees physically can't edit the same files — coordination protocol catches the rest.
+
+If you weren't spawned via the button (running in the main repo working dir), no harm — Bot Hive's protocol still works without worktrees. The button + worktree flow is a hardening, not a requirement.
+
+## Bot CLI helpers (start here)
+
+Three scripts wrap the protocol so you don't have to construct git/gh calls by hand. Use them for every claim, note, and session start:
+
+- **`scripts/my-work.{sh,ps1}`** — session-start helper. Runs `git pull --rebase`, then surfaces: your rejected work, your in-progress tickets, notes addressed to you, recent swarm events, and available backlog filtered by FS-status and Blocked-by. Run this first every session.
+- **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<colony>.<handle>.log`, opens an auto-merging claim PR.
+- **`scripts/in-review.{sh,ps1}` `<HV-id>`** — ship a claimed ticket to in-review when work is complete. Moves the file from `in-progress/` to `in-review/`, updates Status / Completed / Last touched, appends an `in-review` event, commits, pushes to the claim branch, and **verifies the file actually landed in `in-review/` on the remote**. Use this — never do the move by hand. Manual `git mv` + commit has been silently dropped during cherry-picks; the helper makes it atomic and verified.
+- **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<colony>.<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` or `@<colony>.<bot-handle>` to address a specific actor.
+
+All three read **`.bot-hive-identity`** at the worktree root for the bot's colony and handle:
+
+```
+colony=allavallc
+handle=buzz
+```
+
+The Add-a-Bot spawn flow writes this file as part of `git worktree add` setup. Bots running in the worktree pick up their identity automatically — no env var to set per shell. The legacy `BOT_HIVE_HANDLE` env var is supported as a transitional fallback while the migration to identity files is in flight.
+
+Bot identity is `<colony>.<handle>` globally (e.g., `allavallc.buzz`). See `hive/HIVE.md` for the colony model.
+
 ---
 
 ## Identity (read first)
@@ -12,28 +38,27 @@ Every agent session has a unique handle. **Two sessions on the same machine get 
 
 ### On session start
 
-1. **Auto-pick a handle from the curated list** (random selection):
+1. **Read the curated pool** from `hive/handles.txt` (one handle per non-comment line). The pool is data-as-file — not hardcoded prose — so adding handles is a normal PR.
 
+2. **Find the first pool handle that does NOT have a `hive/events/<handle>.log` file.** Each per-actor events file means that handle is taken (for all time — handles are session-unique and never reclaimed). If every pool handle has an events file, append the lowest free numeric suffix to the first pool handle: `falcon-2`, `falcon-3`.
+
+3. **Claim the handle by committing immediately.** Append a presence line to your new events file:
    ```
-   buzz, scout, forager, drone, comb, pollen, nectar, waggle,
-   sparrow, finch, robin, wren, fox, otter, badger, mole,
-   squirrel, hare, sentinel, pilot, ranger, watcher, kestrel,
-   falcon, tern, jay
+   echo "<ISO ts> presence <handle> online" >> hive/events/<handle>.log
+   git add hive/events/<handle>.log
+   git commit -m "presence: <handle> online"
+   git push
    ```
 
-2. **Check for collisions** with handles already in active use:
-   - Scan recent commit trailers: `git log --grep "Bot: " -n 50` — extract the `Bot: <handle>` values.
-   - Scan in-progress tickets: read every `hive/in-progress/*.md` and extract the `Assigned to:` field's handle.
-   - If your random pick appears in either set, **re-pick**. Repeat up to 10 times.
-   - If 10 rolls all collide (extremely unlikely), append a numeric suffix: `scout-2`.
+4. **If the push fails (non-fast-forward), the per-actor file is the lock — you collided with a parallel claim.** Run `git pull --rebase`. If the pulled commits include a `presence <handle> online` line by a different commit author, your handle was taken by a parallel bot. Roll back your local commit (`git reset --hard origin/main`), go to step 2, pick a different handle.
 
-3. **Hold the handle in memory** for the session. **Do not** persist it to `git config` or any file. Each session is a fresh roll.
+5. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
 
-4. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
+The git push race IS the lock. There is no separate registry to keep in sync, no heartbeat, no liveness check. Two bots picking the same handle simultaneously will both attempt to commit `hive/events/<handle>.log`; only one push wins.
 
 ### Override
 
-If `BOT_HIVE_HANDLE` environment variable is set (e.g., `BOT_HIVE_HANDLE=billy`), use that value verbatim — skip the random pick and the collision check. Lets the human lock a session to a specific name.
+If `.bot-hive-identity` exists in the worktree (written by the Add-a-Bot spawn flow), use the `colony=` and `handle=` values verbatim — skip the pool pick. Lets the human lock a session to a specific identity, surviving shell restarts. Legacy `BOT_HIVE_HANDLE` env var is also honored during the migration window.
 
 ### Where the handle appears
 
@@ -93,16 +118,16 @@ Multiple agents (and humans) work this repo at once. Coordination is **not** cen
 ### On every session start
 
 1. `git pull` (subscribe to durable state).
-2. Read `hive/focus.md` — that's the standing order. (Empty / missing = "anything in backlog.")
+2. Read `.bot-hive-identity` to get your colony, then read `hive/colonies/<colony>/focus.md` — that's your colony's standing order. (Empty / missing = "anything in backlog.")
 3. Read recent activity across all agents — `cat hive/events/*.log | sort | tail -50` — to see what's been happening.
 4. Auto-pick a handle (per the Identity section above). Announce it.
-5. Subscribe to the real-time signal stream for the project named in `focus.md` (see "Real-time channel" below). Replay the last ~100 signals as context.
+5. Subscribe to the real-time signal stream for the project named in your colony's focus file (see "Real-time channel" below). Replay the last ~100 signals as context.
 6. **Scan `hive/in-progress/` for your own rejected work.** For each ticket where `Assigned to:` matches your handle AND `Rejected by:` is populated — that's pending rework you own. Resume it before claiming any new ticket. (See "Picking what to claim" below.)
 7. **Read notes addressed to you.** Scan `hive/notes-to-bots/*.log` for lines from the last 24h containing `@<your-agent-id>` or `@swarm`. Those are the human's direction — read them, surface them as priority context, factor them into ticket selection. To respond, append to your own `hive/notes-to-humans/<your-agent-id>.log` (TSV: `<ISO ts>\t<message>`). Use `@<human-handle>` to address a specific human; bare prose goes to anyone watching the panel.
 
 ### When the human says "do FS-X" or "work on HV-X"
 
-The agent they're chatting with **also writes that to `hive/focus.md`** so the other agents pick up the same intent on their next session start. The chat message is a hint; `focus.md` is the source of truth across agents.
+The agent they're chatting with **also writes that to `hive/colonies/<that-human's-colony>/focus.md`** so other agents in that colony pick up the same intent on their next session start. The chat message is a hint; the colony's focus file is the source of truth within the colony.
 
 ### Picking what to claim
 
@@ -122,13 +147,22 @@ If no such tickets exist, proceed to the DAG-walk.
 
 **DAG-walk** — once your own rejected work is clear:
 
-1. Read `focus.md`.
-2. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
-3. Filter out: in-progress, blocked, anything with unfinished `Blocked by:`.
-4. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
-5. Claim it.
+1. **`git pull --rebase` immediately before scanning.** Don't trust your session-start snapshot — main may have moved. Stale-clone claims are a real failure mode (a bot picked a ticket that had been routed to `not-doing/` 30 minutes earlier because they hadn't pulled).
+2. Read your colony's focus file (`hive/colonies/<colony>/focus.md`).
+3. Collect tickets in scope (named FS, named ticket, or all of `backlog/`).
+4. Filter out:
+   - Tickets in `in-progress/`, `blocked/`, `not-doing/`, `done/` (only `backlog/` is pickable)
+   - Anything with unfinished `Blocked by:` (a blocker not in `done/`)
+   - **Anything whose `Feature set:` points at an FS file with `Status:` other than `active`.** A `future` or `parked` FS means the human has explicitly said "not yet" — skip every ticket in that FS, regardless of how attractive the leaf looks.
+   - **Anything whose `Feature set:` points at an FS file with a non-empty `Owner:` that isn't your handle.** A reserved FS belongs to a specific actor; you finish any in-progress ticket you already hold there, but you don't pick *new* tickets from a non-empty Owner FS. (When a human reassigns ownership: the new owner edits the FS file's `Owner:` line; other bots stop picking from that FS forward but finish their current task.)
+5. **Filter out tickets with active soft-fence claims**. Read `GET /api/projects/[id]/events` and skip any entry with `kind: "claim-active"` — a peer just claimed it within the last 30 minutes via the platform's claim endpoint, before their canonical Git move landed.
+6. From the available leaves, pick the one that **unblocks the most downstream tickets**. Tie-break: lowest ticket ID.
+7. **Reserve via the soft fence first**: `POST /api/projects/[id]/tickets/<hvId>/claim` with `{ "handle": "<your-handle>" }`. The platform records a 30-min claim and broadcasts SSE so the swarm panel + other bots see it within ~1s. If the platform returns 409, a peer beat you to it — re-DAG-walk.
+8. **Pull again** (`git pull --rebase`) right before the `git mv` claim, in case main moved during your scan. Then claim canonically by moving the ticket file in a real PR (or in your work-PR's first commit). The webhook clears the soft-fence claim when it sees the canonical move.
 
 This is deterministic enough that two agents usually pick different leaves. If they collide, the git push lock breaks the tie — loser pulls and re-runs.
+
+**Why pull twice (session-start AND before-claim AND before-mv)?** Stale local state is the single failure mode that causes "bot worked on something already retired" — every pull is cheap (one round-trip), every wasted-work session is expensive. Always-pull-before-state-change.
 
 ### One PR per ticket lifecycle transition
 
@@ -198,7 +232,7 @@ A "hot file" is one that multiple parallel agents edit, where parallel PRs relia
 
 - `AGENTS.md`
 - `hive/HIVE.md`
-- `hive/focus.md`
+- `hive/colonies/<your-colony>/focus.md`
 - `tasks/lessons.md`
 - `render.yaml`
 - `package.json`
@@ -331,7 +365,7 @@ Each `hive/feature-sets/feature-set-NNN-<slug>.md` carries an **`## Architecture
 
 **Append** an entry whenever you make a non-trivial design choice in an FS. "Non-trivial" = anything you'd debate in a senior code review; pure mechanical edits don't qualify.
 
-**Read** the relevant FS's section on session start, **after** `focus.md` and the merged event view. If `focus.md` names an FS, that FS's decisions are mandatory pre-reading.
+**Read** the relevant FS's section on session start, **after** your colony's focus file and the merged event view. If the focus file names an FS, that FS's decisions are mandatory pre-reading.
 
 **Append-only** by convention. Never edit or delete past decisions — that's audit honesty. If two bots append simultaneously and conflict, both entries land (auto-rebase orders them by timestamp).
 
@@ -432,8 +466,8 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 ## Pointers
 
 - `hive/HIVE.md` — the format spec. Read this if you're touching the hive workflow itself.
-- `hive/focus.md` — current standing order from the human (one line).
-- `hive/events/` — per-actor event logs (one file per agent). Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
+- `hive/colonies/<colony>/focus.md` — current standing order from the human who owns this colony (one line). The colony comes from `.bot-hive-identity` in your worktree.
+- `hive/events/` — per-actor event logs, keyed by `<colony>.<handle>.log`. Read the merged view on session start: `cat hive/events/*.log | sort | tail -50`.
 - `hive/notes-to-bots/` — humans' notes to bots (one file per human). Scan on session start for `@<your-agent-id>` or `@swarm` mentions.
 - `hive/notes-to-humans/` — bots' notes to humans (one file per bot). Append your own replies/questions/status updates here. Format: `<ISO ts>\t<message>`. **Subsumes** the legacy `hive/questions-for-human.md` channel — write here, not there.
 - `hive/feature-sets/` — current feature sets and their goals.
