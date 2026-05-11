@@ -1,5 +1,8 @@
 # [feature-set-011] Bot swarm communication — real-time
 
+**Status**: active
+**Owner**:
+
 ## Goal
 A real-time signaling channel on the live board so bots and humans can coordinate sub-second — not the 5–30 second git-pull delay we have today. Ephemeral signals ("I'm starting HV-XXX," "done with X — Y unblocked," "blocked, need a human") flow through the channel in real time. Durable state stays in `events.log`. Two layers: ephemeral chatter + durable audit log.
 

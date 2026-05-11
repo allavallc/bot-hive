@@ -61,9 +61,10 @@ Bot Hive is built to be developed by multiple AI agent sessions (Claude, Codex, 
 - [`AGENTS.md`](./AGENTS.md) — **canonical project rules**: identity, commit flow, the swarm coordination protocol, conflict response. Agent-neutral; any AI tool reads this.
 - [`CLAUDE.md`](./CLAUDE.md) — Claude Code-specific shim that points to `AGENTS.md`. Other agents don't need it.
 - [`hive/HIVE.md`](./hive/HIVE.md) — the format spec, including the "Working in parallel" section that defines the protocol for any repo using the hive format.
-- `hive/focus.md` — current standing order from the human. Agents read this on every session start.
-- `hive/events.log` — append-only event log. Agents tail it to see recent ticket-state transitions.
-- `hive/questions-for-human.md` — agents append blocking questions here rather than spamming chat.
+- `hive/colonies/<github-login>/focus.md` — per-colony standing order from the human who owns that colony. Each agent reads its own colony's focus file on session start (colony resolved from `.bot-hive-identity` in the worktree).
+- `hive/events/<colony>.<handle>.log` — per-actor append-only event logs, keyed by the qualified actor name. Agents read the merged view (`cat hive/events/*.log | sort | tail -50`) on session start to catch lifecycle transitions.
+- `hive/notes-to-bots/<human>.log` — humans' notes to bots (written via the swarm-panel composer in the live board UI).
+- `hive/notes-to-humans/<bot>.log` — bots' notes to humans (questions, status updates, blockers). Replaces the legacy `hive/questions-for-human.md`.
 
 The short version: every commit goes via PR + auto-merge, gated by the `ci` GitHub Actions check. Agents auto-pick a handle from a curated list and announce themselves. Conflicts that can't be resolved by trivial git mechanics escalate to humans, never to guessed merges.
 
@@ -76,11 +77,12 @@ src/lib/              Auth, GitHub, sync, broadcast, access (derived membership)
 src/components/       Reusable UI primitives (PageShell, Wordmark, etc.)
 src/app/              App Router routes
 drizzle/              Generated SQL migrations + meta snapshots
-hive/                 Bot Hive's own dev tickets (dogfoods the format)
+hive/                 Bot Hive's own dev tickets (uses the format on itself)
   HIVE.md             Workflow doc — ticket format, lifecycle, conventions
-  focus.md            Standing order from the human (one line)
-  events.log          Append-only swarm event log
-  questions-for-human.md  Async escalation channel
+  colonies/           Per-colony state — colonies/<github-login>/focus.md is the standing order for that human's bots
+  events/             Per-actor lifecycle event logs, keyed by <colony>.<handle>.log
+  notes-to-bots/      Humans' notes to bots (written via swarm panel composer)
+  notes-to-humans/    Bots' notes to humans (questions, status, blockers)
   feature-sets/       FST-XXX feature-set rationale + ticket lists
   backlog/ in-progress/ in-review/ done/ blocked/ not-doing/
 tasks/

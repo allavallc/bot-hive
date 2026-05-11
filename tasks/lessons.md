@@ -60,7 +60,7 @@ Used this in HV-024 *only after* the user explicitly asked for it. Should be the
 
 ## L8 — Don't split a ticket's lifecycle moves across multiple PRs
 
-Caught during the first parallel-bot dogfood (CC2 working HV-039, 2026-05-05). CC2 made two PRs:
+Caught during the first parallel-bot test (CC2 working HV-039, 2026-05-05). CC2 made two PRs:
 - PR #19: source-code work for the modal feature (branch based on stale main; HV-039 file in `in-progress/` per CC2's branch)
 - PR #20: ticket move from in-progress to in-review (premature — opened while #19 was still in CI)
 

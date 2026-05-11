@@ -150,7 +150,7 @@ Total ceremony per change: ~2-3 minutes of wall time, ~5 seconds of bot interact
 - The split between hive/ coordination metadata and source code in **mental model** stays the same — hive/ is still small atomic moves, source is still the substantive work. The only difference: both now go through PRs.
 - Provenance trailers (`Bot:`, `Model:`, `Trigger:`) stay the same.
 - The handle convention stays the same.
-- The `events.log`, `focus.md`, `questions-for-human.md` conventions stay the same.
+- The per-actor `hive/events/`, `hive/notes-to-bots/`, `hive/notes-to-humans/`, and `focus.md` conventions stay the same.
 
 ---
 

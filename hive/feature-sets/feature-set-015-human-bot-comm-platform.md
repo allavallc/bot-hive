@@ -1,5 +1,8 @@
 # [feature-set-015] Human ↔ Bot communication on the platform
 
+**Status**: active
+**Owner**:
+
 ## Goal
 A human can leave a message for the swarm directly from the Bot Hive web UI — and the next bot to start a session, or any bot mid-session, sees it as an actionable signal. Closes the gap where coordinating with a bot today requires the human to chat with one terminal-based agent and have that agent relay messages to others.
 

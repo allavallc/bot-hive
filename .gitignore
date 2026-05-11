@@ -3,6 +3,10 @@ node_modules/
 .pnp
 .pnp.js
 
+# Per-bot git worktrees — each spawned bot lives in its own subdirectory
+# under worktrees/ for filesystem isolation. Local-only.
+worktrees/
+
 # Next.js
 .next/
 out/

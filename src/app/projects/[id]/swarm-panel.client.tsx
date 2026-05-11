@@ -1,38 +1,28 @@
 "use client";
 
 import { robotColor } from "@/components/robot-mascot";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "./swarm-panel.module.css";
 
-// The swarm panel is a real-time view of the per-actor event logs at
-// `hive/events/<actor>.log` — the durable coordination logs every bot
-// writes to. There is no separate signal channel, no bot tokens, no API
-// surface beyond the existing GitHub webhook → SSE broadcast that already
-// powers the live board. When a bot pushes a commit that touches its
-// event log, the webhook fires, the panel re-fetches the merged view,
-// and the new lines render here within seconds.
+// The swarm panel is a real-time view across three substrates:
+//   1. hive/events/<actor>.log   — lifecycle events (claim, done, etc.)
+//   2. hive/notes-to-bots/<author>.log   — humans → bots
+//   3. hive/notes-to-humans/<author>.log — bots → humans
+// All three are plain text + Git, written by per-actor split so parallel
+// writers never conflict. The panel renders a merged, newest-first view.
+// The composer at the top writes notes (use @cc2 or @swarm to target).
 
-type EventEntry = {
+type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
+
+type Entry = {
+  kind: EntryKind;
   ts: string;
-  hvId: string;
-  action: string;
   actor: string;
   raw: string;
 };
 
 const STORAGE_KEY = "bot-hive:swarm-panel:open";
-
-// Event lines look like:  <ISO ts>  <hv-id|tag>  <action>  [unblocked-list]  <actor>
-// Tolerant parser — preserves the full raw line so anything off-format still renders.
-function parseEntry(raw: string): EventEntry | null {
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.startsWith("#")) return null;
-  const parts = trimmed.split(/\s+/);
-  if (parts.length < 3) return null;
-  const [ts, hvId, action, ...rest] = parts;
-  const actor = rest[rest.length - 1] ?? "";
-  return { ts, hvId, action, actor, raw: trimmed };
-}
+const MAX_MESSAGE_CHARS = 280;
 
 function ago(iso: string): string {
   const t = Date.parse(iso);
@@ -44,27 +34,24 @@ function ago(iso: string): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-const ACTION_GLYPH: Record<string, string> = {
-  claim: "→",
-  done: "✓",
-  blocked: "⊘",
-  reclaim: "↺",
-  reverted: "↺",
-  filed: "+",
-  "in-progress": "·",
-  "in-review": "▸",
-  accepted: "✓",
-  rejected: "✗",
-  "not-doing": "—",
-};
+type Lifecycle = { hvId: string; action: string };
+
+function parseLifecycle(raw: string): Lifecycle {
+  const parts = raw.split(/\s+/);
+  // <ts> <hv-id> <action> [unblocked-list] <actor>
+  const hvId = parts[1] ?? "";
+  const action = parts[2] ?? "";
+  return { hvId, action };
+}
 
 export function SwarmPanel({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState<boolean>(true);
-  const [entries, setEntries] = useState<EventEntry[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [connected, setConnected] = useState(false);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
-  // Load persisted open/closed state.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -80,15 +67,14 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
     try {
       const res = await fetch(`/api/projects/${projectId}/events`);
       if (!res.ok) return;
-      const data = (await res.json()) as { entries: string[] };
-      const parsed = data.entries.map(parseEntry).filter((e): e is EventEntry => e !== null);
-      setEntries(parsed);
+      const data = (await res.json()) as { entries: Entry[] };
+      setEntries(data.entries);
     } catch {
       // Network error — leave existing entries; SSE will trigger another refresh.
     }
   }, [projectId]);
 
-  // Subscribe to the project SSE; refetch the merged event view on every change broadcast.
+  // Subscribe to the project SSE; refetch the merged view on every change broadcast.
   useEffect(() => {
     if (!open) return;
     refresh();
@@ -96,7 +82,6 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
     es.onmessage = () => {
-      // Any change broadcast — refresh the merged event view. Cheap, idempotent.
       refresh();
     };
     return () => {
@@ -104,6 +89,32 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
       setConnected(false);
     };
   }, [open, projectId, refresh]);
+
+  const send = useCallback(async () => {
+    const message = draft.trim();
+    if (!message || sending) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/notes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setSendError(data.error || "send failed");
+        return;
+      }
+      setDraft("");
+      // SSE will fire from the broadcast in the POST handler; refresh as a safety net.
+      refresh();
+    } catch {
+      setSendError("network error");
+    } finally {
+      setSending(false);
+    }
+  }, [draft, sending, projectId, refresh]);
 
   if (!open) {
     return (
@@ -119,7 +130,7 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <aside className={styles.panel} aria-label="Swarm — event log view">
+    <aside className={styles.panel} aria-label="Swarm — events and notes">
       <header className={styles.panelHeader}>
         <span className={styles.title}>Swarm</span>
         <span className={styles.connState} data-on={connected} aria-live="polite">
@@ -135,32 +146,61 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
         </button>
       </header>
 
-      <div ref={listRef} className={styles.list}>
+      <form
+        className={styles.composer}
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
+        <input
+          type="text"
+          className={styles.input}
+          placeholder="Use @cc2 or @swarm to target. Enter to send."
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          maxLength={MAX_MESSAGE_CHARS}
+          disabled={sending}
+          aria-label="Note to bots"
+        />
+        <button type="submit" className={styles.sendButton} disabled={!draft.trim() || sending}>
+          {sending ? "…" : "Send"}
+        </button>
+        {sendError && <span className={styles.sendError}>{sendError}</span>}
+      </form>
+
+      <div className={styles.list}>
         {entries.length === 0 ? (
           <p className={styles.empty}>
-            No events in the last 7 days. Activity appears here as agents push to{" "}
-            <code>hive/events/&lt;actor&gt;.log</code>.
+            No activity in the last 7 days. Lifecycle events and notes appear here.
           </p>
         ) : (
-          entries.map((e) => (
-            <div key={e.raw} className={styles.signal} data-type={e.action}>
-              <span className={styles.glyph} aria-hidden="true">
-                {ACTION_GLYPH[e.action] ?? "·"}
-              </span>
-              <span
-                className={styles.author}
-                style={{ color: e.actor ? robotColor(e.actor) : undefined }}
-              >
-                {e.actor || "?"}
-              </span>
-              <span className={styles.message}>
-                {e.action} {e.hvId}
-              </span>
-              <span className={styles.time} title={e.ts}>
-                {ago(e.ts)}
-              </span>
-            </div>
-          ))
+          entries.map((e, i) => {
+            const key = `${e.kind}|${e.ts}|${e.actor}|${i}`;
+            const color = e.actor ? robotColor(e.actor) : undefined;
+            const isNote = e.kind === "note-to-bots" || e.kind === "note-to-humans";
+            let body: string;
+            if (e.kind === "lifecycle") {
+              const { hvId, action } = parseLifecycle(e.raw);
+              body = `${action} ${hvId}`.trim();
+            } else {
+              body = e.raw;
+            }
+            return (
+              <div key={key} className={styles.row}>
+                <span className={styles.bullet} style={{ color }} aria-hidden="true">
+                  ●
+                </span>
+                <span className={styles.author} style={{ color }}>
+                  {e.actor || "?"}
+                </span>
+                <span className={isNote ? styles.noteMessage : styles.message}>{body}</span>
+                <span className={styles.time} title={e.ts}>
+                  {ago(e.ts)}
+                </span>
+              </div>
+            );
+          })
         )}
       </div>
     </aside>
