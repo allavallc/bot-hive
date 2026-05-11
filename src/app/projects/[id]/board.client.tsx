@@ -6,6 +6,7 @@ import { Wordmark } from "@/components/wordmark";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { firstUnfinishedBlocker, groupByFs } from "./board-grouping";
 import { effectiveState } from "./board-state";
 import styles from "./board.module.css";
 
@@ -222,6 +223,16 @@ export function Board({
     byColumn.get(state)?.push(t);
   }
 
+  // HV-113: precompute which tickets have unfinished Blocked-by references
+  // (a blocker not in done/). Greys out the card in backlog + in-review.
+  const doneSet = useMemo(
+    () => new Set(tickets.filter((t) => t.state === "done").map((t) => t.hvId)),
+    [tickets],
+  );
+  function blockingId(ticket: Ticket): string | null {
+    return firstUnfinishedBlocker(ticket, doneSet);
+  }
+
   const openTicket = openTicketId ? (tickets.find((t) => t.id === openTicketId) ?? null) : null;
 
   function handleCardOpen(ticketId: string, trigger: HTMLElement) {
@@ -317,6 +328,7 @@ export function Board({
         >
           {cols.map((col) => {
             const items = byColumn.get(col.state) ?? [];
+            const fsGroups = col.state === "in-review" ? groupByFs(items, features) : null;
             return (
               <div key={col.state} className={styles.column}>
                 <div className={styles.columnHeader}>
@@ -326,17 +338,46 @@ export function Board({
                 <div className={styles.cards}>
                   {items.length === 0 ? (
                     <div className={styles.empty}>No tickets</div>
-                  ) : (
-                    items.map((t) => (
-                      <Card
-                        key={t.id}
-                        ticket={t}
-                        features={features}
-                        animState={animating.get(t.id)}
-                        pendingTransition={pendingTransitions.get(t.hvId)?.kind}
-                        onOpen={(trigger) => handleCardOpen(t.id, trigger)}
-                      />
+                  ) : fsGroups ? (
+                    fsGroups.map((group) => (
+                      <div key={group.fsKey} className={styles.fsSection}>
+                        <div className={styles.fsSectionHeader}>
+                          <span className={styles.fsSectionCode}>{group.code}</span>
+                          {group.title && (
+                            <span className={styles.fsSectionTitle}>— {group.title}</span>
+                          )}
+                        </div>
+                        {group.tickets.map((t) => {
+                          const blocker = blockingId(t);
+                          return (
+                            <Card
+                              key={t.id}
+                              ticket={t}
+                              features={features}
+                              animState={animating.get(t.id)}
+                              pendingTransition={pendingTransitions.get(t.hvId)?.kind}
+                              onOpen={(trigger) => handleCardOpen(t.id, trigger)}
+                              blockingId={blocker}
+                            />
+                          );
+                        })}
+                      </div>
                     ))
+                  ) : (
+                    items.map((t) => {
+                      const blocker = col.state === "backlog" ? blockingId(t) : null;
+                      return (
+                        <Card
+                          key={t.id}
+                          ticket={t}
+                          features={features}
+                          animState={animating.get(t.id)}
+                          pendingTransition={pendingTransitions.get(t.hvId)?.kind}
+                          onOpen={(trigger) => handleCardOpen(t.id, trigger)}
+                          blockingId={blocker}
+                        />
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -545,23 +586,34 @@ function Card({
   animState,
   pendingTransition,
   onOpen,
+  blockingId,
 }: {
   ticket: Ticket;
   features: Feature[];
   animState?: "arrived" | "new" | "in-review";
   pendingTransition?: "approved" | "rejected";
   onOpen: (trigger: HTMLElement) => void;
+  blockingId?: string | null;
 }) {
   const fm = ticket.frontmatter;
   const fsId = fm["Feature set"];
   const fs = fsId ? features.find((f) => f.fsId === fsId) : null;
   const assignee = fm["Assigned to"];
   const handle = extractHandle(assignee);
+  const isBlocked = Boolean(blockingId);
+  const userFacing = fm["User-facing"];
 
   return (
-    <article className={styles.card} data-state={ticket.state} data-anim={animState}>
+    <article
+      className={styles.card}
+      data-state={ticket.state}
+      data-anim={animState}
+      data-blocked={isBlocked ? "true" : undefined}
+    >
       {ticket.state === "in-progress" && !pendingTransition && <WalkingRobot name={assignee} />}
-      {ticket.state === "in-review" && !pendingTransition && <WalkingHuman />}
+      {ticket.state === "in-review" &&
+        !pendingTransition &&
+        (userFacing === "no" ? <WalkingRobot /> : <WalkingHuman />)}
       {handle && (
         <span
           className={styles.cardBot}
@@ -570,7 +622,16 @@ function Card({
           {handle}
         </span>
       )}
-      <button type="button" className={styles.cardButton} onClick={(e) => onOpen(e.currentTarget)}>
+      <button
+        type="button"
+        className={styles.cardButton}
+        onClick={(e) => {
+          if (isBlocked) return;
+          onOpen(e.currentTarget);
+        }}
+        aria-disabled={isBlocked || undefined}
+        title={isBlocked ? `Blocked by ${blockingId}` : undefined}
+      >
         <span className={styles.cardTop}>
           {fm.Type === "bug" && <BugIcon />}
           <span className={styles.cardId}>{ticket.hvId}</span>
