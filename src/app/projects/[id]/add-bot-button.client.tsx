@@ -42,27 +42,35 @@ function detectPlatform(): Platform {
 
 type StepCommand = { command: string; runIn: string };
 
+// HV-104: the bot's identity is stamped into THREE places at spawn so the
+// human can tell terminals apart at a glance:
+//   1. .bot-hive-identity (canonical; read by all bot CLI helpers)
+//   2. .claude/settings.json statusLine command (shows in chat, persistent)
+//   3. wt.exe / osascript window title (shows in tab bar)
+const claudeSettingsPosix = (worktreeDir: string) =>
+  `mkdir -p ${worktreeDir}/.claude && printf '{\\n  "statusLine": {\\n    "type": "command",\\n    "command": "bash ./scripts/claude-statusline.sh"\\n  }\\n}\\n' > ${worktreeDir}/.claude/settings.json`;
+
+const claudeSettingsWindows = (worktreeDir: string) =>
+  `New-Item -ItemType Directory -Force -Path ${worktreeDir}/.claude | Out-Null; Set-Content -Path ${worktreeDir}/.claude/settings.json -Value '{\`n  "statusLine": {\`n    "type": "command",\`n    "command": "powershell -NoProfile -File ./scripts/claude-statusline.ps1"\`n  }\`n}'`;
+
 function step1Command(platform: Platform, handle: string, colony: string): StepCommand {
   const branch = `${handle}-work`;
   const worktreeDir = `worktrees/${handle}`;
+  const tabTitle = `${colony}.${handle}`;
   if (platform === "windows") {
-    // Idempotent: clear any leftover worktree dir, then -B (force-reset
-    // branch). Write .bot-hive-identity. Open a new terminal tab in the
-    // worktree dir — no inner shell command, just a fresh prompt. wt.exe
-    // with -d alone has no escaping issues.
     return {
-      command: `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }; git worktree add ${worktreeDir} -B ${branch}; Set-Content -Path ${worktreeDir}/.bot-hive-identity -Value "colony=${colony}\`nhandle=${handle}"; wt.exe new-tab -d "${worktreeDir}"`,
+      command: `if (Test-Path ${worktreeDir}) { git worktree remove ${worktreeDir} --force }; git worktree add ${worktreeDir} -B ${branch}; Set-Content -Path ${worktreeDir}/.bot-hive-identity -Value "colony=${colony}\`nhandle=${handle}"; ${claudeSettingsWindows(worktreeDir)}; wt.exe new-tab --title "${tabTitle}" -d "${worktreeDir}"`,
       runIn: "your main bot-hive terminal",
     };
   }
   if (platform === "mac") {
     return {
-      command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && printf 'colony=${colony}\\nhandle=${handle}\\n' > ${worktreeDir}/.bot-hive-identity && osascript -e 'tell app "Terminal" to do script "cd ${worktreeDir}"'`,
+      command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && printf 'colony=${colony}\\nhandle=${handle}\\n' > ${worktreeDir}/.bot-hive-identity && ${claudeSettingsPosix(worktreeDir)} && osascript -e 'tell application "Terminal" to do script "cd ${worktreeDir} && echo -e \\"\\\\033]0;${tabTitle}\\\\007\\""'`,
       runIn: "your main bot-hive terminal",
     };
   }
   return {
-    command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && printf 'colony=${colony}\\nhandle=${handle}\\n' > ${worktreeDir}/.bot-hive-identity\n# Then open a new terminal manually in ${worktreeDir}`,
+    command: `if [ -d ${worktreeDir} ]; then git worktree remove ${worktreeDir} --force; fi && git worktree add ${worktreeDir} -B ${branch} && printf 'colony=${colony}\\nhandle=${handle}\\n' > ${worktreeDir}/.bot-hive-identity && ${claudeSettingsPosix(worktreeDir)}\n# Then open a new terminal manually in ${worktreeDir} (set tab title to ${tabTitle} if your terminal supports it)`,
     runIn: "your main bot-hive terminal",
   };
 }
@@ -245,25 +253,6 @@ export function AddBotButton({ projectId }: { projectId: string; repoSlug?: stri
                   })()}
 
                   <hr className={styles.divider} />
-
-                  {data.activeHandles.length > 0 ? (
-                    <div className={styles.activeBots}>
-                      <span className={styles.dim}>Currently active:</span>
-                      <div className={styles.activeBotsList}>
-                        {data.activeHandles.map((h) => (
-                          <span
-                            key={h}
-                            className={styles.activeBotPill}
-                            style={{ color: robotColor(h) }}
-                          >
-                            ● {h}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className={styles.dim}>No bots currently active.</p>
-                  )}
 
                   <p className={styles.disclaimer}>
                     ⚠ Each bot consumes from your Claude subscription/credits — N parallel bots ≈ N×

@@ -26,7 +26,10 @@ $actor = "$colony.$handle"
 
 git pull --rebase origin main | Out-Null
 
-Write-Host "=== you are: $actor ==="
+# Identity + role re-resolved on every cycle. whoami.ps1 scans
+# hive/events/<colony>.*.log so role splits when bots join/leave the
+# colony - no manual re-check needed.
+& "$PSScriptRoot/whoami.ps1"
 
 # Assigned-to matcher: field can carry legacy bare handle or new
 # <colony>.<handle> form (ADR-003). Match both for now.

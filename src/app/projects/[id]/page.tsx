@@ -6,6 +6,7 @@ import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AddBotButton } from "./add-bot-button.client";
+import { AdminInbox } from "./admin-inbox.client";
 import { Board } from "./board.client";
 import { SwarmPanel } from "./swarm-panel.client";
 
@@ -51,6 +52,11 @@ export default async function ProjectBoardPage({
     body: f.body,
   }));
 
+  // FS-022 + FS-025 admin gate: only allavallc sees the suggestions
+  // inbox + swarm-health panel during the rollout. Both ride inside
+  // a single slide-over triggered by the AdminInbox chip.
+  const isAdmin = session.user.name === "allavallc";
+
   return (
     <>
       <Board
@@ -62,6 +68,7 @@ export default async function ProjectBoardPage({
         initialTickets={initialTickets}
         initialFeatures={initialFeatures}
       />
+      <AdminInbox projectId={project.id} isAdmin={isAdmin} />
       <SwarmPanel projectId={project.id} />
       <AddBotButton projectId={project.id} />
     </>

@@ -1,0 +1,203 @@
+.section {
+  margin: 24px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 16px;
+}
+
+.heading {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0;
+}
+
+.count {
+  margin-left: 8px;
+  color: var(--ink-dim);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+
+.fileToggle {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.fileToggle:hover {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+
+.fileForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.fileInput {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.fileMessage {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 8px 10px;
+  font-family: var(--read);
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.fileSubmit {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 6px 14px;
+  font-family: var(--read);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.fileSubmit:hover {
+  background: rgba(196, 114, 74, 0.1);
+}
+
+.dim {
+  font-family: var(--read);
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  margin: 0;
+}
+
+.error {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--bg);
+  border-left: 3px solid var(--accent);
+}
+
+.from {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+}
+
+.actor {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.arrow {
+  color: var(--ink-dimmer);
+}
+
+.message {
+  font-family: var(--read);
+  font-size: 0.92rem;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.timing {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-dimmer);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.approve,
+.reject,
+.rejectConfirm,
+.cancel {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  padding: 6px 14px;
+  font-family: var(--read);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.approve:hover {
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+.reject:hover,
+.rejectConfirm:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.cancel:hover {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+
+.reasonInput {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 6px 10px;
+  font-family: var(--read);
+  font-size: 0.85rem;
+}
