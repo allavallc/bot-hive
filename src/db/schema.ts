@@ -1,13 +1,16 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -283,5 +286,41 @@ export const swarmAnomalies = pgTable(
   (t) => ({
     projectDedupUnique: unique("swarm_anomalies_project_dedup_unique").on(t.projectId, t.dedupKey),
     projectOpenIdx: index("swarm_anomalies_project_open_idx").on(t.projectId, t.resolvedAt),
+  }),
+);
+
+// FS-028 / HV-130: bot seat assignment.
+//
+// One row per (project, colony, handle). At most one row per
+// (project, colony, seat) where status='active' — enforced by the
+// partial unique index below. Seats are contiguous integers 1..N
+// per (project, colony); the application code renumbers survivors
+// when a bot leaves (see src/lib/seats.ts).
+//
+// Project + colony scoping matches `colony_settings` (above) — the
+// same human can run different bots in different projects.
+export const bots = pgTable(
+  "bots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    colony: text("colony").notNull(),
+    handle: text("handle").notNull(),
+    seat: integer("seat").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }).notNull().defaultNow(),
+    status: text("status").notNull().default("active"),
+  },
+  (t) => ({
+    projectColonyHandleUnique: unique("bots_project_colony_handle_unique").on(
+      t.projectId,
+      t.colony,
+      t.handle,
+    ),
+    activeSeatUnique: uniqueIndex("bots_project_colony_active_seat_uniq")
+      .on(t.projectId, t.colony, t.seat)
+      .where(sql`${t.status} = 'active'`),
   }),
 );
