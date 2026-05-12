@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { firstUnfinishedBlocker, groupByFs } from "./board-grouping";
+import { staggerSeconds } from "./board-stagger";
 import { effectiveState } from "./board-state";
 import styles from "./board.module.css";
 
@@ -568,15 +569,18 @@ function extractHandle(assignedTo?: string): string | undefined {
   return trimmed;
 }
 
-function WalkingRobot({ name }: { name?: string }) {
-  const delay = useMemo(() => -Math.random() * 12, []);
+function WalkingRobot({ seed, name }: { seed?: string; name?: string }) {
+  // HV-113 follow-up: deterministic delay (was Math.random in useMemo,
+  // which SSR'd one value and hydrated another -> React error #418).
+  const delay = staggerSeconds(seed ?? name, 12);
   return (
     <RobotMascot name={name} className={styles.botRobot} style={{ animationDelay: `${delay}s` }} />
   );
 }
 
-function WalkingHuman() {
-  const delay = useMemo(() => -Math.random() * 14, []);
+function WalkingHuman({ seed }: { seed?: string }) {
+  // HV-113 follow-up: deterministic delay; see WalkingRobot.
+  const delay = staggerSeconds(seed, 14);
   return <HumanMascot className={styles.cardHuman} style={{ animationDelay: `${delay}s` }} />;
 }
 
@@ -610,10 +614,16 @@ function Card({
       data-anim={animState}
       data-blocked={isBlocked ? "true" : undefined}
     >
-      {ticket.state === "in-progress" && !pendingTransition && <WalkingRobot name={assignee} />}
+      {ticket.state === "in-progress" && !pendingTransition && (
+        <WalkingRobot seed={ticket.hvId} name={assignee} />
+      )}
       {ticket.state === "in-review" &&
         !pendingTransition &&
-        (userFacing === "no" ? <WalkingRobot /> : <WalkingHuman />)}
+        (userFacing === "no" ? (
+          <WalkingRobot seed={ticket.hvId} />
+        ) : (
+          <WalkingHuman seed={ticket.hvId} />
+        ))}
       {handle && (
         <span
           className={styles.cardBot}
