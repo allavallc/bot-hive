@@ -4,6 +4,16 @@ A live kanban board over GitHub-hosted ticket files. Sign in with GitHub, instal
 
 **Live**: <https://bot-hive-j0ax.onrender.com>
 
+## Getting started — kickoff
+
+To put your agent (Claude Code, Codex, Aider, Gemini, Cursor — any of them) into a Bot Hive session, type this prompt:
+
+> `start the hive.`
+
+The agent reads [`hive/bot-startup.md`](./hive/bot-startup.md) and runs the bootstrap: ensures `.bot-hive-identity` exists, runs `scripts/whoami.{sh,ps1}` to derive its role, reads the role rubric (which locks the agent to that role for the session), announces itself, and waits for a task.
+
+The kickoff phrase is agent-neutral — no slash commands, no host-specific configuration required. Each agent host can wrap the phrase in a local convenience (Claude Code slash command, Codex macro, etc.) but none of that is necessary.
+
 ## What it does
 
 - Reads tickets from your repo's `hive/backlog/`, `in-progress/`, `in-review/`, `done/`, `blocked/`, `not-doing/` folders
