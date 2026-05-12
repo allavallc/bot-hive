@@ -2,9 +2,12 @@
 # scripts/whoami.sh - bot identity + role resolver (FS-028 / HV-133).
 #
 # Reads .bot-hive-identity, derives the repo full name from
-# `git remote get-url origin`, calls GET /api/bots/whoami on the
-# platform server, and prints the same four-line format as the old
-# event-log-scan version so downstream consumers don't break.
+# `git remote get-url origin`, calls POST /api/bots/join on the
+# platform server (idempotent: returns the existing seat for an
+# already-active bot, allocates a new seat for a fresh one or
+# reactivates an offline row), and prints the same four-line format
+# as the old event-log-scan version so downstream consumers don't
+# break.
 #
 # Server URL: $BOT_HIVE_API_URL or https://bot-hive-j0ax.onrender.com.
 
@@ -39,13 +42,16 @@ if [ -z "$REPO_FULL_NAME" ] || ! echo "$REPO_FULL_NAME" | grep -q '/'; then
   exit 3
 fi
 
-# Call the server.
-RESPONSE=$(curl -sS -G \
-  --data-urlencode "repo_full_name=${REPO_FULL_NAME}" \
-  --data-urlencode "colony=${COLONY}" \
-  --data-urlencode "handle=${HANDLE}" \
+# Call the server. POST /join is idempotent — returns the same seat for
+# an already-active bot, allocates one for a fresh bot or reactivates an
+# offline row.
+PAYLOAD=$(printf '{"repo_full_name":"%s","colony":"%s","handle":"%s"}' \
+  "$REPO_FULL_NAME" "$COLONY" "$HANDLE")
+RESPONSE=$(curl -sS -X POST \
+  -H "Content-Type: application/json" \
+  -d "$PAYLOAD" \
   -w "\n%{http_code}" \
-  "${API_BASE}/api/bots/whoami") || {
+  "${API_BASE}/api/bots/join") || {
     echo "error: server unreachable; cannot resolve role (${API_BASE})." >&2
     exit 4
   }
