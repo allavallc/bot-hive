@@ -10,4 +10,9 @@ Why this file is a stub instead of carrying the rules itself:
 
 If you're a Claude Code session: read `AGENTS.md`, then `hive/HIVE.md`, then `tasks/lessons.md`, then start work per the swarm protocol.
 
-**Kickoff:** when the operator types `start the hive`, execute the procedure in [`hive/bot-startup.md`](./hive/bot-startup.md) — agent-neutral, no Claude-specific magic.
+**Kickoff:** two equivalent triggers — execute the procedure in [`hive/bot-startup.md`](./hive/bot-startup.md) when either fires:
+
+1. The operator types `start the hive` in chat (operator's main checkout, or any session not spawned via Add-a-Bot).
+2. A `.bot-hive-kickoff` marker file exists at the worktree root (written by the Add-a-Bot spawn flow). One-shot — bootstrap consumes it.
+
+Both paths are agent-neutral, no Claude-specific magic.

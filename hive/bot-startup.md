@@ -1,6 +1,19 @@
 # Bot startup
 
-Execute these steps top-to-bottom on session start. The agent reads this file when the operator types `start the hive` (or any equivalent kickoff phrase) and runs each step in order. The procedure is agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklist.
+Execute these steps top-to-bottom on session start when EITHER kickoff trigger fires:
+
+- the operator types `start the hive` (or any equivalent kickoff phrase) in chat, OR
+- a `.bot-hive-kickoff` marker file exists at the worktree root (written by the Add-a-Bot spawn flow).
+
+If neither trigger has fired, wait silently — do not proceed past this line.
+
+The procedure is agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklist.
+
+## 0. Check for the marker file
+
+If `.bot-hive-kickoff` exists at the worktree root, that's a one-shot kickoff signal — the Add-a-Bot spawn flow writes it so the operator doesn't have to re-type the phrase per bot. Continue through steps 1–3. **Delete the marker at the start of step 4** (after announcing identity) so it's consumed exactly once.
+
+If the marker is absent AND the operator has not typed the phrase: stop. Don't run any further step. The session is not kicked off.
 
 ## 1. Ensure identity exists
 
@@ -46,9 +59,14 @@ I'm <colony>.<handle>, role: <role>, ready.
 
 Replace `<colony>`, `<handle>`, and `<role>` with the exact values whoami printed.
 
-## 4. Stop and wait for a task
+## 4. Consume the marker and stop
 
-Do not claim a backlog ticket, file work, edit code, or take any other action until the operator gives a specific instruction. The session is now bootstrapped; the operator drives.
+If `.bot-hive-kickoff` exists, delete it now — the kickoff is one-shot. Then stop. Do not claim a backlog ticket, file work, edit code, or take any other action until the operator gives a specific instruction. The session is now bootstrapped; the operator drives.
+
+```bash
+rm -f .bot-hive-kickoff                            # POSIX
+Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue   # PowerShell
+```
 
 ## Recovery — role drift mid-session
 
