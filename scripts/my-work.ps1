@@ -47,6 +47,28 @@ if (Test-Path $focusFile) {
 # <colony>.<handle> form (ADR-003). Match both for now.
 $assignedRe = "^- \*\*Assigned to\*\*: ($([regex]::Escape($handle))|$([regex]::Escape($actor)))\s*$"
 
+# HV-124: stuck-in-progress check. Surface tickets whose code merged on
+# main but whose ticket file is still in hive/in-progress/ (the bot
+# forgot to run scripts/in-review.ps1). Same bug class as HV-075 and
+# HV-113 silent-leave. Warn at the top of output so it's unmissable.
+$stuckFound = 0
+Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
+    $content = Get-Content $_.FullName -Raw
+    if ($content -match "(?m)$assignedRe" -and
+        -not ($content -match "(?m)^- \*\*Rejected by\*\*:\s*\S")) {
+        $hv = $_.BaseName -replace '-\d+$', ''
+        $subjects = & git log origin/main --pretty=format:'%s' 2>$null
+        $workSubject = $subjects | Where-Object { $_ -like "${hv}:*" -and $_ -notlike "${hv}: claim - *" } | Select-Object -First 1
+        if ($workSubject) {
+            if ($stuckFound -eq 0) { Write-Host "" }
+            Write-Host "$([char]0x26A0) ${hv}: code merged but ticket file still in hive/in-progress/."
+            Write-Host "  Run: ./scripts/in-review.ps1 ${hv}"
+            Write-Host "  (do this BEFORE picking your next ticket)"
+            $stuckFound = 1
+        }
+    }
+}
+
 # Section 1 - your own rejected work
 Write-Host ""
 Write-Host "=== your rejected work (claim before any new ticket) ==="
