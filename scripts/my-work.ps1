@@ -24,7 +24,16 @@ if (-not $handle) {
 if (-not $colony) { $colony = $handle }
 $actor = "$colony.$handle"
 
-git pull --rebase origin main | Out-Null
+# Git fetch chatters to stderr ("From https://...", "Successfully rebased",
+# etc.) on a busy main. Under $ErrorActionPreference = "Stop" + Windows
+# PowerShell 5.1, those stderr lines become NativeCommandError records
+# and abort the script before we get to any output. *>$null suppresses
+# every stream; rely on $LASTEXITCODE to detect a real failure.
+& git pull --rebase origin main *>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "git pull --rebase origin main failed (exit $LASTEXITCODE)"
+    exit $LASTEXITCODE
+}
 
 # Identity + role re-resolved on every cycle. whoami.ps1 scans
 # hive/events/<colony>.*.log so role splits when bots join/leave the
