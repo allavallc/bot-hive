@@ -40,3 +40,25 @@ Out of scope for this FS:
 - Endpoint auth — v1 ships open; follow-up ticket adds Bearer-token auth issued at Add-a-Bot time. Bounded blast radius: an unauthenticated attacker can pollute one project's seat strip; can't read other data.
 - Replacing the event-log substrate for ticket lifecycle events (claim/in-review/done/accepted) — those stay file-based; only the identity/role read path moves.
 - Multi-instance broadcast. `src/lib/broadcast.ts` is in-process; events don't propagate across server replicas. Render Free is single-instance today.
+
+## Architecture & decisions
+
+### 2026-05-12 — Collapse seat machinery to a single SSE stream (allavallc.wren)
+
+**Choice:** Replace `/join`, `/leave`, `/heartbeat`, `/whoami` and the heartbeat process with one long-lived SSE stream per bot. The open TCP socket is the liveness signal; `onClose` (with a 15 s grace window) drives renumber + role re-derive + push. See HV-136.
+
+**Rejected:**
+- *Keep heartbeats, fix the silent `Start-Job` failure.* Doesn't address B1 (seat clobber on `/join`) or B3 (three sources of truth for role). Treats symptoms.
+- *Keep four endpoints, add per-endpoint reconciliation.* More code paths, more authorities that can drift. Opposite direction from the fix.
+- *Bot picks its own role at spawn; server stores verbatim, no derivation.* Loses the consolidation table behavior the operator explicitly wants (1 bot = PM+coder+tester, etc., auto-rebalanced on add/remove).
+
+**Why:** Three bugs surfaced on first multi-bot use (2026-05-12) — B1 seat clobber, B2 silent heartbeat failure, B3 role-source contradiction. Root cause is structural: liveness and role authority split across DB row + heartbeat timestamp + local PID file + local role override + role table. Collapse the authority surface to one stream and the drift cases disappear. Cost: a `connection_id` column plus a 15 s grace period. Benefit: 4 endpoints + 3 scripts + 2 local-state files deleted, ~250 LOC net.
+
+**Implications:**
+- `bots.status` and `bots.lastHeartbeatAt` columns disappear (migration).
+- `.bot-hive-identity role=` is no longer honored; spawn flow stops writing it.
+- `UserPromptSubmit` hook reads `.bot-hive-role-notice` written by the stream listener instead of polling `/whoami`.
+- Removing a middle bot will flip surviving bots' roles (seat 3 becomes seat 2 → different role from the table). Operator-visible but correct.
+- Doc rewrite (`hive/seats.md`, `hive/bot-startup.md`, `hive/bot-shutdown.md`, `AGENTS.md`, memory) is explicitly deferred and tracked as a follow-up.
+
+**Reference:** HV-136.
