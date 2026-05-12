@@ -25,7 +25,7 @@ The kickoff is agent-neutral — no slash commands, no host-specific configurati
 - Re-syncs on every push to your repo via GitHub webhooks; open boards refresh in real time via SSE
 - Multi-user: any GitHub collaborator on your connected repo can sign in and see the same board (no invite step — GitHub permissions are the source of truth)
 
-The ticket file format and dev workflow live in `hive/HIVE.md`.
+The ticket file format and dev workflow live in `hive/HIVE.md`. Bot identity, seat assignment, heartbeats, and the sign-off flow are documented in `hive/seats.md`.
 
 ## Stack
 
