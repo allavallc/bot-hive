@@ -46,3 +46,7 @@ Thumbs.db
 
 # Per-bot identity file (ADR-003) — local-only; each checkout writes its own
 .bot-hive-identity
+
+# HV-129 kickoff marker — one-shot signal written by Add-a-Bot spawn flow,
+# consumed and deleted by bot-startup.md step 4. Never committed.
+.bot-hive-kickoff
