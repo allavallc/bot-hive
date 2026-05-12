@@ -11,9 +11,21 @@ Two equivalent kickoff triggers — either one starts the bootstrap procedure in
 1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Use this in the operator's main checkout, or any session that wasn't spawned via the Add-a-Bot button.
 2. **`.bot-hive-kickoff` marker file** exists at the worktree root. Use this when a bot is spawned via the Add-a-Bot button — the spawn flow writes the marker alongside `.bot-hive-identity` so the operator doesn't have to re-type the phrase in every new terminal. The marker is one-shot: the bot deletes it during step 4 of bootstrap.
 
-If neither trigger has fired, wait silently. Both paths run the same branchless numbered checklist: ensure `.bot-hive-identity` exists, run `scripts/whoami.{sh,ps1}` to derive role, read the role rubric (which locks you to that role for the session), announce identity, consume the marker if present, and wait for a task.
+If neither trigger has fired, wait silently. Both paths run the same branchless numbered checklist: ensure `.bot-hive-identity` exists, run `scripts/whoami.{sh,ps1}` to call `/api/bots/join` and learn your seat + role, launch the background heartbeat, read the role rubric (which locks you to that role for the session), announce identity, consume the marker if present, and wait for a task.
 
 Kickoff is the canonical entry point. Do not start work, claim tickets, or edit code before completing it.
+
+## Sign-off
+
+When the operator wants you to leave the hive, they'll say one of these phrases (case-insensitive):
+
+1. **`stop your hive work`** (canonical)
+2. **`sign off`**
+3. **`leave the hive`**
+
+Recognize any of them as the shutdown trigger, the same way `start the hive` is the kickoff trigger. Run the procedure in [`hive/bot-shutdown.md`](./hive/bot-shutdown.md): stop the heartbeat process, call `POST /api/bots/leave`, delete `.bot-hive-role-cache` and `.bot-hive-heartbeat.pid`, and only then print `Signed off. Safe to close this window.`.
+
+The operator should not close the terminal until they see that line. If `/leave` fails, surface the error — do not print the all-clear.
 
 ## Worktree isolation (preferred)
 

@@ -16,9 +16,9 @@ Bot Hive's own development is coordinated using its ticket format. The `hive/` f
 
 The format is a coordination layer over files-and-git. The following are explicitly **out of scope**:
 
-- **A scheduler or work-request endpoint.** Bots browse tickets by reading the filesystem; no service hands work out.
+- **A scheduler or work-request endpoint *for tickets*.** Bots browse tickets by reading the filesystem; no service hands ticket work out. (The platform server *does* hand out seat assignments via `/api/bots/join` — that's bot identity, not ticket work.)
 - **Capability matching.** Bots and tickets do not declare or require capabilities — any agent that can read the file format can do the work; humans assign or bots self-select.
-- **Lease / heartbeat daemon.** Stale claims are surfaced by inspecting `in-progress/` card metadata, not enforced by a process.
+- **Lease / heartbeat daemon *for ticket work*.** Stale ticket claims are surfaced by inspecting `in-progress/` card metadata, not enforced by a process. (Bot identity and seat assignment *do* use a heartbeat — see `hive/seats.md` — because lifecycle isn't part of the file-based ticket format.)
 - **CLI-as-primary interface.** A thin convenience CLI may exist as a layer, but the markdown files are the canonical contract.
 - **Semantic-similarity deduplication, budget enforcement, cross-repo coordination.** Single-repo, single-tree; trust adopters to manage their own bot economics.
 

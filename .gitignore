@@ -50,3 +50,10 @@ Thumbs.db
 # HV-129 kickoff marker — one-shot signal written by Add-a-Bot spawn flow,
 # consumed and deleted by bot-startup.md step 4. Never committed.
 .bot-hive-kickoff
+
+# FS-028 seat-assignment per-session state. Cache file used by
+# scripts/check-role.{sh,ps1} to detect mid-session role changes; PID file
+# tracks the background heartbeat process so shutdown can kill it. Both
+# are worktree-local and recreated on every boot.
+.bot-hive-role-cache
+.bot-hive-heartbeat.pid
