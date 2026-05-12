@@ -70,7 +70,7 @@ $stuckFound = 0
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     if ($content -match "(?m)$assignedRe" -and
-        -not ($content -match "(?m)^- \*\*Rejected by\*\*:\s*\S")) {
+        -not ($content -match "(?m)^- \*\*Rejected by\*\*:[ \t]*\S")) {
         $hv = $_.BaseName -replace '-\d+$', ''
         $subjects = & git log origin/main --pretty=format:'%s' 2>$null
         $workSubject = $subjects | Where-Object { $_ -like "${hv}:*" -and $_ -notlike "${hv}: claim - *" } | Select-Object -First 1
@@ -91,7 +91,7 @@ $rejected = @()
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     if ($content -match "(?m)$assignedRe" -and
-        $content -match "(?m)^- \*\*Rejected by\*\*:\s*\S") {
+        $content -match "(?m)^- \*\*Rejected by\*\*:[ \t]*\S") {
         $hv = $_.BaseName -replace '-\d+$', ''
         $reason = if ($content -match "(?m)^- \*\*Rejection reason\*\*:[ \t]*(.+)$") { $Matches[1].Trim() } else { "" }
         $rejected += "  $hv - rejected: $reason"
@@ -106,7 +106,7 @@ $inprog = @()
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     if ($content -match "(?m)$assignedRe" -and
-        -not ($content -match "(?m)^- \*\*Rejected by\*\*:\s*\S")) {
+        -not ($content -match "(?m)^- \*\*Rejected by\*\*:[ \t]*\S")) {
         $hv = $_.BaseName -replace '-\d+$', ''
         $title = (Get-Content $_.FullName -TotalCount 1) -replace '^# \[.*\] ', ''
         $inprog += "  $hv - $title"
