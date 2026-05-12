@@ -30,9 +30,12 @@ All three read **`.bot-hive-identity`** at the worktree root for the bot's colon
 ```
 colony=allavallc
 handle=buzz
+role=pm            # optional — forces the role, bypassing the tenure heuristic (HV-122)
 ```
 
 The Add-a-Bot spawn flow writes this file as part of `git worktree add` setup. Bots running in the worktree pick up their identity automatically — no env var to set per shell. The legacy `BOT_HIVE_HANDLE` env var is supported as a transitional fallback while the migration to identity files is in flight.
+
+The optional `role=` line accepts `pm`, `coder`, or `tester`. When set, `scripts/whoami.{sh,ps1}` honors it and skips the tenure-based assignment. Use it whenever the human's intent for role assignment shouldn't depend on which bot has the older event log.
 
 Bot identity is `<colony>.<handle>` globally (e.g., `allavallc.buzz`). See `hive/HIVE.md` for the colony model.
 

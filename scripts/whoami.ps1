@@ -5,10 +5,13 @@ $ErrorActionPreference = "Stop"
 
 $colony = $null
 $handle = $null
+$explicitRole = $null
 if (Test-Path ".bot-hive-identity") {
     Get-Content ".bot-hive-identity" | ForEach-Object {
         if ($_ -match '^colony=(.+)$') { $colony = $Matches[1].Trim() }
         if ($_ -match '^handle=(.+)$') { $handle = $Matches[1].Trim() }
+        # HV-122: optional role= override.
+        if ($_ -match '^role=(.+)$') { $explicitRole = $Matches[1].Trim() }
     }
 }
 if (-not $handle -and $env:BOT_HIVE_HANDLE) { $handle = $env:BOT_HIVE_HANDLE }
@@ -99,7 +102,21 @@ switch ($total) {
     }
 }
 
+# HV-122: explicit role= override. Applied after the tenure heuristic so
+# the "colony bots active" tier metric still reflects reality even when
+# the role itself is forced.
+$roleSource = "heuristic"
+if ($explicitRole) {
+    switch ($explicitRole) {
+        "pm"     { $roles = "PM";     $skills = "hive/skills/pm.md";     $roleSource = "explicit (.bot-hive-identity role=pm)" }
+        "coder"  { $roles = "coder";  $skills = "hive/skills/coder.md";  $roleSource = "explicit (.bot-hive-identity role=coder)" }
+        "tester" { $roles = "tester"; $skills = "hive/skills/tester.md"; $roleSource = "explicit (.bot-hive-identity role=tester)" }
+        default  { Write-Warning "unknown role '$explicitRole' in .bot-hive-identity; valid values are pm, coder, tester. Falling back to the tenure heuristic." }
+    }
+}
+
 Write-Host "actor: $actor"
 Write-Host "colony bots active: $total (you are $position/$total)"
 Write-Host "role: $roles"
+Write-Host "role source: $roleSource"
 Write-Host "read these skill files: $skills"

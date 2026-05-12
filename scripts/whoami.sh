@@ -14,8 +14,13 @@ set -euo pipefail
 if [ -f .bot-hive-identity ]; then
   COLONY=$(grep '^colony=' .bot-hive-identity | head -1 | cut -d= -f2- | tr -d '\r')
   HANDLE=$(grep '^handle=' .bot-hive-identity | head -1 | cut -d= -f2- | tr -d '\r')
+  # HV-122: optional role= override. When present, bypasses the tenure
+  # heuristic so a freshly-bootstrapped PM isn't demoted by a returning
+  # bot's old first-event timestamp.
+  EXPLICIT_ROLE=$(grep '^role=' .bot-hive-identity | head -1 | cut -d= -f2- | tr -d '[:space:]\r' || true)
 fi
 HANDLE="${HANDLE:-${BOT_HIVE_HANDLE:-}}"
+EXPLICIT_ROLE="${EXPLICIT_ROLE:-}"
 
 if [ -z "$HANDLE" ]; then
   echo "error: no bot identity found (.bot-hive-identity missing and BOT_HIVE_HANDLE unset)." >&2
@@ -113,7 +118,21 @@ case "$TOTAL" in
     ;;
 esac
 
+# HV-122: explicit role= override. Applied after the tenure heuristic so
+# the "colony bots active" tier metric still reflects reality even when
+# the role itself is forced.
+ROLE_SOURCE="heuristic"
+if [ -n "$EXPLICIT_ROLE" ]; then
+  case "$EXPLICIT_ROLE" in
+    pm) ROLES="PM"; SKILLS="hive/skills/pm.md"; ROLE_SOURCE="explicit (.bot-hive-identity role=pm)" ;;
+    coder) ROLES="coder"; SKILLS="hive/skills/coder.md"; ROLE_SOURCE="explicit (.bot-hive-identity role=coder)" ;;
+    tester) ROLES="tester"; SKILLS="hive/skills/tester.md"; ROLE_SOURCE="explicit (.bot-hive-identity role=tester)" ;;
+    *) echo "warn: unknown role '${EXPLICIT_ROLE}' in .bot-hive-identity; valid values are pm, coder, tester. Falling back to the tenure heuristic." >&2 ;;
+  esac
+fi
+
 echo "actor: ${ACTOR}"
 echo "colony bots active: ${TOTAL} (you are ${POSITION}/${TOTAL})"
 echo "role: ${ROLES}"
+echo "role source: ${ROLE_SOURCE}"
 echo "read these skill files: ${SKILLS}"

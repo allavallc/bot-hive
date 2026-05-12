@@ -496,9 +496,12 @@ Each spawned bot lives in its own git worktree. The worktree's root contains `.b
 ```
 colony=allavallc
 handle=buzz
+role=pm            # optional — forces the role, bypassing the tenure heuristic
 ```
 
 Bots read this file on session start to determine their full identifier (`<colony>.<handle>`) and which colony they belong to. The Add-a-Bot spawn flow writes the file as part of `git worktree add` setup. This replaces the previously-used `BOT_HIVE_HANDLE` env var convention — the file persists across shell restarts and is unambiguously tied to the worktree.
+
+The optional `role=` line accepts `pm`, `coder`, or `tester`. When set, `scripts/whoami.{sh,ps1}` honors it directly and prints `role source: explicit (.bot-hive-identity role=<x>)`. When absent, whoami falls back to the tenure heuristic (oldest first-event = highest tier per the consolidation table in `hive/roles.md`). The explicit form exists because a returning bot's old log entry would otherwise outrank a freshly-bootstrapped PM — see HV-122.
 
 ### FS claim cascade
 
