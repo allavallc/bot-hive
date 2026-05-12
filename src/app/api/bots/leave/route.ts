@@ -1,35 +1,33 @@
-// POST /api/bots/join — allocate a seat in (project, colony) for a bot.
+// POST /api/bots/leave — sign a bot off cleanly.
 //
-// Side effects (HV-131): sweeps stale rows in the colony before
-// allocating, so a bot whose terminal crashed >15 min ago is reclaimed
-// before a new one joins. Broadcasts `bot-left` for each sweep eviction
-// and `bot-joined` for the new allocation; the kanban seat strip
-// subscribes via the existing project SSE stream.
+// Marks the row offline, renumbers survivors (so seats stay
+// contiguous), and broadcasts `bot-left` to the project SSE stream.
+// The bot prints "Safe to close this window" only after a 200 from
+// this route — that's the gate against half-completed leaves.
 //
 // Auth: none in v1.
-//
 // Body: { repo_full_name, colony, handle }.
-// Response: { seat, total, role, skill_files }.
+// Response: { ok: true, departed: {handle, seat}, seat_map: [...] }.
 
 import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { broadcast } from "@/lib/broadcast";
-import { allocateSeat, seatMap, sweepStale } from "@/lib/seats";
-import { eq } from "drizzle-orm";
+import { markOffline, renumberAfter, seatMap } from "@/lib/seats";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-type JoinBody = {
+type LeaveBody = {
   repo_full_name?: unknown;
   colony?: unknown;
   handle?: unknown;
 };
 
 export async function POST(req: Request) {
-  let body: JoinBody;
+  let body: LeaveBody;
   try {
-    body = (await req.json()) as JoinBody;
+    body = (await req.json()) as LeaveBody;
   } catch {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
@@ -57,35 +55,34 @@ export async function POST(req: Request) {
   }
 
   const result = await db.transaction(async (tx) => {
-    const reclaimed = await sweepStale(tx, project.id, colony);
-    const state = await allocateSeat(tx, project.id, colony, handle);
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${project.id} || ':' || ${colony}))`,
+    );
+    const departingSeat = await markOffline(tx, project.id, colony, handle);
+    if (departingSeat === null) return null;
+    await renumberAfter(tx, project.id, colony, departingSeat);
     const map = await seatMap(tx, project.id, colony);
-    return { reclaimed, state, map };
+    return { departingSeat, map };
   });
 
-  // Broadcast outside the transaction. Each event carries the post-commit
-  // seat map so subscribers can replace local state idempotently.
-  for (const departed of result.reclaimed) {
-    broadcast({
-      type: "bot-left",
-      projectId: project.id,
-      colony,
-      departed,
-      seatMap: result.map,
-    });
+  if (!result) {
+    return NextResponse.json(
+      { error: `no active bot for ${colony}.${handle} in ${repoFullName}` },
+      { status: 404 },
+    );
   }
+
   broadcast({
-    type: "bot-joined",
+    type: "bot-left",
     projectId: project.id,
     colony,
-    joined: { handle, seat: result.state.seat },
+    departed: { handle, seat: result.departingSeat },
     seatMap: result.map,
   });
 
   return NextResponse.json({
-    seat: result.state.seat,
-    total: result.state.total,
-    role: result.state.role,
-    skill_files: result.state.skillFiles,
+    ok: true,
+    departed: { handle, seat: result.departingSeat },
+    seat_map: result.map,
   });
 }
