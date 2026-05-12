@@ -8,7 +8,7 @@ A live kanban board over GitHub-hosted ticket files. Sign in with GitHub, instal
 
 To put your agent (Claude Code, Codex, Aider, Gemini, Cursor — any of them) into a Bot Hive session, type this prompt:
 
-> `start the hive.`
+> `start the hive`
 
 The agent reads [`hive/bot-startup.md`](./hive/bot-startup.md) and runs the bootstrap: ensures `.bot-hive-identity` exists, runs `scripts/whoami.{sh,ps1}` to derive its role, reads the role rubric (which locks the agent to that role for the session), announces itself, and waits for a task.
 
