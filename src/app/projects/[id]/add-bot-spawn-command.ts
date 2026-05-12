@@ -23,15 +23,19 @@ export type Platform = "windows" | "mac" | "linux";
 
 export type StepCommand = { command: string; runIn: string };
 
+// FS-028 / HV-135: bots also need the UserPromptSubmit hook wired to
+// scripts/check-role so role changes are announced mid-session. Earlier
+// versions wrote a settings.json with only statusLine, which silently
+// disabled the role-change announce for every spawned bot.
 const claudeSettingsPosix = (worktreeDir: string) =>
-  `mkdir -p ${worktreeDir}/.claude && printf '{\\n  "statusLine": {\\n    "type": "command",\\n    "command": "bash ./scripts/claude-statusline.sh"\\n  }\\n}\\n' > ${worktreeDir}/.claude/settings.json`;
+  `mkdir -p ${worktreeDir}/.claude && printf '{\\n  "statusLine": {\\n    "type": "command",\\n    "command": "bash ./scripts/claude-statusline.sh"\\n  },\\n  "hooks": {\\n    "UserPromptSubmit": [{\\n      "matcher": "*",\\n      "hooks": [{\\n        "type": "command",\\n        "command": "bash ./scripts/check-role.sh"\\n      }]\\n    }]\\n  }\\n}\\n' > ${worktreeDir}/.claude/settings.json`;
 
 // One-line JSON on purpose. Single-quoted PowerShell strings are literal
 // — backtick escapes (`n) are NOT expanded. Older multi-line attempt
 // wrote the literal characters `n into the file, breaking JSON parse.
 // One-liner sidesteps the entire escape-interpretation problem.
 const claudeSettingsWindows = (worktreeDir: string) =>
-  `New-Item -ItemType Directory -Force -Path ${worktreeDir}/.claude | Out-Null; Set-Content -Path ${worktreeDir}/.claude/settings.json -Value '{"statusLine":{"type":"command","command":"powershell -NoProfile -File ./scripts/claude-statusline.ps1"}}'`;
+  `New-Item -ItemType Directory -Force -Path ${worktreeDir}/.claude | Out-Null; Set-Content -Path ${worktreeDir}/.claude/settings.json -Value '{"statusLine":{"type":"command","command":"powershell -NoProfile -File ./scripts/claude-statusline.ps1"},"hooks":{"UserPromptSubmit":[{"matcher":"*","hooks":[{"type":"command","command":"powershell -NoProfile -File ./scripts/check-role.ps1"}]}]}}'`;
 
 const kickoffMarkerPosix = (worktreeDir: string) => `: > ${worktreeDir}/.bot-hive-kickoff`;
 

@@ -1,7 +1,7 @@
 # scripts/whoami.ps1 - bot identity + role resolver (FS-028 / HV-133).
 #
 # Windows PowerShell version. See scripts/whoami.sh for the canonical
-# flow. Calls GET /api/bots/whoami on the platform server.
+# flow. Calls POST /api/bots/join on the platform server (idempotent).
 
 $ErrorActionPreference = "Stop"
 
@@ -41,9 +41,10 @@ if (-not $repoFullName -or $repoFullName -notmatch '/') {
     exit 3
 }
 
-$uri = "$apiBase/api/bots/whoami?repo_full_name=$([uri]::EscapeDataString($repoFullName))&colony=$([uri]::EscapeDataString($colony))&handle=$([uri]::EscapeDataString($handle))"
+$uri = "$apiBase/api/bots/join"
+$payload = @{ repo_full_name = $repoFullName; colony = $colony; handle = $handle } | ConvertTo-Json -Compress
 try {
-    $resp = Invoke-RestMethod -Uri $uri -Method Get -ErrorAction Stop
+    $resp = Invoke-RestMethod -Uri $uri -Method Post -ContentType "application/json" -Body $payload -ErrorAction Stop
 } catch {
     Write-Error "server unreachable or returned error: $_"
     exit 4
