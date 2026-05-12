@@ -8,6 +8,7 @@ import {
   allocateSeat,
   bumpHeartbeat,
   getSeatState,
+  listActiveColonies,
   markOffline,
   renumberAfter,
   seatMap,
@@ -366,6 +367,28 @@ describe("sweepStale", () => {
       .from(bots)
       .where(and(eq(bots.projectId, projectId), eq(bots.status, "offline")));
     expect(offlineCount).toHaveLength(2);
+  });
+});
+
+describe("listActiveColonies", () => {
+  test("returns distinct colonies with at least one active row, sorted", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "tony", "ant");
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    await allocateSeat(tx, projectId, "allavallc", "wren");
+
+    expect(await listActiveColonies(tx, projectId)).toEqual(["allavallc", "tony"]);
+  });
+
+  test("excludes colonies with only offline rows", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    await tx
+      .update(bots)
+      .set({ status: "offline" })
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+
+    expect(await listActiveColonies(tx, projectId)).toEqual([]);
   });
 });
 
