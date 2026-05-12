@@ -1,6 +1,6 @@
 # Bot startup
 
-Execute these steps top-to-bottom on session start. The agent reads this file when the operator types `start the hive.` (or any equivalent kickoff phrase) and runs each step in order. The procedure is agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklist.
+Execute these steps top-to-bottom on session start. The agent reads this file when the operator types `start the hive` (or any equivalent kickoff phrase) and runs each step in order. The procedure is agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklist.
 
 ## 1. Ensure identity exists
 

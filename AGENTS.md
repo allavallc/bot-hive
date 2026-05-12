@@ -6,7 +6,7 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 ## Kickoff (do this first)
 
-When the operator types `start the hive.` (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat, execute the procedure in [`hive/bot-startup.md`](./hive/bot-startup.md). The procedure is a branchless numbered checklist: ensure `.bot-hive-identity` exists, run `scripts/whoami.{sh,ps1}` to derive role, read the role rubric (which locks you to that role for the session), announce identity, and wait for a task.
+When the operator types `start the hive` (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat, execute the procedure in [`hive/bot-startup.md`](./hive/bot-startup.md). The procedure is a branchless numbered checklist: ensure `.bot-hive-identity` exists, run `scripts/whoami.{sh,ps1}` to derive role, read the role rubric (which locks you to that role for the session), announce identity, and wait for a task.
 
 Kickoff is the canonical entry point. Do not start work, claim tickets, or edit code before completing it.
 
