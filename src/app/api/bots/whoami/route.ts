@@ -1,12 +1,17 @@
 // GET /api/bots/whoami?repo_full_name=…&colony=…&handle=… —
 // return the bot's current seat + role. Always fresh from DB.
 //
+// Side effects (HV-131): sweeps stale rows in the colony before
+// reading so the bot sees an accurate `total` count. Each sweep
+// eviction broadcasts `bot-left` to the project SSE stream.
+//
 // Auth: none in v1.
 // Response: { seat, total, role, skill_files }.
 
 import { db } from "@/db";
 import { projects } from "@/db/schema";
-import { getSeatState } from "@/lib/seats";
+import { broadcast } from "@/lib/broadcast";
+import { getSeatState, seatMap, sweepStale } from "@/lib/seats";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -34,6 +39,23 @@ export async function GET(req: Request) {
       { error: `no project registered for repo '${repoFullName}'` },
       { status: 404 },
     );
+  }
+
+  const sweep = await db.transaction(async (tx) => {
+    const reclaimed = await sweepStale(tx, project.id, colony);
+    const map = reclaimed.length > 0 ? await seatMap(tx, project.id, colony) : null;
+    return { reclaimed, map };
+  });
+  if (sweep.map) {
+    for (const departed of sweep.reclaimed) {
+      broadcast({
+        type: "bot-left",
+        projectId: project.id,
+        colony,
+        departed,
+        seatMap: sweep.map,
+      });
+    }
   }
 
   const state = await getSeatState(project.id, colony, handle);

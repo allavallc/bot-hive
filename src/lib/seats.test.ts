@@ -4,7 +4,15 @@ import { bots, projects, user } from "@/db/schema";
 import { test } from "@/lib/test-db";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, test as vitestTest } from "vitest";
-import { allocateSeat, getSeatState } from "./seats";
+import {
+  allocateSeat,
+  bumpHeartbeat,
+  getSeatState,
+  markOffline,
+  renumberAfter,
+  seatMap,
+  sweepStale,
+} from "./seats";
 
 async function seedProject(tx: Parameters<typeof allocateSeat>[0]) {
   const userId = `vitest-${randomUUID()}`;
@@ -137,6 +145,227 @@ describe("allocateSeat concurrency", () => {
       await db.delete(projects).where(eq(projects.id, project.id));
       await db.delete(user).where(eq(user.id, userId));
     }
+  });
+});
+
+describe("bumpHeartbeat", () => {
+  test("bumps lastHeartbeatAt on an active row", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    // Backdate the row.
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    await tx
+      .update(bots)
+      .set({ lastHeartbeatAt: past })
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+
+    const now = new Date();
+    await bumpHeartbeat(tx, projectId, "allavallc", "buzz", now);
+
+    const [row] = await tx
+      .select({ heartbeat: bots.lastHeartbeatAt })
+      .from(bots)
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+    expect(row.heartbeat.getTime()).toBe(now.getTime());
+  });
+
+  test("is a no-op for an offline row (does not reactivate)", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    await tx
+      .update(bots)
+      .set({ status: "offline" })
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+
+    await bumpHeartbeat(tx, projectId, "allavallc", "buzz");
+
+    const [row] = await tx
+      .select({ status: bots.status })
+      .from(bots)
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+    expect(row.status).toBe("offline");
+  });
+
+  test("is a no-op for a missing row", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await bumpHeartbeat(tx, projectId, "allavallc", "ghost");
+    const rows = await tx
+      .select()
+      .from(bots)
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "ghost")));
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe("markOffline + renumberAfter", () => {
+  test("markOffline returns the departing seat and sets status='offline'", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    const departing = await markOffline(tx, projectId, "allavallc", "buzz");
+    expect(departing).toBe(1);
+    const [row] = await tx
+      .select({ status: bots.status })
+      .from(bots)
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+    expect(row.status).toBe("offline");
+  });
+
+  test("markOffline returns null for missing or already-offline rows", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    expect(await markOffline(tx, projectId, "allavallc", "ghost")).toBeNull();
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    await markOffline(tx, projectId, "allavallc", "buzz");
+    expect(await markOffline(tx, projectId, "allavallc", "buzz")).toBeNull();
+  });
+
+  test("renumberAfter decrements only seats greater than departing", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz"); // 1
+    await allocateSeat(tx, projectId, "allavallc", "wren"); // 2
+    await allocateSeat(tx, projectId, "allavallc", "kestrel"); // 3
+
+    await markOffline(tx, projectId, "allavallc", "wren");
+    await renumberAfter(tx, projectId, "allavallc", 2);
+
+    const buzz = await getSeatState(projectId, "allavallc", "buzz", tx);
+    const kestrel = await getSeatState(projectId, "allavallc", "kestrel", tx);
+    expect(buzz?.seat).toBe(1);
+    expect(kestrel?.seat).toBe(2);
+  });
+
+  test("renumberAfter does not touch offline rows", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz"); // 1
+    await allocateSeat(tx, projectId, "allavallc", "wren"); // 2
+
+    // Manually mark buzz offline so wren has seat 2 but no seat 1 active.
+    await tx
+      .update(bots)
+      .set({ status: "offline" })
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+
+    // Now renumber as if seat 1 just departed — wren goes from 2 → 1.
+    await renumberAfter(tx, projectId, "allavallc", 1);
+    const wren = await getSeatState(projectId, "allavallc", "wren", tx);
+    expect(wren?.seat).toBe(1);
+
+    // buzz still has its old seat=1, status=offline.
+    const [buzzRow] = await tx
+      .select({ seat: bots.seat, status: bots.status })
+      .from(bots)
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "buzz")));
+    expect(buzzRow.seat).toBe(1);
+    expect(buzzRow.status).toBe("offline");
+  });
+});
+
+describe("seatMap", () => {
+  test("returns active rows in seat order with derived roles", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz"); // 1
+    await allocateSeat(tx, projectId, "allavallc", "wren"); // 2
+    await allocateSeat(tx, projectId, "allavallc", "kestrel"); // 3
+
+    const map = await seatMap(tx, projectId, "allavallc");
+    expect(map).toEqual([
+      { handle: "buzz", seat: 1, role: "PM" },
+      { handle: "wren", seat: 2, role: "coder" },
+      { handle: "kestrel", seat: 3, role: "tester" },
+    ]);
+  });
+
+  test("excludes offline rows", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    await allocateSeat(tx, projectId, "allavallc", "wren");
+    await tx
+      .update(bots)
+      .set({ status: "offline" })
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "wren")));
+
+    const map = await seatMap(tx, projectId, "allavallc");
+    expect(map).toHaveLength(1);
+    expect(map[0].handle).toBe("buzz");
+  });
+
+  test("returns empty array for a colony with no active rows", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    const map = await seatMap(tx, projectId, "nobody");
+    expect(map).toEqual([]);
+  });
+});
+
+describe("sweepStale", () => {
+  test("returns empty when no rows are stale", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz");
+    const departed = await sweepStale(tx, projectId, "allavallc");
+    expect(departed).toEqual([]);
+  });
+
+  test("marks stale rows offline and renumbers survivors", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz"); // 1
+    await allocateSeat(tx, projectId, "allavallc", "wren"); // 2
+    await allocateSeat(tx, projectId, "allavallc", "kestrel"); // 3
+
+    // Backdate wren's heartbeat past the threshold.
+    const past = new Date(Date.now() - 30 * 60 * 1000); // 30 min ago
+    await tx
+      .update(bots)
+      .set({ lastHeartbeatAt: past })
+      .where(and(eq(bots.projectId, projectId), eq(bots.handle, "wren")));
+
+    const departed = await sweepStale(tx, projectId, "allavallc");
+    expect(departed).toEqual([{ handle: "wren", seat: 2 }]);
+
+    const buzz = await getSeatState(projectId, "allavallc", "buzz", tx);
+    const kestrel = await getSeatState(projectId, "allavallc", "kestrel", tx);
+    expect(buzz?.seat).toBe(1);
+    expect(kestrel?.seat).toBe(2);
+  });
+
+  test("handles multiple stale rows in one sweep", async ({ tx }) => {
+    const projectId = await seedProject(tx);
+    await allocateSeat(tx, projectId, "allavallc", "buzz"); // 1
+    await allocateSeat(tx, projectId, "allavallc", "wren"); // 2
+    await allocateSeat(tx, projectId, "allavallc", "kestrel"); // 3
+    await allocateSeat(tx, projectId, "allavallc", "starling"); // 4
+
+    const past = new Date(Date.now() - 30 * 60 * 1000);
+    // wren and kestrel both stale.
+    await tx
+      .update(bots)
+      .set({ lastHeartbeatAt: past })
+      .where(
+        and(eq(bots.projectId, projectId), eq(bots.colony, "allavallc"), eq(bots.handle, "wren")),
+      );
+    await tx
+      .update(bots)
+      .set({ lastHeartbeatAt: past })
+      .where(
+        and(
+          eq(bots.projectId, projectId),
+          eq(bots.colony, "allavallc"),
+          eq(bots.handle, "kestrel"),
+        ),
+      );
+
+    const departed = await sweepStale(tx, projectId, "allavallc");
+    expect(departed.map((d) => d.handle).sort()).toEqual(["kestrel", "wren"]);
+
+    // Surviving bots should be renumbered: buzz=1, starling=2.
+    const buzz = await getSeatState(projectId, "allavallc", "buzz", tx);
+    const starling = await getSeatState(projectId, "allavallc", "starling", tx);
+    expect(buzz?.seat).toBe(1);
+    expect(starling?.seat).toBe(2);
+
+    // wren and kestrel are now offline.
+    const offlineCount = await tx
+      .select({ status: bots.status })
+      .from(bots)
+      .where(and(eq(bots.projectId, projectId), eq(bots.status, "offline")));
+    expect(offlineCount).toHaveLength(2);
   });
 });
 
