@@ -18,6 +18,11 @@ BOT_HIVE_COLONY=""
 BOT_HIVE_HANDLE_RESOLVED=""
 if [ -f .bot-hive-identity ]; then
   while IFS='=' read -r key value; do
+    # Strip trailing CR — Windows-written .bot-hive-identity has CRLF line
+    # endings, which would leak \r into HANDLE/COLONY and break every grep
+    # against ticket files (LF-only). Other bash helpers (claim.sh,
+    # in-review.sh) already strip via `tr -d '\r'`; my-work.sh did not.
+    value="${value%$'\r'}"
     case "$key" in
       colony) BOT_HIVE_COLONY="$value" ;;
       handle) BOT_HIVE_HANDLE_RESOLVED="$value" ;;
