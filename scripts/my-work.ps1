@@ -24,15 +24,21 @@ if (-not $handle) {
 if (-not $colony) { $colony = $handle }
 $actor = "$colony.$handle"
 
-# Git fetch chatters to stderr ("From https://...", "Successfully rebased",
-# etc.) on a busy main. Under $ErrorActionPreference = "Stop" + Windows
-# PowerShell 5.1, those stderr lines become NativeCommandError records
-# and abort the script before we get to any output. *>$null suppresses
-# every stream; rely on $LASTEXITCODE to detect a real failure.
-& git pull --rebase origin main *>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "git pull --rebase origin main failed (exit $LASTEXITCODE)"
-    exit $LASTEXITCODE
+# Git fetch / rebase chatters to stderr ("From https://...", "Successfully
+# rebased", etc.) on a busy main. Under $ErrorActionPreference = "Stop" in
+# Windows PowerShell 5.1, those stderr writes become NativeCommandError
+# records and terminate the script before any section renders - which
+# silently kills the HV-124 warning along with every other section.
+# Relax to Continue around the git call; rely on $LASTEXITCODE to detect
+# a real rebase failure.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+git pull --rebase origin main 2>$null | Out-Null
+$pullExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEAP
+if ($pullExit -ne 0) {
+    Write-Error "git pull --rebase origin main failed (exit $pullExit)"
+    exit $pullExit
 }
 
 # Identity + role re-resolved on every cycle. whoami.ps1 scans
