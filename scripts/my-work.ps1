@@ -24,7 +24,22 @@ if (-not $handle) {
 if (-not $colony) { $colony = $handle }
 $actor = "$colony.$handle"
 
-git pull --rebase origin main | Out-Null
+# Git fetch / rebase chatters to stderr ("From https://...", "Successfully
+# rebased", etc.) on a busy main. Under $ErrorActionPreference = "Stop" in
+# Windows PowerShell 5.1, those stderr writes become NativeCommandError
+# records and terminate the script before any section renders - which
+# silently kills the HV-124 warning along with every other section.
+# Relax to Continue around the git call; rely on $LASTEXITCODE to detect
+# a real rebase failure.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+git pull --rebase origin main 2>$null | Out-Null
+$pullExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEAP
+if ($pullExit -ne 0) {
+    Write-Error "git pull --rebase origin main failed (exit $pullExit)"
+    exit $pullExit
+}
 
 # Identity + role re-resolved on every cycle. whoami.ps1 scans
 # hive/events/<colony>.*.log so role splits when bots join/leave the
@@ -47,6 +62,28 @@ if (Test-Path $focusFile) {
 # <colony>.<handle> form (ADR-003). Match both for now.
 $assignedRe = "^- \*\*Assigned to\*\*: ($([regex]::Escape($handle))|$([regex]::Escape($actor)))\s*$"
 
+# HV-124: stuck-in-progress check. Surface tickets whose code merged on
+# main but whose ticket file is still in hive/in-progress/ (the bot
+# forgot to run scripts/in-review.ps1). Same bug class as HV-075 and
+# HV-113 silent-leave. Warn at the top of output so it's unmissable.
+$stuckFound = 0
+Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
+    $content = Get-Content $_.FullName -Raw
+    if ($content -match "(?m)$assignedRe" -and
+        -not ($content -match "(?m)^- \*\*Rejected by\*\*:[ \t]*\S")) {
+        $hv = $_.BaseName -replace '-\d+$', ''
+        $subjects = & git log origin/main --pretty=format:'%s' 2>$null
+        $workSubject = $subjects | Where-Object { $_ -like "${hv}:*" -and $_ -notlike "${hv}: claim - *" } | Select-Object -First 1
+        if ($workSubject) {
+            if ($stuckFound -eq 0) { Write-Host "" }
+            Write-Host "$([char]0x26A0) ${hv}: code merged but ticket file still in hive/in-progress/."
+            Write-Host "  Run: ./scripts/in-review.ps1 ${hv}"
+            Write-Host "  (do this BEFORE picking your next ticket)"
+            $stuckFound = 1
+        }
+    }
+}
+
 # Section 1 - your own rejected work
 Write-Host ""
 Write-Host "=== your rejected work (claim before any new ticket) ==="
@@ -54,7 +91,7 @@ $rejected = @()
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     if ($content -match "(?m)$assignedRe" -and
-        $content -match "(?m)^- \*\*Rejected by\*\*:\s*\S") {
+        $content -match "(?m)^- \*\*Rejected by\*\*:[ \t]*\S") {
         $hv = $_.BaseName -replace '-\d+$', ''
         $reason = if ($content -match "(?m)^- \*\*Rejection reason\*\*:[ \t]*(.+)$") { $Matches[1].Trim() } else { "" }
         $rejected += "  $hv - rejected: $reason"
@@ -69,7 +106,7 @@ $inprog = @()
 Get-ChildItem -Path "hive/in-progress" -Filter "*.md" -ErrorAction SilentlyContinue | ForEach-Object {
     $content = Get-Content $_.FullName -Raw
     if ($content -match "(?m)$assignedRe" -and
-        -not ($content -match "(?m)^- \*\*Rejected by\*\*:\s*\S")) {
+        -not ($content -match "(?m)^- \*\*Rejected by\*\*:[ \t]*\S")) {
         $hv = $_.BaseName -replace '-\d+$', ''
         $title = (Get-Content $_.FullName -TotalCount 1) -replace '^# \[.*\] ', ''
         $inprog += "  $hv - $title"

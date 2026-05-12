@@ -18,6 +18,11 @@ BOT_HIVE_COLONY=""
 BOT_HIVE_HANDLE_RESOLVED=""
 if [ -f .bot-hive-identity ]; then
   while IFS='=' read -r key value; do
+    # Strip trailing CR — Windows-written .bot-hive-identity has CRLF line
+    # endings, which would leak \r into HANDLE/COLONY and break every grep
+    # against ticket files (LF-only). Other bash helpers (claim.sh,
+    # in-review.sh) already strip via `tr -d '\r'`; my-work.sh did not.
+    value="${value%$'\r'}"
     case "$key" in
       colony) BOT_HIVE_COLONY="$value" ;;
       handle) BOT_HIVE_HANDLE_RESOLVED="$value" ;;
@@ -59,6 +64,31 @@ fi
 assigned_to_me() {
   grep -qE "^- \*\*Assigned to\*\*: (${HANDLE}|${COLONY}\.${HANDLE})\$" "$1"
 }
+
+# HV-124: stuck-in-progress check. For each ticket assigned to this bot in
+# hive/in-progress/, look at origin/main commit subjects matching this HV
+# id. The claim commit has subject "HV-XXX: claim - <actor>". Any other
+# "HV-XXX: ..." subject means the work-PR merged but in-review.sh was never
+# run, leaving the ticket file orphaned. Same bug class as HV-075 (cherry-
+# pick miss) and HV-113 silent-leave. Warn loudly at the top of output.
+STUCK_FOUND=0
+for f in hive/in-progress/*.md; do
+  [ -f "$f" ] || continue
+  if assigned_to_me "$f" && ! grep -q "^- \*\*Rejected by\*\*: \S" "$f"; then
+    HV=$(basename "$f" | sed 's/-[0-9]*\.md$//')
+    WORK_SUBJECT=$(git log origin/main --pretty=format:'%s' 2>/dev/null \
+      | grep "^${HV}:" \
+      | grep -v "^${HV}: claim - " \
+      | head -1 || true)
+    if [ -n "$WORK_SUBJECT" ]; then
+      [ $STUCK_FOUND -eq 0 ] && echo
+      echo "⚠ ${HV}: code merged but ticket file still in hive/in-progress/."
+      echo "  Run: ./scripts/in-review.sh ${HV}"
+      echo "  (do this BEFORE picking your next ticket)"
+      STUCK_FOUND=1
+    fi
+  fi
+done
 
 echo
 echo "=== your rejected work (claim before any new ticket) ==="
