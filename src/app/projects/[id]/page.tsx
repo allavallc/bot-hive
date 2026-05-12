@@ -8,6 +8,7 @@ import { notFound, redirect } from "next/navigation";
 import { AddBotButton } from "./add-bot-button.client";
 import { AdminInbox } from "./admin-inbox.client";
 import { Board } from "./board.client";
+import { BotTeamButton } from "./bot-team-button.client";
 import { SwarmPanel } from "./swarm-panel.client";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export default async function ProjectBoardPage({
       <AdminInbox projectId={project.id} isAdmin={isAdmin} />
       <SwarmPanel projectId={project.id} />
       <AddBotButton projectId={project.id} />
+      <BotTeamButton projectId={project.id} githubRepo={project.githubRepo} />
     </>
   );
 }
