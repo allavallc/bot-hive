@@ -78,20 +78,25 @@ function Invoke-SpawnBot {
         exit 1
     }
 
+    # Pick the first handle in hive/handles.txt that is free.
+    # A handle is "free" if:
+    #   - no events log exists at hive/events/<colony>.<handle>.log, AND
+    #   - no worktree exists at worktrees/<handle>/ (orphaned spawn from a prior aborted run).
     $handle = $null
     foreach ($line in Get-Content $handlesFile) {
         $trimmed = $line.Trim()
         if (-not $trimmed) { continue }
         if ($trimmed.StartsWith('#')) { continue }
         $eventsLog = "hive/events/$colony.$trimmed.log"
-        if (-not (Test-Path $eventsLog)) {
-            $handle = $trimmed
-            break
-        }
+        if (Test-Path $eventsLog) { continue }
+        $worktreeDir = "worktrees/$trimmed"
+        if (Test-Path $worktreeDir) { continue }
+        $handle = $trimmed
+        break
     }
 
     if (-not $handle) {
-        Write-Output "Error: no free handles in $handlesFile (every pool handle has an events log)."
+        Write-Output "Error: no free handles in $handlesFile (every pool handle has an events log or an existing worktree)."
         exit 1
     }
 
