@@ -312,6 +312,12 @@ export const bots = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }).notNull().defaultNow(),
     status: text("status").notNull().default("active"),
+    // HV-136: SSE-as-liveness. When a bot's stream is open, this holds the
+    // server-side connection id so internal code can push events to that
+    // specific bot. NULL when no stream is open (old /join flow or
+    // disconnected). Last-writer-wins on reopen.
+    connectionId: text("connection_id"),
+    role: text("role"),
   },
   (t) => ({
     projectColonyHandleUnique: unique("bots_project_colony_handle_unique").on(

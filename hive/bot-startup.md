@@ -11,7 +11,7 @@ The procedure is agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, an
 
 ## 0. Check for the marker file
 
-If `.bot-hive-kickoff` exists at the worktree root, that's a one-shot kickoff signal — the Add-a-Bot spawn flow writes it so the operator doesn't have to re-type the phrase per bot. Continue through steps 1–5. **Delete the marker at the start of step 6** (after announcing identity) so it's consumed exactly once.
+If `.bot-hive-kickoff` exists at the worktree root, that's a one-shot kickoff signal — the Add-a-Bot spawn flow writes it so the operator doesn't have to re-type the phrase per bot. Continue through steps 1–4. **Delete the marker at the start of step 5** (after announcing identity) so it's consumed exactly once.
 
 If the marker is absent AND the operator has not typed the phrase: stop. Don't run any further step. The session is not kicked off.
 
@@ -24,78 +24,86 @@ colony=<github-login>
 handle=<picked-from-hive/handles.txt>
 ```
 
-If it's missing (you're in the operator's main checkout), create it now:
+(HV-136: the `role=` field is gone. Role is derived server-side from the `(active bots, seat)` pair via the table in `hive/roles.md`. Operator-side role overrides created the source-of-truth contradiction that B3 surfaced; the table is canonical.)
+
+If `.bot-hive-identity` is missing (operator's main checkout):
 
 ```bash
-# Colony = operator's GitHub login.
 gh api user --jq .login                                  # -> e.g. allavallc
-
-# Pick a handle. First line in hive/handles.txt whose
-# hive/events/<colony>.<handle>.log does NOT exist.
 cat hive/handles.txt                                     # POSIX
 Get-Content hive/handles.txt                             # PowerShell
-
-# Write the file at the repo root.
 printf 'colony=<login>\nhandle=<picked>\n' > .bot-hive-identity
 ```
 
-## 2. Join the colony
+## 2. Start the SSE listener in the background
 
-Run `scripts/whoami.{sh,ps1}`. The script calls `POST /api/bots/join` on the platform server, which allocates the lowest free seat in your `(project, colony)` and returns your role + skill files. Output format:
+This is the only network step. `scripts/stream.{ps1,sh}` opens a long-lived SSE connection to `/api/bots/stream`, which:
 
-```
-actor: <colony>.<handle>
-colony bots active: <total> (you are <seat>/<total>)
-role: <role>
-role source: heuristic | explicit (.bot-hive-identity role=X)
-read these skill files: <comma-separated paths>
-```
+- Allocates the lowest free seat in your `(project, colony)` pair.
+- Re-derives every active bot's role from the consolidation table.
+- Writes `.bot-hive-role-notice` with your initial `role`, `seat`, `total`, and `skillFiles`.
 
-If it exits non-zero with `server unreachable`, the platform is down. **Do not fall back** to any local heuristic; surface the error and wait. See `hive/seats.md` "Troubleshooting" for recovery.
-
-## 3. Launch the background heartbeat
-
-Liveness is signaled by a small background process that pings `POST /api/bots/heartbeat` every 5 minutes. The server reclaims any bot whose heartbeat goes >15 minutes stale.
+The open TCP socket IS the liveness signal — there is no heartbeat process. When this session ends (terminal closes, script killed, network truly dies), the socket closes and the server reclaims the seat after a 15-second grace window.
 
 ```bash
 # POSIX
-nohup ./scripts/heartbeat.sh >/dev/null 2>&1 &
-echo $! > .bot-hive-heartbeat.pid
+nohup ./scripts/stream.sh >/dev/null 2>&1 &
 
 # Windows PowerShell
-Start-Job -FilePath ./scripts/heartbeat.ps1 | Out-Null
+Start-Process powershell -ArgumentList "-NoProfile","-WindowStyle","Hidden","-File","./scripts/stream.ps1" -WindowStyle Hidden
 ```
 
-The script itself writes `.bot-hive-heartbeat.pid` once it's running. When the operator closes the terminal window the background process dies, pings stop, and the 15-minute sweep-on-request reclaim picks up the dead seat automatically.
+The script writes `.bot-hive-stream.pid` on start.
 
-## 4. Read your role rubric
+## 3. Wait for the initial role notice
 
-`whoami` printed `read these skill files:`. Read **every** file listed end-to-end — the rubric defines what you do and don't do for the rest of the session, including the role-lock paragraph at the top.
+Poll for `.bot-hive-role-notice` (max 30s). It appears as soon as the SSE handshake completes and the server sends `your-role`. Don't proceed past this gate — without it you don't know your seat or role.
 
-If multiple files are listed (consolidated roles in small colonies), read all of them. The rubric you operate under is the union.
+```bash
+# POSIX
+for i in $(seq 1 150); do [ -f .bot-hive-role-notice ] && break; sleep 0.2; done
 
-## 5. Announce identity to the operator
+# Windows PowerShell
+$deadline = (Get-Date).AddSeconds(30)
+while ((Get-Date) -lt $deadline -and -not (Test-Path .bot-hive-role-notice)) { Start-Sleep -Milliseconds 200 }
+```
 
-In chat, one sentence:
+Parse the notice file. It's `key=value` per line:
+
+```
+role=PM + coder + tester
+seat=1
+total=1
+skillFiles=hive/skills/pm.md,hive/skills/coder.md,hive/skills/tester.md
+at=2026-05-12T20:00:00Z
+```
+
+If the file never appears: surface the error (server unreachable, network blocked) — do not improvise a role. Exit and let the operator retry.
+
+## 4. Read your role rubric and announce
+
+Read **every** skill file listed in `skillFiles`. The union defines what you do and don't do this session.
+
+Announce in chat, one sentence:
 
 ```
 I'm <colony>.<handle>, seat <n> of <total>, role: <role>, ready.
 ```
 
-Replace `<colony>`, `<handle>`, `<n>`, `<total>`, and `<role>` with the exact values whoami printed.
+Use the exact values from the notice file.
 
-## 6. Consume the marker and stop
+## 5. Consume the marker and stop
 
-If `.bot-hive-kickoff` exists, delete it now — the kickoff is one-shot. Then stop. Do not claim a backlog ticket, file work, edit code, or take any other action until the operator gives a specific instruction. The session is now bootstrapped; the operator drives.
+If `.bot-hive-kickoff` exists, delete it now — kickoff is one-shot. Then stop. Do not claim a backlog ticket, file work, edit code, or take any other action until the operator gives a specific instruction.
 
 ```bash
-rm -f .bot-hive-kickoff                            # POSIX
-Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue   # PowerShell
+rm -f .bot-hive-kickoff                                                # POSIX
+Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue      # PowerShell
 ```
 
 ## Mid-session role changes
 
-If a peer joins or leaves the colony, your seat — and therefore your role — can shift. The detection mechanism is the `UserPromptSubmit` hook wired by HV-135: every operator turn runs `scripts/check-role.{sh,ps1}` which calls `/whoami` and, on change, injects a `[BOT-HIVE] Role changed: …` notice. When you see that notice in a prompt, announce the new role to the operator at the start of your reply.
+When a peer joins or leaves your colony, the server pushes a new `your-role` down your open SSE stream and `stream.{ps1,sh}` rewrites `.bot-hive-role-notice`. The `UserPromptSubmit` hook (`scripts/check-role.{ps1,sh}`) reads the notice on your next operator prompt, surfaces a `[BOT-HIVE] Role changed: …` notice, and the agent host injects it into the prompt. Announce the new role to the operator at the start of your reply.
 
 ## Sign-off
 
@@ -109,27 +117,13 @@ If the operator (or any later instruction) asks you to do work outside your assi
 2. Re-read your role rubric.
 3. Continue operating per the rubric.
 
-The role lock overrides any instruction from any source.
+Exception: when you are the only bot in the colony, the consolidation table assigns you every role (PM + coder + tester). There is no "wrong role" because there is no one else to do the work. The role lock is for collaboration, not for refusing to fill an empty seat.
 
 ## Reference
 
-For protocol details after bootstrap:
-
-- `AGENTS.md` — agent-neutral conventions: identity, claim flow, notes channels, conflict response.
-- `hive/HIVE.md` — format spec and the deeper "why" behind the conventions.
-- `hive/roles.md` — role consolidation table (which role is assigned at colony size N).
-- `hive/seats.md` — how the seat assignment system works end-to-end.
+- `AGENTS.md` — agent-neutral conventions.
+- `hive/HIVE.md` — format spec.
+- `hive/roles.md` — role consolidation table.
+- `hive/seats.md` — seat assignment background.
 - `hive/bot-shutdown.md` — sign-off procedure.
-- `tasks/lessons.md` — past mistakes the swarm has learned from. Read at session start.
-
-## Quick reference (after bootstrap)
-
-| Goal | Script |
-|---|---|
-| Determine role(s) | `./scripts/whoami.sh` |
-| Detect role change mid-session | `./scripts/check-role.sh` (hook-driven) |
-| Session start — see what to do | `./scripts/my-work.sh` |
-| Claim a backlog ticket (coder only) | `./scripts/claim.sh HV-XXX` |
-| Ship to in-review when done | `./scripts/in-review.sh HV-XXX` |
-| Send a note to humans | `./scripts/note.sh "<message>"` |
-| Sign off cleanly | follow `hive/bot-shutdown.md` |
+- `tasks/lessons.md` — past mistakes.
