@@ -129,14 +129,52 @@ function Invoke-SpawnBot {
 
 function Invoke-StopBot {
     # Mirrors hive/bot-shutdown.md so the operator can run it without an agent.
+    # Logs every step to .bot-hive.log [hive-stop] so the operator can audit
+    # what got killed/deleted and when.
+    $logPath = (Join-Path (Get-Location).Path '.bot-hive.log')
+    function _hiveStopLog {
+        param([string]$msg)
+        try {
+            $ts = (Get-Date).ToUniversalTime().ToString('o')
+            [System.IO.File]::AppendAllText($logPath, "$ts [hive-stop] $msg" + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+        } catch { }
+    }
+
+    _hiveStopLog "invoked in $((Get-Location).Path)"
+
     if (Test-Path .bot-hive-stream.pid) {
         $streamPid = (Get-Content .bot-hive-stream.pid -ErrorAction SilentlyContinue | Select-Object -First 1)
         if ($streamPid) {
-            try { Stop-Process -Id $streamPid -Force -ErrorAction SilentlyContinue } catch { }
+            $alive = $false
+            try { Get-Process -Id $streamPid -ErrorAction Stop | Out-Null; $alive = $true } catch { $alive = $false }
+            _hiveStopLog "found .bot-hive-stream.pid -> PID $streamPid (alive=$alive)"
+            if ($alive) {
+                try {
+                    Stop-Process -Id $streamPid -Force -ErrorAction Stop
+                    _hiveStopLog "killed PID $streamPid"
+                } catch {
+                    _hiveStopLog "kill of PID $streamPid failed: $($_.Exception.Message)"
+                }
+            } else {
+                _hiveStopLog "PID $streamPid not alive; nothing to kill"
+            }
+        } else {
+            _hiveStopLog "found .bot-hive-stream.pid but it was empty"
         }
         Remove-Item .bot-hive-stream.pid -ErrorAction SilentlyContinue
+        _hiveStopLog "deleted .bot-hive-stream.pid"
+    } else {
+        _hiveStopLog "no .bot-hive-stream.pid found"
     }
-    Remove-Item .bot-hive-role-notice,.bot-hive-role-bootannounced,.bot-hive-role-cache,.bot-hive-heartbeat.pid -ErrorAction SilentlyContinue
+
+    foreach ($f in @('.bot-hive-role-notice','.bot-hive-role-bootannounced','.bot-hive-role-cache','.bot-hive-heartbeat.pid')) {
+        if (Test-Path $f) {
+            Remove-Item $f -ErrorAction SilentlyContinue
+            _hiveStopLog "deleted $f"
+        }
+    }
+
+    _hiveStopLog "done; printing all-clear"
     Write-Output "Signed off. Safe to close this window."
 }
 

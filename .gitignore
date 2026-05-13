@@ -59,3 +59,10 @@ Thumbs.db
 # are worktree-local and recreated on every boot.
 .bot-hive-role-cache
 .bot-hive-heartbeat.pid
+
+# HV-136 SSE listener runtime state and diagnostic log. Worktree-local;
+# never committed.
+.bot-hive-stream.pid
+.bot-hive-role-notice
+.bot-hive-role-bootannounced
+.bot-hive.log
