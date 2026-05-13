@@ -77,7 +77,10 @@ spawn_bot() {
     exit 1
   fi
 
-  # Pick the first handle in hive/handles.txt with no events log yet.
+  # Pick the first handle in hive/handles.txt that is free.
+  # A handle is "free" if:
+  #   - no events log exists at hive/events/<colony>.<handle>.log, AND
+  #   - no worktree exists at worktrees/<handle>/ (orphaned spawn from a prior aborted run).
   local handle=""
   while IFS= read -r line; do
     [ -z "$line" ] && continue
@@ -85,14 +88,18 @@ spawn_bot() {
     local trimmed
     trimmed=$(echo "$line" | tr -d '[:space:]')
     [ -z "$trimmed" ] && continue
-    if [ ! -f "hive/events/${colony}.${trimmed}.log" ]; then
-      handle="$trimmed"
-      break
+    if [ -f "hive/events/${colony}.${trimmed}.log" ]; then
+      continue
     fi
+    if [ -d "worktrees/${trimmed}" ]; then
+      continue
+    fi
+    handle="$trimmed"
+    break
   done < "$handles_file"
 
   if [ -z "$handle" ]; then
-    echo "Error: no free handles in $handles_file (every pool handle has an events log)."
+    echo "Error: no free handles in $handles_file (every pool handle has an events log or an existing worktree)."
     exit 1
   fi
 
