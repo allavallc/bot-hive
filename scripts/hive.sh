@@ -2,21 +2,25 @@
 # scripts/hive.sh -- bot-hive CLI for spawning and stopping bots.
 #
 # Usage:
-#   ./scripts/hive.sh start -coder      Spawn a new bot intended as a coder
-#   ./scripts/hive.sh start -tester     Spawn a new bot intended as a tester
-#   ./scripts/hive.sh stop              Stop this bot: kill SSE listener, clean state, print all-clear
+#   ./scripts/hive.sh add coder       Spawn a new bot intended as a coder
+#   ./scripts/hive.sh add tester      Spawn a new bot intended as a tester
+#   ./scripts/hive.sh stop            Stop this bot: kill SSE listener, clean state, print all-clear
 #
-# 'start' requires at least one active bot in the colony already (the PM).
+# 'add' requires at least one active bot in the colony already (the PM).
 # Run "start the hive" in a Claude session at the bot-hive root first to
 # create the PM bot.
+#
+# Also see AGENTS.md "Spawn / shutdown chat phrases" -- 'hive add coder',
+# 'hive add tester', and the sign-off phrases trigger an agent to invoke
+# this script on the operator's behalf.
 
 set -e
 
 usage() {
   echo "Usage:"
-  echo "  ./scripts/hive.sh start -coder      Spawn a coder bot"
-  echo "  ./scripts/hive.sh start -tester     Spawn a tester bot"
-  echo "  ./scripts/hive.sh stop              Stop this bot + clean local state"
+  echo "  ./scripts/hive.sh add coder       Spawn a coder bot"
+  echo "  ./scripts/hive.sh add tester      Spawn a tester bot"
+  echo "  ./scripts/hive.sh stop            Stop this bot + clean local state"
 }
 
 count_active_bots() {
@@ -55,8 +59,8 @@ spawn_bot() {
   # So -coder needs >=1 active bot (becomes bot 2). -tester needs >=2 (becomes bot 3).
   if [ "$intended_role" = "tester" ] && [ "$active_count" -lt 2 ]; then
     echo "Error: cannot spawn a tester with only $active_count bot(s) active."
-    echo "Spawn a coder first: './scripts/hive.sh start -coder'"
-    echo "(Per hive/roles.md the tester is seat 3 in the colony — the PM and a coder must exist first.)"
+    echo "Spawn a coder first: './scripts/hive.sh add coder'"
+    echo "(Per hive/roles.md the tester is seat 3 in the colony -- the PM and a coder must exist first.)"
     exit 1
   fi
 
@@ -132,15 +136,15 @@ stop_bot() {
 }
 
 cmd="${1:-}"
-flag="${2:-}"
+role="${2:-}"
 
 case "$cmd" in
-  start)
-    case "$flag" in
-      -coder)  spawn_bot "coder" ;;
-      -tester) spawn_bot "tester" ;;
+  add)
+    case "$role" in
+      coder)  spawn_bot "coder" ;;
+      tester) spawn_bot "tester" ;;
       *)
-        echo "Error: 'start' requires -coder or -tester"
+        echo "Error: 'add' requires 'coder' or 'tester'"
         usage
         exit 1
         ;;

@@ -1,21 +1,25 @@
 # scripts/hive.ps1 -- bot-hive CLI for spawning and stopping bots.
 #
 # Usage:
-#   .\scripts\hive.ps1 start -coder      Spawn a new bot intended as a coder
-#   .\scripts\hive.ps1 start -tester     Spawn a new bot intended as a tester
-#   .\scripts\hive.ps1 stop              Stop this bot: kill SSE listener, clean state, print all-clear
+#   .\scripts\hive.ps1 add coder       Spawn a new bot intended as a coder
+#   .\scripts\hive.ps1 add tester      Spawn a new bot intended as a tester
+#   .\scripts\hive.ps1 stop            Stop this bot: kill SSE listener, clean state, print all-clear
 #
-# 'start' requires at least one active bot in the colony already (the PM).
+# 'add' requires at least one active bot in the colony already (the PM).
 # Run "start the hive" in a Claude session at the bot-hive root first to
 # create the PM bot.
+#
+# Also see AGENTS.md "Spawn / shutdown chat phrases" -- 'hive add coder',
+# 'hive add tester', and the sign-off phrases trigger an agent to invoke
+# this script on the operator's behalf.
 
 $ErrorActionPreference = "Stop"
 
 function Show-Usage {
     Write-Output "Usage:"
-    Write-Output "  .\scripts\hive.ps1 start -coder      Spawn a coder bot"
-    Write-Output "  .\scripts\hive.ps1 start -tester     Spawn a tester bot"
-    Write-Output "  .\scripts\hive.ps1 stop              Stop this bot + clean local state"
+    Write-Output "  .\scripts\hive.ps1 add coder       Spawn a coder bot"
+    Write-Output "  .\scripts\hive.ps1 add tester      Spawn a tester bot"
+    Write-Output "  .\scripts\hive.ps1 stop            Stop this bot + clean local state"
 }
 
 function Get-ActiveBotCount {
@@ -56,7 +60,7 @@ function Invoke-SpawnBot {
     # Per hive/roles.md: -coder needs >=1 active bot; -tester needs >=2.
     if ($IntendedRole -eq 'tester' -and $activeCount -lt 2) {
         Write-Output "Error: cannot spawn a tester with only $activeCount bot(s) active."
-        Write-Output "Spawn a coder first: '.\scripts\hive.ps1 start -coder'"
+        Write-Output "Spawn a coder first: '.\scripts\hive.ps1 add coder'"
         Write-Output "(Per hive/roles.md the tester is seat 3 in the colony -- the PM and a coder must exist first.)"
         exit 1
     }
@@ -132,15 +136,15 @@ function Invoke-StopBot {
 }
 
 $cmd = if ($args.Count -gt 0) { $args[0] } else { '' }
-$flag = if ($args.Count -gt 1) { $args[1] } else { '' }
+$role = if ($args.Count -gt 1) { $args[1] } else { '' }
 
 switch ($cmd) {
-    'start' {
-        switch ($flag) {
-            '-coder'  { Invoke-SpawnBot -IntendedRole 'coder' }
-            '-tester' { Invoke-SpawnBot -IntendedRole 'tester' }
+    'add' {
+        switch ($role) {
+            'coder'  { Invoke-SpawnBot -IntendedRole 'coder' }
+            'tester' { Invoke-SpawnBot -IntendedRole 'tester' }
             default {
-                Write-Output "Error: 'start' requires -coder or -tester"
+                Write-Output "Error: 'add' requires 'coder' or 'tester'"
                 Show-Usage
                 exit 1
             }
