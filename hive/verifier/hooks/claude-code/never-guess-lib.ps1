@@ -1,4 +1,4 @@
-# never-guess-lib.ps1 — shared helpers for the never-guess hook family.
+# never-guess-lib.ps1 -- shared helpers for the never-guess hook family.
 # Dot-source from each hook: . "$PSScriptRoot\never-guess-lib.ps1"
 
 $Script:NeverGuessLogPath = Join-Path $env:USERPROFILE '.claude\hooks\never-guess-violations.log'
@@ -99,10 +99,10 @@ function Strip-CodeAndThinking {
     return $t
 }
 
-# Cheap negative filter — if a message has zero of these AND no destructive keywords, skip deeper checks.
+# Cheap negative filter -- if a message has zero of these AND no destructive keywords, skip deeper checks.
 $Script:ClaimVerbPattern = '\b(is|was|are|were|has|have|already|never|superseded|merged|equivalent|identical|exists|missing|landed|shipped|fixed|done|broken|works|doesn''t|isn''t|aren''t|wasn''t|weren''t)\b'
 
-# Risky claim patterns — strong signals of factual claims about repo/PR/file state.
+# Risky claim patterns -- strong signals of factual claims about repo/PR/file state.
 $Script:RiskyClaimPatterns = @(
     '\bPR #\d+\s+(is|was|got|has been|is now)\s+(merged|closed|superseded|reverted|landed|open)\b',
     '\balready (merged|landed|shipped|done|fixed|accepted|in main|on main)\b',
@@ -115,7 +115,7 @@ $Script:RiskyClaimPatterns = @(
     '\bthe\s+\w+\s+(file|folder|directory|table|column|hook|skill|function|endpoint)\s+(is|does not|doesn''t)\b'
 )
 
-# Destructive operations — gating these is the highest-value catch.
+# Destructive operations -- gating these is the highest-value catch.
 $Script:DestructiveBashPattern = '(?i)\b(gh pr close|gh pr merge|gh issue close|git push.*(--force|-f\b)|git reset --hard|git branch -D|git clean -fd|rm -rf|Remove-Item.*-Recurse.*-Force|DROP TABLE|TRUNCATE|DROP DATABASE|DELETE FROM)\b'
 
 function Test-Citation {
@@ -123,7 +123,7 @@ function Test-Citation {
     $start = [Math]::Max(0, $MatchIndex - $WindowChars)
     $end   = [Math]::Min($Text.Length, $MatchIndex + $MatchLength + $WindowChars)
     $ctx   = $Text.Substring($start, $end - $start)
-    return ($ctx -match '\(verified:|\bUnverified\s+(—|--|-)\s')
+    return ($ctx -match '\(verified:|\bUnverified\s+(--|--|-)\s')
 }
 
 function Test-CitationBacked {
@@ -133,7 +133,7 @@ function Test-CitationBacked {
     $ctx   = $Text.Substring($start, $end - $start)
     $m = [regex]::Match($ctx, '\(verified:\s*([^)]+)\)')
     if (-not $m.Success) {
-        return ($ctx -match '\bUnverified\s+(—|--|-)\s')
+        return ($ctx -match '\bUnverified\s+(--|--|-)\s')
     }
     $claimedCmd = $m.Groups[1].Value.Trim().ToLower()
     foreach ($t in $ToolUses) {

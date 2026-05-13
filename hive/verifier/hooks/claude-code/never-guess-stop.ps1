@@ -1,4 +1,4 @@
-# never-guess-stop.ps1 — block end-of-turn if assistant made unverified factual claims.
+# never-guess-stop.ps1 -- block end-of-turn if assistant made unverified factual claims.
 . "$PSScriptRoot\never-guess-lib.ps1"
 
 try {
@@ -27,7 +27,7 @@ try {
             $auto = Get-AutoVerifyResult -ClaimText $m.Value
             if ($auto) {
                 if (-not $auto.verified) {
-                    $autoVerifyNotes += "Auto-verify says claim '$($m.Value)' is WRONG — actual: $($auto.truth) (ran: $($auto.cmd))"
+                    $autoVerifyNotes += "Auto-verify says claim '$($m.Value)' is WRONG -- actual: $($auto.truth) (ran: $($auto.cmd))"
                 } else {
                     $autoVerifyNotes += "Auto-verify confirmed: $($auto.truth)"
                 }
@@ -45,15 +45,15 @@ try {
         }
     }
 
-    # Cap on "Unverified —" abuse
-    $unverifiedCount = ([regex]::Matches($clean, '\bUnverified\s+(—|--|-)\s')).Count
+    # Cap on "Unverified --" abuse
+    $unverifiedCount = ([regex]::Matches($clean, '\bUnverified\s+(--|--|-)\s')).Count
     if ($unverifiedCount -gt 3) {
-        $violations += @{ kind='unverified-overuse'; claim="Used 'Unverified —' $unverifiedCount times in one message" }
+        $violations += @{ kind='unverified-overuse'; claim="Used 'Unverified --' $unverifiedCount times in one message" }
     }
 
     if ($violations.Count -eq 0 -and $autoVerifyNotes.Count -eq 0) { exit 0 }
 
-    $preview = if ($msg.Length -gt 200) { $msg.Substring(0, 200) + '…' } else { $msg }
+    $preview = if ($msg.Length -gt 200) { $msg.Substring(0, 200) + '...' } else { $msg }
 
     if ($violations.Count -gt 0) {
         foreach ($v in $violations) { Write-Violation -Kind $v.kind -Detail $v.claim -AssistantMsgPreview $preview }
@@ -63,7 +63,7 @@ The never-guess hook caught unverified claims in your message:
 
 $claimList
 
-For each: either (a) run a tool call to verify and add (verified: <command>) right after the claim — the tag must reference a command you actually ran this session; or (b) relabel as "Unverified —" if you genuinely cannot check (max 3 per message, not allowed for destructive recommendations).
+For each: either (a) run a tool call to verify and add (verified: <command>) right after the claim -- the tag must reference a command you actually ran this session; or (b) relabel as "Unverified --" if you genuinely cannot check (max 3 per message, not allowed for destructive recommendations).
 
 Then resend.
 "@
@@ -74,7 +74,7 @@ Then resend.
         exit 0
     }
 
-    # No violations but auto-verify ran — block only if it found something WRONG
+    # No violations but auto-verify ran -- block only if it found something WRONG
     if ($autoVerifyNotes.Count -gt 0) {
         $wrongs = $autoVerifyNotes | Where-Object { $_ -match 'WRONG' }
         if ($wrongs.Count -gt 0) {

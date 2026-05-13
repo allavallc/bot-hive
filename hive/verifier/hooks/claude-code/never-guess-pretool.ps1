@@ -1,4 +1,4 @@
-# never-guess-pretool.ps1 — block destructive bash unless verified-this-session.
+# never-guess-pretool.ps1 -- block destructive bash unless verified-this-session.
 . "$PSScriptRoot\never-guess-lib.ps1"
 
 try {
