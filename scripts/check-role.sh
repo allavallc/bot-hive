@@ -13,9 +13,13 @@ BOOT_STAMP=".bot-hive-role-bootannounced"
 
 [ -f "$NOTICE_FILE" ] || exit 0
 
-ROLE=$(grep -E '^role='  "$NOTICE_FILE" | head -1 | cut -d= -f2- | tr -d '\r' || true)
-SEAT=$(grep -E '^seat='  "$NOTICE_FILE" | head -1 | cut -d= -f2- | tr -d '\r' || true)
-TOTAL=$(grep -E '^total=' "$NOTICE_FILE" | head -1 | cut -d= -f2- | tr -d '\r' || true)
+# Strip UTF-8 BOM (Windows PowerShell's `Set-Content -Encoding utf8`
+# writes one and grep won't match `^role=` against `\xef\xbb\xbfrole=`).
+NOTICE_BODY=$(sed '1s/^\xef\xbb\xbf//' "$NOTICE_FILE")
+
+ROLE=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^role='  | head -1 | cut -d= -f2- | tr -d '\r' || true)
+SEAT=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^seat='  | head -1 | cut -d= -f2- | tr -d '\r' || true)
+TOTAL=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^total=' | head -1 | cut -d= -f2- | tr -d '\r' || true)
 
 rm -f "$NOTICE_FILE"
 

@@ -73,8 +73,10 @@ while ($true) {
                 try {
                     $evt = $payload | ConvertFrom-Json -ErrorAction Stop
                     if ($evt.type -eq "your-role") {
-                        $notice = "role=$($evt.role)`r`nseat=$($evt.seat)`r`ntotal=$($evt.total)`r`nskillFiles=$($evt.skillFiles -join ',')`r`nat=$((Get-Date).ToUniversalTime().ToString('o'))`r`n"
-                        Set-Content -Path $noticeFile -Value $notice -Encoding utf8
+                        $notice = "role=$($evt.role)`nseat=$($evt.seat)`ntotal=$($evt.total)`nskillFiles=$($evt.skillFiles -join ',')`nat=$((Get-Date).ToUniversalTime().ToString('o'))`n"
+                        # Write without BOM — bash/grep in the UserPromptSubmit hook
+                        # can't parse a BOM-prefixed `role=...` first line.
+                        [System.IO.File]::WriteAllText((Resolve-Path -LiteralPath ".").Path + "\$noticeFile", $notice, [System.Text.UTF8Encoding]::new($false))
                     }
                 } catch {
                     # Malformed JSON; skip.
