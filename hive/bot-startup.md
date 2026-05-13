@@ -1,13 +1,15 @@
 # Bot startup
 
-Execute these steps top-to-bottom on session start when EITHER kickoff trigger fires:
+Two bootstrap procedures depending on which kickoff trigger fired (per `AGENTS.md` Kickoff section):
 
-- the operator types `start the hive` (or any equivalent kickoff phrase) in chat, OR
-- a `.bot-hive-kickoff` marker file exists at the worktree root (written by the Add-a-Bot spawn flow).
+- **Procedure A** (steps 0–5 below) — runs when `start the hive` fires in this session's cwd, OR when a `.bot-hive-kickoff` marker is present. Uses the cwd's existing `.bot-hive-identity`.
+- **Procedure B** (its own section near the bottom) — runs when `hive add coder` or `hive add tester` fires in a fresh agent session. Creates a new worktree, then transforms this session into the new bot operating from that worktree.
 
-If neither trigger has fired, wait silently — do not proceed past this line.
+If no trigger has fired, wait silently — do not proceed past this line.
 
-The procedure is agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklist.
+Both procedures are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklists.
+
+# Procedure A — `start the hive` / marker file
 
 ## 0. Check for the marker file
 
@@ -100,6 +102,83 @@ If `.bot-hive-kickoff` exists, delete it now — kickoff is one-shot. Then stop.
 rm -f .bot-hive-kickoff                                                # POSIX
 Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue      # PowerShell
 ```
+
+# Procedure B — `hive add coder` / `hive add tester`
+
+Use this when the operator says `hive add coder` or `hive add tester` to a fresh agent session (typically in a new terminal). The phrase is the trigger; this procedure transforms this session into the new coder/tester bot operating from a freshly-created worktree.
+
+Procedure A still applies if the operator instead typed `start the hive` or there's a `.bot-hive-kickoff` marker in cwd — handle that case first. If both could apply, prefer the more specific phrase (`hive add coder` / `hive add tester` over `start the hive`).
+
+## B.1. Run the spawn helper
+
+Capture the worktree path from the script's output. The script creates the worktree, writes `.bot-hive-identity` and `.bot-hive-kickoff` inside it.
+
+```bash
+# POSIX
+./scripts/hive.sh add coder       # for `hive add coder`
+./scripts/hive.sh add tester      # for `hive add tester`
+
+# Windows PowerShell
+.\scripts\hive.ps1 add coder
+.\scripts\hive.ps1 add tester
+```
+
+The script refuses with a clear error if no PM bot is alive yet, or if `add tester` is called before a coder exists. Surface that error to the operator and stop — do not improvise around it.
+
+The script prints `Spawned bot: worktrees/<handle>` — extract `<handle>` for the next steps.
+
+## B.2. Start the SSE listener from the new worktree
+
+Same script as Procedure A step 2, but invoked with the new worktree as cwd so it reads the worktree's `.bot-hive-identity` (the new handle) instead of cwd's.
+
+```bash
+# POSIX -- run inside a subshell so the cd doesn't change your own cwd
+(cd worktrees/<handle> && nohup ./scripts/stream.sh > /dev/null 2>&1 &)
+
+# Windows PowerShell -- use -WorkingDirectory
+Start-Process powershell -ArgumentList "-NoProfile","-WindowStyle","Hidden","-File","./scripts/stream.ps1" -WorkingDirectory "worktrees/<handle>" -WindowStyle Hidden
+```
+
+The script writes `worktrees/<handle>/.bot-hive-stream.pid` on start.
+
+## B.3. Wait for the role notice in the new worktree
+
+Poll for `worktrees/<handle>/.bot-hive-role-notice` (max 30s). Same logic as Procedure A step 3 but the file lives in the worktree path, not cwd.
+
+If the file never appears: surface the error (server unreachable, network blocked) — do not improvise a role.
+
+## B.4. Read your role rubric and announce
+
+Read every skill file listed in `skillFiles` (paths are repo-relative; same `hive/skills/*.md` files). The union defines what you do and don't do this session.
+
+Announce in chat, one sentence:
+
+```
+I'm <colony>.<handle>, seat <n> of <total>, role: <role>, ready.
+```
+
+## B.5. Consume the kickoff marker
+
+```bash
+rm -f worktrees/<handle>/.bot-hive-kickoff                                                   # POSIX
+Remove-Item -Path "worktrees/<handle>/.bot-hive-kickoff" -ErrorAction SilentlyContinue      # PowerShell
+```
+
+## B.6. Operate from the worktree path going forward
+
+This session's actual cwd is still wherever the operator launched the agent (typically bot-hive root). The new bot identity lives at `worktrees/<handle>/`. Every subsequent operation that's worktree-specific runs with the worktree as cwd:
+
+| Operation | Invocation pattern |
+|---|---|
+| List your work | `(cd worktrees/<handle> && ./scripts/my-work.sh)` |
+| Claim a ticket | `(cd worktrees/<handle> && ./scripts/claim.sh HV-XXX)` |
+| Ship to in-review | `(cd worktrees/<handle> && ./scripts/in-review.sh HV-XXX)` |
+| Write a note | `(cd worktrees/<handle> && ./scripts/note.sh "<msg>")` |
+| Heartbeat / role-check | `(cd worktrees/<handle> && ./scripts/heartbeat.sh)` etc. |
+
+PowerShell equivalent uses `Push-Location` / `Pop-Location` or `-WorkingDirectory` on `Start-Process`. The principle is the same: the worktree path is your effective working directory; your shell cwd is incidental.
+
+Edits to product code, tests, etc. happen on the worktree's branch (`<handle>-work`). Use `git -C worktrees/<handle> <command>` for any git operation that should land on the worktree branch instead of whatever branch is checked out in cwd.
 
 ## Mid-session role changes
 

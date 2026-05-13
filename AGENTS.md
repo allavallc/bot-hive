@@ -6,14 +6,14 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 ## Kickoff (do this first)
 
-Two equivalent kickoff triggers — either one starts the bootstrap procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
+Four kickoff triggers, each kicks off a specific bootstrap procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
 
-1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Use this in the operator's main checkout, or any session that wasn't spawned via the Add-a-Bot button.
-2. **`.bot-hive-kickoff` marker file** exists at the worktree root. Use this when a bot is spawned via the Add-a-Bot button — the spawn flow writes the marker alongside `.bot-hive-identity` so the operator doesn't have to re-type the phrase in every new terminal. The marker is one-shot: the bot deletes it during step 4 of bootstrap.
+1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. This session bootstraps in the current working directory using the existing `.bot-hive-identity`. Typically becomes the PM bot (seat 1) in the operator's main checkout. See `bot-startup.md` § Procedure A.
+2. **Operator types `hive add coder`** in chat (in a fresh agent session, typically in a new terminal). This session creates a new worktree via `scripts/hive.{sh,ps1}`, then transforms itself into a coder bot operating from that worktree. Requires a PM bot to be alive already. See `bot-startup.md` § Procedure B.
+3. **Operator types `hive add tester`** in chat (in a fresh agent session). Same as #2 but becomes a tester. Requires ≥2 active bots already (PM + coder). See `bot-startup.md` § Procedure B.
+4. **`.bot-hive-kickoff` marker file** exists at the worktree root (written by `scripts/hive.{sh,ps1}` or any older spawn flow). The session bootstraps in the current cwd using the existing `.bot-hive-identity`. Marker is one-shot — consumed during bootstrap. See `bot-startup.md` § Procedure A.
 
-If neither trigger has fired, wait silently. Both paths run the same branchless numbered checklist: ensure `.bot-hive-identity` exists, run `scripts/whoami.{sh,ps1}` to call `/api/bots/join` and learn your seat + role, launch the background heartbeat, read the role rubric (which locks you to that role for the session), announce identity, consume the marker if present, and wait for a task.
-
-Kickoff is the canonical entry point. Do not start work, claim tickets, or edit code before completing it.
+If none has fired, wait silently. Kickoff is the canonical entry point. Do not start work, claim tickets, or edit code before completing it.
 
 ## Sign-off
 
