@@ -1,62 +1,49 @@
-# scripts/check-role.ps1 - detect mid-session role shift (FS-028 / HV-133).
+# scripts/check-role.ps1 — HV-136 notice surfacer.
 #
-# Windows PowerShell counterpart to scripts/check-role.sh. See that file
-# for the contract: prints a one-line notice on role change, silent
-# otherwise. Designed to run from the agent host's pre-prompt hook.
+# Replaces the old /whoami-polling check-role with a one-shot read of
+# .bot-hive-role-notice. stream.ps1 (the background SSE listener) writes
+# that file whenever the server pushes a `your-role` event. This script
+# runs from the UserPromptSubmit hook on every operator prompt:
+# - If the notice file exists, print a one-line `[BOT-HIVE] Role …`
+#   message (which the agent host injects into the next prompt) and
+#   delete the file (one-shot).
+# - Otherwise exit 0 silently.
+#
+# No /whoami call. No DB round-trip. Cheap.
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$apiBase = if ($env:BOT_HIVE_API_URL) { $env:BOT_HIVE_API_URL } else { "https://bot-hive-j0ax.onrender.com" }
-$cacheFile = ".bot-hive-role-cache"
+$noticeFile = ".bot-hive-role-notice"
+if (-not (Test-Path $noticeFile)) { exit 0 }
 
-if (-not (Test-Path ".bot-hive-identity")) { exit 0 }
-
-$colony = $null
-$handle = $null
-Get-Content ".bot-hive-identity" | ForEach-Object {
-    if ($_ -match '^colony=(.+)$') { $colony = $Matches[1].Trim() }
-    if ($_ -match '^handle=(.+)$') { $handle = $Matches[1].Trim() }
+$role = $null
+$seat = $null
+$total = $null
+Get-Content $noticeFile | ForEach-Object {
+    if ($_ -match '^role=(.+)$')  { $role  = $Matches[1].Trim() }
+    if ($_ -match '^seat=(.+)$')  { $seat  = $Matches[1].Trim() }
+    if ($_ -match '^total=(.+)$') { $total = $Matches[1].Trim() }
 }
-if (-not $handle) { exit 0 }
-if (-not $colony) { $colony = $handle }
 
-$originUrl = ""
-try { $originUrl = (git remote get-url origin 2>$null) } catch {}
-if (-not $originUrl) { exit 0 }
-$repoFullName = $originUrl `
-    -replace '\.git$', '' `
-    -replace '^https?://[^/]+/', '' `
-    -replace '^git@[^:]+:', ''
-if (-not $repoFullName -or $repoFullName -notmatch '/') { exit 0 }
+# Consume the notice (one-shot — same event shouldn't re-fire).
+Remove-Item $noticeFile -Force -ErrorAction SilentlyContinue
 
-$uri = "$apiBase/api/bots/whoami?repo_full_name=$([uri]::EscapeDataString($repoFullName))&colony=$([uri]::EscapeDataString($colony))&handle=$([uri]::EscapeDataString($handle))"
-$resp = $null
-try {
-    $resp = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec 5 -ErrorAction Stop
-} catch {
+if (-not $role) { exit 0 }
+
+# Suppress the very first notice (which arrives on stream open and
+# matches the role the bot already announced at bootstrap). We detect
+# "first" via a tiny stamp file.
+$bootStamp = ".bot-hive-role-bootannounced"
+if (-not (Test-Path $bootStamp)) {
+    "role=$role" | Out-File -FilePath $bootStamp -Encoding utf8
     exit 0
 }
-if (-not $resp -or -not $resp.seat) { exit 0 }
 
-$seat = $resp.seat
-$total = $resp.total
-$role = $resp.role
+# Compare against the last announced role.
+$lastAnnounced = (Get-Content $bootStamp -ErrorAction SilentlyContinue | Where-Object { $_ -match '^role=' } | Select-Object -First 1) -replace '^role=', ''
+if ($lastAnnounced -eq $role) { exit 0 }
 
-$prevSeat = ""
-$prevRole = ""
-if (Test-Path $cacheFile) {
-    $cacheLine = (Get-Content $cacheFile | Select-Object -First 1)
-    if ($cacheLine -match 'seat=([^;]+);role=(.+)') {
-        $prevSeat = $Matches[1].Trim()
-        $prevRole = $Matches[2]
-    }
-}
-
-Set-Content -Path $cacheFile -Value "seat=$seat;role=$role" -Encoding utf8
-
-if ($prevSeat -eq "$seat" -and $prevRole -eq "$role") { exit 0 }
-# Suppress on first run (no prior cache).
-if (-not $prevSeat) { exit 0 }
+"role=$role" | Out-File -FilePath $bootStamp -Encoding utf8
 
 Write-Output "[BOT-HIVE] Role changed: you are now seat $seat of $total, role: $role."
 Write-Output "Announce this to the operator before continuing."

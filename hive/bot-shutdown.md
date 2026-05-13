@@ -6,47 +6,35 @@ Run this procedure when the operator signals you to leave the hive. Trigger phra
 - `sign off`
 - `leave the hive`
 
-The procedure is agent-neutral. Five steps. Don't reorder them; don't skip step 5.
+HV-136: there's no `/leave` API call anymore. Killing the SSE listener closes the TCP socket, which the server detects within ~1s and reaps the seat after a 15s grace window. Three steps.
 
-## 1. Stop the background heartbeat
-
-The heartbeat loop launched at boot is still pinging. Kill it before signing off so it doesn't fight the server's offline state.
+## 1. Stop the SSE listener
 
 ```bash
 # POSIX
-if [ -f .bot-hive-heartbeat.pid ]; then
-  kill "$(cat .bot-hive-heartbeat.pid)" 2>/dev/null || true
+if [ -f .bot-hive-stream.pid ]; then
+  kill "$(cat .bot-hive-stream.pid)" 2>/dev/null || true
+  rm -f .bot-hive-stream.pid
 fi
 
 # Windows PowerShell
-Get-Job | Stop-Job
+if (Test-Path .bot-hive-stream.pid) {
+  $streamPid = Get-Content .bot-hive-stream.pid -ErrorAction SilentlyContinue
+  if ($streamPid) { Stop-Process -Id $streamPid -Force -ErrorAction SilentlyContinue }
+  Remove-Item .bot-hive-stream.pid -ErrorAction SilentlyContinue
+}
 ```
 
-## 2. Call `POST /api/bots/leave`
-
-The server marks your row offline, renumbers surviving seats, and broadcasts `bot-left` on the project SSE so the live kanban updates immediately.
+## 2. Delete the per-session state files
 
 ```bash
-# POSIX (curl)
-COLONY=$(grep '^colony=' .bot-hive-identity | cut -d= -f2-)
-HANDLE=$(grep '^handle=' .bot-hive-identity | cut -d= -f2-)
-REPO=$(git remote get-url origin | sed -E 's#(\.git)?$##; s#^https?://[^/]+/##; s#^git@[^:]+:##')
-API="${BOT_HIVE_API_URL:-https://bot-hive-j0ax.onrender.com}"
-curl -sS -X POST -H "Content-Type: application/json" \
-  -d "{\"repo_full_name\":\"$REPO\",\"colony\":\"$COLONY\",\"handle\":\"$HANDLE\"}" \
-  "$API/api/bots/leave"
+rm -f .bot-hive-role-notice .bot-hive-role-bootannounced .bot-hive-role-cache .bot-hive-heartbeat.pid   # POSIX
+Remove-Item .bot-hive-role-notice,.bot-hive-role-bootannounced,.bot-hive-role-cache,.bot-hive-heartbeat.pid -ErrorAction SilentlyContinue   # PowerShell
 ```
 
-Expect a `200` with `{ok: true, departed: {...}, seat_map: [...]}`. Any non-200 means the leave didn't take — see step 5.
+(The `.bot-hive-role-cache` and `.bot-hive-heartbeat.pid` lines exist for cleanup of legacy state on old worktrees.)
 
-## 3. Delete the per-session state files
-
-```bash
-rm -f .bot-hive-role-cache .bot-hive-heartbeat.pid             # POSIX
-Remove-Item .bot-hive-role-cache,.bot-hive-heartbeat.pid -ErrorAction SilentlyContinue   # PowerShell
-```
-
-## 4. Print the all-clear
+## 3. Print the all-clear
 
 Print verbatim, on its own line:
 
@@ -54,15 +42,14 @@ Print verbatim, on its own line:
 Signed off. Safe to close this window.
 ```
 
-That sentence is the gate. The operator should not close the terminal until they see it; if they do, the seat will stay live until the 15-minute server-side reclaim picks it up.
-
-## 5. If `/leave` fails
-
-Do **not** print the all-clear line. Tell the operator the leave failed and what the error was. Two options:
-
-- Retry once. Transient 5xx errors usually recover on the next call.
-- Force-close anyway. The server's sweep-on-request reclaim will pick up the dead seat within 15 minutes (the next time anyone calls `/whoami`, `/colony`, or `/join` for that colony). The operator's view will be wrong for that window, but the seat sheet self-heals.
+That sentence is the gate. The operator should not close the terminal until they see it.
 
 ## What survivors see
 
-Each surviving bot in your colony shifts up one seat (bot 4 → 3, bot 3 → 2, etc.). On their next operator turn, the `UserPromptSubmit` hook detects the seat change via `scripts/check-role.{sh,ps1}` and prompts them to announce the new role. The operator's kanban seat strip — visible via the "See Bot Team" button — updates within ~1s on the `bot-left` SSE event.
+When this terminal closes — or the SSE script is killed — the socket dies. After a 15s grace window the server marks this row offline, renumbers survivors so seats stay contiguous, and pushes a new `your-role` down each surviving bot's open stream. On the survivor's next operator prompt, the `UserPromptSubmit` hook surfaces `[BOT-HIVE] Role changed: …` and the bot announces the new role.
+
+The kanban "See Bot Team" modal updates within ~1s on the `bot-left` SSE broadcast.
+
+## If the listener can't be stopped
+
+If `kill` / `Stop-Process` fails (the script is already dead, the PID file is stale, etc.), just close the terminal. The TCP socket dies when the parent shell exits regardless. The server's 15s grace + reclaim takes care of the rest.
