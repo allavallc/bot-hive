@@ -11,6 +11,17 @@ Both procedures are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor,
 
 # Procedure A — `start the hive` / marker file
 
+## Preflight — concurrent-owner check
+
+Before running steps 0-5, check whether another agent process already owns this identity in this cwd. Read `.bot-hive-stream.pid` in cwd; if it exists and points at a live process, ANOTHER agent is already this bot.
+
+- POSIX: `[ -f .bot-hive-stream.pid ] && kill -0 "$(cat .bot-hive-stream.pid)" 2>/dev/null`
+- Windows PowerShell: `if (Test-Path .bot-hive-stream.pid) { try { Get-Process -Id (Get-Content .bot-hive-stream.pid) -ErrorAction Stop | Out-Null; $true } catch { $false } }`
+
+If another agent is already the owner, STOP. Do NOT continue Procedure A. Two agents cannot share one identity. Tell the operator: "Another agent is already running as `<handle>` in this cwd. If you want to add a new bot, type `hive add coder` or `hive add tester` here instead — that triggers Procedure B and this session becomes the new bot." Then wait silently for the operator's next prompt.
+
+Only continue past this preflight if no live `.bot-hive-stream.pid` is found.
+
 ## 0. Check for the marker file
 
 If `.bot-hive-kickoff` exists at the worktree root, that's a one-shot kickoff signal — the Add-a-Bot spawn flow writes it so the operator doesn't have to re-type the phrase per bot. Continue through steps 1–4. **Delete the marker at the start of step 5** (after announcing identity) so it's consumed exactly once.
@@ -105,9 +116,17 @@ Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue      # PowerSh
 
 # Procedure B — `hive add coder` / `hive add tester`
 
-Use this when the operator says `hive add coder` or `hive add tester` to a fresh agent session (typically in a new terminal). The phrase is the trigger; this procedure transforms this session into the new coder/tester bot operating from a freshly-created worktree.
+## STOP — read this header before executing any step
 
-Procedure A still applies if the operator instead typed `start the hive` or there's a `.bot-hive-kickoff` marker in cwd — handle that case first. If both could apply, prefer the more specific phrase (`hive add coder` / `hive add tester` over `start the hive`).
+Three rules you must internalize before running B.1-B.6:
+
+1. **THIS session becomes the new coder/tester bot.** Not "this session creates a worktree for the operator to open in another terminal." Not "this session stays as its current identity and delegates the role." THIS session — the one you are reading this in, in this chat with the operator — transforms into the new bot. The terminal stays open; you stay in it; you ARE the new handle from B.4 onward.
+
+2. **Ignore cwd's `.bot-hive-identity`.** Your cwd is almost certainly the operator's main checkout, where `.bot-hive-identity` says something like `handle=wren`. That identity belongs to a DIFFERENT agent process (the PM, running in another terminal). You are NOT `wren`. You are about to be the handle that step B.1's spawn script picks for you.
+
+3. **Your final announcement (in B.4) is `I'm <colony>.<new-handle>, seat <n> of <total>, role: <coder|tester>, ready.`** Where `<new-handle>` is what the spawn script chose, NOT cwd's handle. If you say "I'm wren the PM, I spawned a worktree for you to open elsewhere" you have failed this procedure. Stop and re-read this header.
+
+If both Procedure A's triggers and Procedure B's triggers could apply (e.g., `.bot-hive-kickoff` is present in cwd AND the operator just typed `hive add coder`), Procedure B wins — the more specific phrase overrides.
 
 ## B.1. Run the spawn helper
 
