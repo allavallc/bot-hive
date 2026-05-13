@@ -22,10 +22,13 @@ When the operator wants you to leave the hive, they'll say one of these phrases 
 1. **`stop your hive work`** (canonical)
 2. **`sign off`**
 3. **`leave the hive`**
+4. **`stop hive`**
 
-Recognize any of them as the shutdown trigger, the same way `start the hive` is the kickoff trigger. Run the procedure in [`hive/bot-shutdown.md`](./hive/bot-shutdown.md): stop the heartbeat process, call `POST /api/bots/leave`, delete `.bot-hive-role-cache` and `.bot-hive-heartbeat.pid`, and only then print `Signed off. Safe to close this window.`.
+Recognize any of them as the shutdown trigger, the same way `start the hive` is the kickoff trigger. Run the procedure in [`hive/bot-shutdown.md`](./hive/bot-shutdown.md): kill the SSE listener (the open TCP socket IS the liveness signal — the server reclaims the seat after a 15s grace), delete the local state files (`.bot-hive-role-notice`, `.bot-hive-role-bootannounced`, etc.), and only then print `Signed off. Safe to close this window.`.
 
-The operator should not close the terminal until they see that line. If `/leave` fails, surface the error — do not print the all-clear.
+Operators can also run `./scripts/hive.sh stop` (or `.\scripts\hive.ps1 stop`) directly from a terminal to perform this procedure without an agent.
+
+The operator should not close the terminal until they see the all-clear line.
 
 ## Worktree isolation (preferred)
 
@@ -35,12 +38,16 @@ If you weren't spawned via the button (running in the main repo working dir), no
 
 ## Bot CLI helpers (start here)
 
-Three scripts wrap the protocol so you don't have to construct git/gh calls by hand. Use them for every claim, note, and session start:
+Five scripts wrap the protocol so you don't have to construct git/gh calls by hand. Use them for every claim, note, session start, and bot spawn/stop:
 
 - **`scripts/my-work.{sh,ps1}`** — session-start helper. Runs `git pull --rebase`, then surfaces: your rejected work, your in-progress tickets, notes addressed to you, recent swarm events, and available backlog filtered by FS-status and Blocked-by. Run this first every session.
 - **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<colony>.<handle>.log`, opens an auto-merging claim PR.
 - **`scripts/in-review.{sh,ps1}` `<HV-id>`** — ship a claimed ticket to in-review when work is complete. Moves the file from `in-progress/` to `in-review/`, updates Status / Completed / Last touched, appends an `in-review` event, commits, pushes to the claim branch, and **verifies the file actually landed in `in-review/` on the remote**. Use this — never do the move by hand. Manual `git mv` + commit has been silently dropped during cherry-picks; the helper makes it atomic and verified.
 - **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<colony>.<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` or `@<colony>.<bot-handle>` to address a specific actor.
+- **`scripts/hive.{sh,ps1}`** — operator-facing CLI for spawning and stopping bots. Three subcommands:
+  - `./scripts/hive.sh start -coder` — spawn a new bot intended as a coder. Creates a worktree at `worktrees/<handle>/`, writes `.bot-hive-identity`, writes the `.bot-hive-kickoff` marker. Requires a PM bot already in the colony (run `start the hive` in a Claude session at the bot-hive root first).
+  - `./scripts/hive.sh start -tester` — spawn a new bot intended as a tester. Requires at least two active bots already (the PM and a coder) so the new bot lands at seat 3 per `hive/roles.md`.
+  - `./scripts/hive.sh stop` — run the shutdown procedure (`hive/bot-shutdown.md`) from a terminal without needing an agent: kill the SSE listener, delete local state files, print `Signed off. Safe to close this window.`
 
 All three read **`.bot-hive-identity`** at the worktree root for the bot's colony and handle:
 

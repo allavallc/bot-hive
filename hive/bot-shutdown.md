@@ -5,6 +5,9 @@ Run this procedure when the operator signals you to leave the hive. Trigger phra
 - `stop your hive work` (canonical)
 - `sign off`
 - `leave the hive`
+- `stop hive`
+
+Operators can also run `./scripts/hive.sh stop` (POSIX) or `.\scripts\hive.ps1 stop` (PowerShell) directly from a terminal to perform this procedure without an agent.
 
 HV-136: there's no `/leave` API call anymore. Killing the SSE listener closes the TCP socket, which the server detects within ~1s and reaps the seat after a 15s grace window. Three steps.
 
