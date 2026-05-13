@@ -44,10 +44,20 @@ count_active_bots() {
 spawn_bot() {
   local intended_role="$1"
 
+  local log_file
+  log_file="$(pwd)/.bot-hive.log"
+  _hive_add_log() {
+    printf '%s [hive-add] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$log_file" 2>/dev/null || true
+  }
+
+  _hive_add_log "invoked: intended_role=$intended_role cwd=$(pwd)"
+
   local active_count
   active_count=$(count_active_bots)
+  _hive_add_log "active bot count across worktrees: $active_count"
 
   if [ "$active_count" -eq 0 ]; then
+    _hive_add_log "refusing: no active bot in colony"
     echo "Error: no active bot in this colony."
     echo "Run 'start the hive' in a Claude session at the bot-hive root first to create the PM bot, then retry."
     exit 1
@@ -58,6 +68,7 @@ spawn_bot() {
   #   total=3 -> seats: "PM", "coder", "tester"    (new bot at seat 3 -> tester)
   # So -coder needs >=1 active bot (becomes bot 2). -tester needs >=2 (becomes bot 3).
   if [ "$intended_role" = "tester" ] && [ "$active_count" -lt 2 ]; then
+    _hive_add_log "refusing: tester needs >=2 active bots (have $active_count)"
     echo "Error: cannot spawn a tester with only $active_count bot(s) active."
     echo "Spawn a coder first: './scripts/hive.sh add coder'"
     echo "(Per hive/roles.md the tester is seat 3 in the colony -- the PM and a coder must exist first.)"
@@ -67,12 +78,15 @@ spawn_bot() {
   local colony
   colony=$(gh api user --jq .login 2>/dev/null)
   if [ -z "$colony" ]; then
+    _hive_add_log "refusing: could not resolve colony via 'gh api user'"
     echo "Error: could not determine colony from 'gh api user'. Make sure 'gh' is authenticated."
     exit 1
   fi
+  _hive_add_log "resolved colony=$colony"
 
   local handles_file="hive/handles.txt"
   if [ ! -f "$handles_file" ]; then
+    _hive_add_log "refusing: $handles_file missing"
     echo "Error: $handles_file not found"
     exit 1
   fi
@@ -89,9 +103,11 @@ spawn_bot() {
     trimmed=$(echo "$line" | tr -d '[:space:]')
     [ -z "$trimmed" ] && continue
     if [ -f "hive/events/${colony}.${trimmed}.log" ]; then
+      _hive_add_log "skipping '$trimmed': events log exists"
       continue
     fi
     if [ -d "worktrees/${trimmed}" ]; then
+      _hive_add_log "skipping '$trimmed': worktree exists"
       continue
     fi
     handle="$trimmed"
@@ -99,24 +115,37 @@ spawn_bot() {
   done < "$handles_file"
 
   if [ -z "$handle" ]; then
+    _hive_add_log "refusing: no free handles in pool"
     echo "Error: no free handles in $handles_file (every pool handle has an events log or an existing worktree)."
     exit 1
   fi
+  _hive_add_log "picked handle='$handle'"
 
   local worktree_path="worktrees/${handle}"
   if [ -d "$worktree_path" ]; then
+    _hive_add_log "refusing: worktree at $worktree_path unexpectedly exists (race condition?)"
     echo "Error: worktree at $worktree_path already exists."
     exit 1
   fi
 
   # Create the worktree on its own branch off main.
-  git worktree add "$worktree_path" -b "${handle}-work" main
+  _hive_add_log "git worktree add $worktree_path -b ${handle}-work main"
+  if ! git worktree add "$worktree_path" -b "${handle}-work" main; then
+    _hive_add_log "git worktree add failed"
+    echo "Error: git worktree add failed"
+    exit 1
+  fi
+  _hive_add_log "worktree created"
 
   # Identity file (no BOM; printf is plain bytes).
   printf "colony=%s\nhandle=%s\n" "$colony" "$handle" > "$worktree_path/.bot-hive-identity"
+  _hive_add_log "wrote $worktree_path/.bot-hive-identity (colony=$colony handle=$handle)"
 
   # One-shot kickoff marker -- bootstrap consumes (deletes) it.
   : > "$worktree_path/.bot-hive-kickoff"
+  _hive_add_log "wrote $worktree_path/.bot-hive-kickoff (kickoff marker)"
+
+  _hive_add_log "spawn complete: worktrees/$handle"
 
   echo ""
   echo "Spawned bot: worktrees/${handle}"

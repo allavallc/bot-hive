@@ -49,9 +49,22 @@ function Get-ActiveBotCount {
 function Invoke-SpawnBot {
     param([string]$IntendedRole)
 
+    $logPath = (Join-Path (Get-Location).Path '.bot-hive.log')
+    function _hiveAddLog {
+        param([string]$msg)
+        try {
+            $ts = (Get-Date).ToUniversalTime().ToString('o')
+            [System.IO.File]::AppendAllText($logPath, "$ts [hive-add] $msg" + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+        } catch { }
+    }
+
+    _hiveAddLog "invoked: intendedRole=$IntendedRole cwd=$((Get-Location).Path)"
+
     $activeCount = Get-ActiveBotCount
+    _hiveAddLog "active bot count across worktrees: $activeCount"
 
     if ($activeCount -eq 0) {
+        _hiveAddLog "refusing: no active bot in colony"
         Write-Output "Error: no active bot in this colony."
         Write-Output "Run 'start the hive' in a Claude session at the bot-hive root first to create the PM bot, then retry."
         exit 1
@@ -59,6 +72,7 @@ function Invoke-SpawnBot {
 
     # Per hive/roles.md: -coder needs >=1 active bot; -tester needs >=2.
     if ($IntendedRole -eq 'tester' -and $activeCount -lt 2) {
+        _hiveAddLog "refusing: tester needs >=2 active bots (have $activeCount)"
         Write-Output "Error: cannot spawn a tester with only $activeCount bot(s) active."
         Write-Output "Spawn a coder first: '.\scripts\hive.ps1 add coder'"
         Write-Output "(Per hive/roles.md the tester is seat 3 in the colony -- the PM and a coder must exist first.)"
@@ -68,12 +82,15 @@ function Invoke-SpawnBot {
     $colony = $null
     try { $colony = (gh api user --jq .login 2>$null) } catch { }
     if (-not $colony) {
+        _hiveAddLog "refusing: could not resolve colony via 'gh api user'"
         Write-Output "Error: could not determine colony from 'gh api user'. Make sure 'gh' is authenticated."
         exit 1
     }
+    _hiveAddLog "resolved colony=$colony"
 
     $handlesFile = "hive/handles.txt"
     if (-not (Test-Path $handlesFile)) {
+        _hiveAddLog "refusing: $handlesFile missing"
         Write-Output "Error: $handlesFile not found"
         exit 1
     }
@@ -88,35 +105,55 @@ function Invoke-SpawnBot {
         if (-not $trimmed) { continue }
         if ($trimmed.StartsWith('#')) { continue }
         $eventsLog = "hive/events/$colony.$trimmed.log"
-        if (Test-Path $eventsLog) { continue }
+        if (Test-Path $eventsLog) {
+            _hiveAddLog "skipping '$trimmed': events log exists at $eventsLog"
+            continue
+        }
         $worktreeDir = "worktrees/$trimmed"
-        if (Test-Path $worktreeDir) { continue }
+        if (Test-Path $worktreeDir) {
+            _hiveAddLog "skipping '$trimmed': worktree exists at $worktreeDir"
+            continue
+        }
         $handle = $trimmed
         break
     }
 
     if (-not $handle) {
+        _hiveAddLog "refusing: no free handles in pool"
         Write-Output "Error: no free handles in $handlesFile (every pool handle has an events log or an existing worktree)."
         exit 1
     }
+    _hiveAddLog "picked handle='$handle'"
 
     $worktreePath = "worktrees/$handle"
     if (Test-Path $worktreePath) {
+        _hiveAddLog "refusing: worktree at $worktreePath unexpectedly exists (race condition?)"
         Write-Output "Error: worktree at $worktreePath already exists."
         exit 1
     }
 
     # Create the worktree on its own branch off main.
+    _hiveAddLog "git worktree add $worktreePath -b $handle-work main"
     git worktree add $worktreePath -b "$handle-work" main
+    if ($LASTEXITCODE -ne 0) {
+        _hiveAddLog "git worktree add failed (exit $LASTEXITCODE)"
+        Write-Output "Error: git worktree add failed"
+        exit 1
+    }
+    _hiveAddLog "worktree created"
 
     # Identity file -- write UTF-8 WITHOUT BOM (PowerShell 5.1's Set-Content -Encoding utf8 adds one; HV-136 lesson).
     $identityPath = Join-Path $worktreePath '.bot-hive-identity'
     $identityContent = "colony=$colony`nhandle=$handle`n"
     [System.IO.File]::WriteAllText($identityPath, $identityContent, [System.Text.UTF8Encoding]::new($false))
+    _hiveAddLog "wrote $identityPath (colony=$colony handle=$handle, UTF-8 no BOM)"
 
     # One-shot kickoff marker -- empty file, bootstrap consumes it.
     $kickoffPath = Join-Path $worktreePath '.bot-hive-kickoff'
     [System.IO.File]::WriteAllText($kickoffPath, "", [System.Text.UTF8Encoding]::new($false))
+    _hiveAddLog "wrote $kickoffPath (kickoff marker)"
+
+    _hiveAddLog "spawn complete: worktrees/$handle"
 
     Write-Output ""
     Write-Output "Spawned bot: worktrees/$handle"

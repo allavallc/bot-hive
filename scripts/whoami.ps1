@@ -5,7 +5,22 @@
 
 $ErrorActionPreference = "Stop"
 
+$Script:logPath = (Join-Path (Get-Location).Path ".bot-hive.log")
+function Write-WhoamiLog {
+    param([string]$Message)
+    try {
+        $ts = (Get-Date).ToUniversalTime().ToString('o')
+        [System.IO.File]::AppendAllText(
+            $Script:logPath,
+            "$ts [whoami] $Message" + [Environment]::NewLine,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+    } catch { }
+}
+Write-WhoamiLog "invoked (pid=$PID, cwd=$((Get-Location).Path))"
+
 $apiBase = if ($env:BOT_HIVE_API_URL) { $env:BOT_HIVE_API_URL } else { "https://bot-hive-j0ax.onrender.com" }
+Write-WhoamiLog "api base: $apiBase"
 
 $colony = $null
 $handle = $null
@@ -17,6 +32,7 @@ if (Test-Path ".bot-hive-identity") {
         if ($_ -match '^role=(.+)$')   { $explicitRole = $Matches[1].Trim() }
     }
 }
+Write-WhoamiLog "identity loaded: colony='$colony' handle='$handle' explicitRole='$explicitRole'"
 if (-not $handle -and $env:BOT_HIVE_HANDLE) { $handle = $env:BOT_HIVE_HANDLE }
 if (-not $handle) {
     Write-Error "no bot identity found (.bot-hive-identity missing and BOT_HIVE_HANDLE unset)."
@@ -43,12 +59,15 @@ if (-not $repoFullName -or $repoFullName -notmatch '/') {
 
 $uri = "$apiBase/api/bots/join"
 $payload = @{ repo_full_name = $repoFullName; colony = $colony; handle = $handle } | ConvertTo-Json -Compress
+Write-WhoamiLog "POST $uri payload=$payload"
 try {
     $resp = Invoke-RestMethod -Uri $uri -Method Post -ContentType "application/json" -Body $payload -ErrorAction Stop
 } catch {
+    Write-WhoamiLog "join failed: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
     Write-Error "server unreachable or returned error: $_"
     exit 4
 }
+Write-WhoamiLog "join response: seat=$($resp.seat) total=$($resp.total) role='$($resp.role)' skill_files='$($resp.skill_files -join ',')'"
 
 $seat = $resp.seat
 $total = $resp.total

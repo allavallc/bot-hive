@@ -13,13 +13,21 @@
 
 set -euo pipefail
 
+LOG_FILE="$(pwd)/.bot-hive.log"
+log() {
+    printf '%s [whoami] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$LOG_FILE" 2>/dev/null || true
+}
+log "invoked (pid=$$, cwd=$(pwd))"
+
 API_BASE="${BOT_HIVE_API_URL:-https://bot-hive-j0ax.onrender.com}"
+log "api base: $API_BASE"
 
 if [ -f .bot-hive-identity ]; then
   COLONY=$(grep '^colony=' .bot-hive-identity | head -1 | cut -d= -f2- | tr -d '\r')
   HANDLE=$(grep '^handle=' .bot-hive-identity | head -1 | cut -d= -f2- | tr -d '\r')
   EXPLICIT_ROLE=$(grep '^role=' .bot-hive-identity | head -1 | cut -d= -f2- | tr -d '[:space:]\r' || true)
 fi
+log "identity loaded: colony='${COLONY:-}' handle='${HANDLE:-}' explicit_role='${EXPLICIT_ROLE:-}'"
 HANDLE="${HANDLE:-${BOT_HIVE_HANDLE:-}}"
 EXPLICIT_ROLE="${EXPLICIT_ROLE:-}"
 
@@ -47,19 +55,23 @@ fi
 # offline row.
 PAYLOAD=$(printf '{"repo_full_name":"%s","colony":"%s","handle":"%s"}' \
   "$REPO_FULL_NAME" "$COLONY" "$HANDLE")
+log "POST ${API_BASE}/api/bots/join payload=$PAYLOAD"
 RESPONSE=$(curl -sS -X POST \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD" \
   -w "\n%{http_code}" \
   "${API_BASE}/api/bots/join") || {
+    log "join failed: curl error"
     echo "error: server unreachable; cannot resolve role (${API_BASE})." >&2
     exit 4
   }
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | sed '$d')
+log "join response: http_code=$HTTP_CODE body=$BODY"
 
 if [ "$HTTP_CODE" != "200" ]; then
+  log "join non-200; exit 5"
   echo "error: server returned ${HTTP_CODE}: ${BODY}" >&2
   exit 5
 fi
