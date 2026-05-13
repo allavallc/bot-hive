@@ -193,7 +193,7 @@ This session's actual cwd is still wherever the operator launched the agent (typ
 | Claim a ticket | `(cd worktrees/<handle> && ./scripts/claim.sh HV-XXX)` |
 | Ship to in-review | `(cd worktrees/<handle> && ./scripts/in-review.sh HV-XXX)` |
 | Write a note | `(cd worktrees/<handle> && ./scripts/note.sh "<msg>")` |
-| Heartbeat / role-check | `(cd worktrees/<handle> && ./scripts/heartbeat.sh)` etc. |
+| Confirm role / identity | `(cd worktrees/<handle> && ./scripts/whoami.sh)` |
 
 PowerShell equivalent uses `Push-Location` / `Pop-Location` or `-WorkingDirectory` on `Start-Process`. The principle is the same: the worktree path is your effective working directory; your shell cwd is incidental.
 
