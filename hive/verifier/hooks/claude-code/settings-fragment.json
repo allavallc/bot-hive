@@ -5,14 +5,20 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\hooks\\never-guess-pretool.ps1\"" }
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\hooks\\never-guess-pretool.ps1\""
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\hooks\\never-guess-stop.ps1\"" }
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.claude\\hooks\\never-guess-stop.ps1\""
+          }
         ]
       }
     ]
