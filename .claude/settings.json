@@ -13,27 +13,6 @@
           }
         ]
       }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File \"hive/verifier/hooks/claude-code/never-guess-pretool.ps1\""
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File \"hive/verifier/hooks/claude-code/never-guess-stop.ps1\""
-          }
-        ]
-      }
     ]
   }
 }
