@@ -6,14 +6,14 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 ## Kickoff (do this first)
 
-Four kickoff triggers, each kicks off a specific bootstrap procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
+Two equivalent triggers, both run the single procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
 
-1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. This session bootstraps in the current working directory using the existing `.bot-hive-identity`. Typically becomes the PM bot (seat 1) in the operator's main checkout. **Preflight check first:** if another agent process is already running this identity (live `.bot-hive-stream.pid`), do NOT bootstrap — wait silently. See `bot-startup.md` § Procedure A.
-2. **Operator types `hive add coder`** in chat (in a fresh agent session, typically in a new terminal). This session creates a new worktree via `scripts/hive.{sh,ps1}`, then **transforms ITSELF** into a coder bot operating from that worktree. You are not delegating to another terminal — you ARE the new coder. Ignore cwd's `.bot-hive-identity` (which usually points at the PM). Requires a PM bot alive already. See `bot-startup.md` § Procedure B.
-3. **Operator types `hive add tester`** in chat (in a fresh agent session). Same as #2 but this session transforms into a tester. Requires ≥2 active bots already (PM + coder). See `bot-startup.md` § Procedure B.
-4. **`.bot-hive-kickoff` marker file** exists at the worktree root (written by `scripts/hive.{sh,ps1}` or any older spawn flow). The session bootstraps in the current cwd using the existing `.bot-hive-identity`. Marker is one-shot — consumed during bootstrap. See `bot-startup.md` § Procedure A.
+1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Preflight check first: if a live `.bot-hive-stream.pid` already exists in cwd, another agent owns this session — stop and tell the operator.
+2. **`.bot-hive-kickoff` marker file** exists at the cwd root (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed during bootstrap.
 
-If none has fired, wait silently. Kickoff is the canonical entry point. Do not start work, claim tickets, or edit code before completing it.
+The server assigns your handle and role. You do not need to know them before connecting — they arrive in the `your-role` SSE event at step 2 of the startup procedure.
+
+If neither trigger has fired, wait silently. Kickoff is the canonical entry point. Do not start work, claim tickets, or edit code before completing it.
 
 ## Sign-off
 
@@ -32,21 +32,11 @@ The operator should not close the terminal until they see the all-clear line.
 
 ## Spawn additional bots
 
-After the PM bot is running (`start the hive` has fired in the operator's main checkout), the operator can add coder or tester bots two equivalent ways:
+To add a bot to the colony, the operator opens a new terminal and types `start the hive`. The server detects the new connection, assigns the next free handle and the appropriate role, and pushes the updated role to all connected bots via SSE.
 
-- **Chat phrase**, said to any active bot:
-  - `hive add coder` — agent runs `./scripts/hive.sh add coder` (POSIX) or `.\scripts\hive.ps1 add coder` (Windows) and relays the output to the operator.
-  - `hive add tester` — agent runs the equivalent `add tester`. Requires at least two active bots first (PM + coder) so the new bot lands at seat 3 per `hive/roles.md`.
+There is no role argument to choose — the server derives the role from the consolidation table in `hive/roles.md` based on how many bots are already active in the colony. Role assignment is automatic and server-authoritative.
 
-- **Shell command** in any terminal at the bot-hive repo root:
-  - `./scripts/hive.sh add coder` / `add tester` / `stop` (POSIX)
-  - `.\scripts\hive.ps1 add coder` / `add tester` / `stop` (PowerShell)
-
-Both paths create a worktree at `worktrees/<handle>/`, write `.bot-hive-identity` (UTF-8 no-BOM), and drop a `.bot-hive-kickoff` marker. The operator then opens a fresh agent (Claude / Codex / etc.) in that worktree; the kickoff marker auto-triggers `hive/bot-startup.md`. The new bot announces itself, the server re-derives roles, and existing bots receive their updated role via SSE.
-
-Pre-condition: a PM bot must already be in the colony. The script checks for any live `.bot-hive-stream.pid` process across the worktrees; if none, it errors out and asks the operator to run `start the hive` first.
-
-Recognize these phrases the same way you recognize `start the hive` — they are operator triggers, not chat. Do not improvise around them; run the script and report its exact output.
+Existing bots receive their updated role notice on their next operator prompt via the `UserPromptSubmit` hook and announce the change.
 
 ## Worktree isolation (preferred)
 
@@ -62,65 +52,37 @@ Five scripts wrap the protocol so you don't have to construct git/gh calls by ha
 - **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<colony>.<handle>.log`, opens an auto-merging claim PR.
 - **`scripts/in-review.{sh,ps1}` `<HV-id>`** — ship a claimed ticket to in-review when work is complete. Moves the file from `in-progress/` to `in-review/`, updates Status / Completed / Last touched, appends an `in-review` event, commits, pushes to the claim branch, and **verifies the file actually landed in `in-review/` on the remote**. Use this — never do the move by hand. Manual `git mv` + commit has been silently dropped during cherry-picks; the helper makes it atomic and verified.
 - **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<colony>.<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` or `@<colony>.<bot-handle>` to address a specific actor.
-- **`scripts/hive.{sh,ps1}`** — operator-facing CLI for spawning and stopping bots. Three subcommands:
-  - `./scripts/hive.sh add coder` — spawn a new bot intended as a coder. Creates a worktree at `worktrees/<handle>/`, writes `.bot-hive-identity`, writes the `.bot-hive-kickoff` marker. Requires a PM bot already in the colony (run `start the hive` in a Claude session at the bot-hive root first).
-  - `./scripts/hive.sh add tester` — spawn a new bot intended as a tester. Requires at least two active bots already (the PM and a coder) so the new bot lands at seat 3 per `hive/roles.md`.
+- **`scripts/hive.{sh,ps1}`** — operator-facing CLI for stopping bots:
   - `./scripts/hive.sh stop` — run the shutdown procedure (`hive/bot-shutdown.md`) from a terminal without needing an agent: kill the SSE listener, delete local state files, print `Signed off. Safe to close this window.`
 
-All three read **`.bot-hive-identity`** at the worktree root for the bot's colony and handle:
+`.bot-hive-identity` at the worktree root holds the bot's colony and handle (written at boot):
 
 ```
 colony=allavallc
-handle=buzz
-role=pm            # optional — forces the role, bypassing the tenure heuristic (HV-122)
+handle=wren
 ```
 
-The Add-a-Bot spawn flow writes this file as part of `git worktree add` setup. Bots running in the worktree pick up their identity automatically — no env var to set per shell. The legacy `BOT_HIVE_HANDLE` env var is supported as a transitional fallback while the migration to identity files is in flight.
-
-The optional `role=` line accepts `pm`, `coder`, or `tester`. When set, `scripts/whoami.{sh,ps1}` honors it and skips the tenure-based assignment. Use it whenever the human's intent for role assignment shouldn't depend on which bot has the older event log.
-
-Bot identity is `<colony>.<handle>` globally (e.g., `allavallc.buzz`). See `hive/HIVE.md` for the colony model.
+Bot identity is `<colony>.<handle>` (e.g., `allavallc.wren`). See `hive/HIVE.md` for the colony model.
 
 ---
 
 ## Identity (read first)
 
-Every agent session has a unique handle. **Two sessions on the same machine get different handles** — identity is per-session, not per-machine.
+Every agent session has a unique handle. **Two sessions on the same machine get different handles** — identity is per-session, not per-machine. Identity is colony-scoped: `allavallc.wren` and `otheruser.wren` are completely independent.
 
-### On session start
+### How handles are assigned
 
-1. **Read the curated pool** from `hive/handles.txt` (one handle per non-comment line). The pool is data-as-file — not hardcoded prose — so adding handles is a normal PR.
+Handles are **server-assigned** at boot. When the bot connects to the SSE stream, the server picks the next free handle from the colony's pool (`hive/handles.txt`) and returns it in the `your-role` event. The bot writes `.bot-hive-identity` (colony + handle) after receiving it.
 
-2. **Find the first pool handle that does NOT have a `hive/events/<handle>.log` file.** Each per-actor events file means that handle is taken (for all time — handles are session-unique and never reclaimed). If every pool handle has an events file, append the lowest free numeric suffix to the first pool handle: `falcon-2`, `falcon-3`.
-
-3. **Claim the handle by committing immediately.** Append a presence line to your new events file:
-   ```
-   echo "<ISO ts> presence <handle> online" >> hive/events/<handle>.log
-   git add hive/events/<handle>.log
-   git commit -m "presence: <handle> online"
-   git push
-   ```
-
-4. **If the push fails (non-fast-forward), the per-actor file is the lock — you collided with a parallel claim.** Run `git pull --rebase`. If the pulled commits include a `presence <handle> online` line by a different commit author, your handle was taken by a parallel bot. Roll back your local commit (`git reset --hard origin/main`), go to step 2, pick a different handle.
-
-5. **Announce** "I'm `<handle>`" to the user so they can tell sessions apart.
-
-The git push race IS the lock. There is no separate registry to keep in sync, no heartbeat, no liveness check. Two bots picking the same handle simultaneously will both attempt to commit `hive/events/<handle>.log`; only one push wins.
-
-### Override
-
-If `.bot-hive-identity` exists in the worktree (written by the Add-a-Bot spawn flow), use the `colony=` and `handle=` values verbatim — skip the pool pick. Lets the human lock a session to a specific identity, surviving shell restarts. Legacy `BOT_HIVE_HANDLE` env var is also honored during the migration window.
+The pool is data-as-file — adding handles is a normal PR to `hive/handles.txt`.
 
 ### Where the handle appears
 
-- `Assigned to:` ticket field (e.g., `Assigned to: allavallc-cc1 (claude-opus-4-7)`).
-- `Bot:` commit trailer (alongside `Model:` and `Trigger:`).
-- `hive/events/<your-agent-id>.log` — your own per-actor event log.
-- Live board UI as a colored badge on each ticket card (color is deterministic via `robotColor(handle)`).
-
-### Existing `git config bot-hive.handle` values
-
-Handles set under the prior convention (`git config bot-hive.handle <name>`) are **deprecated but harmless**. Agents should ignore them. Run `git config --unset bot-hive.handle` to clean up if desired — not required.
+- `.bot-hive-identity` — written at boot with `colony=` and `handle=` from the server's assignment.
+- `Assigned to:` ticket field (e.g., `Assigned to: allavallc.wren`).
+- `Bot:` commit trailer.
+- `hive/events/<colony>.<handle>.log` — your per-actor event log.
+- Live board UI as a colored badge on each ticket card.
 
 Full convention discussion: see `hive/HIVE.md` "Bot identity" section.
 

@@ -1,62 +1,32 @@
 # Bot startup
 
-Two bootstrap procedures depending on which kickoff trigger fired (per `AGENTS.md` Kickoff section):
+One procedure for all bots. Every session — PM, coder, tester — runs the same steps. The server assigns your handle and role; you do not need to know them in advance.
 
-- **Procedure A** (steps 0–5 below) — runs when `start the hive` fires in this session's cwd, OR when a `.bot-hive-kickoff` marker is present. Uses the cwd's existing `.bot-hive-identity`.
-- **Procedure B** (its own section near the bottom) — runs when `hive add coder` or `hive add tester` fires in a fresh agent session. Creates a new worktree, then transforms this session into the new bot operating from that worktree.
+**Triggers** (either one fires this procedure):
 
-If no trigger has fired, wait silently — do not proceed past this line.
+1. The operator types `start the hive` in chat.
+2. A `.bot-hive-kickoff` marker file exists at the cwd (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed at step 5.
 
-Both procedures are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent all use the same checklists.
+If neither has fired, wait silently. Do not start work, claim tickets, or read skill files before completing startup.
 
-# Procedure A — `start the hive` / marker file
+Both triggers are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent use the same checklist.
+
+---
 
 ## Preflight — concurrent-owner check
 
-Before running steps 0-5, check whether another agent process already owns this identity in this cwd. Read `.bot-hive-stream.pid` in cwd; if it exists and points at a live process, ANOTHER agent is already this bot.
+Before running steps 1–5, check whether another agent already owns this session:
 
 - POSIX: `[ -f .bot-hive-stream.pid ] && kill -0 "$(cat .bot-hive-stream.pid)" 2>/dev/null`
 - Windows PowerShell: `if (Test-Path .bot-hive-stream.pid) { try { Get-Process -Id (Get-Content .bot-hive-stream.pid) -ErrorAction Stop | Out-Null; $true } catch { $false } }`
 
-If another agent is already the owner, STOP. Do NOT continue Procedure A. Two agents cannot share one identity. Tell the operator: "Another agent is already running as `<handle>` in this cwd. If you want to add a new bot, type `hive add coder` or `hive add tester` here instead — that triggers Procedure B and this session becomes the new bot." Then wait silently for the operator's next prompt.
+If a live owner is found, **stop**. Tell the operator: "Another session is already running as a bot here. To add a new bot, open a fresh terminal and type `start the hive` there."
 
-Only continue past this preflight if no live `.bot-hive-stream.pid` is found.
+Only continue if no live owner is found.
 
-## 0. Check for the marker file
+---
 
-If `.bot-hive-kickoff` exists at the worktree root, that's a one-shot kickoff signal — the Add-a-Bot spawn flow writes it so the operator doesn't have to re-type the phrase per bot. Continue through steps 1–4. **Delete the marker at the start of step 5** (after announcing identity) so it's consumed exactly once.
-
-If the marker is absent AND the operator has not typed the phrase: stop. Don't run any further step. The session is not kicked off.
-
-## 1. Ensure identity exists
-
-A `.bot-hive-identity` file at the worktree root holds two required fields:
-
-```
-colony=<github-login>
-handle=<picked-from-hive/handles.txt>
-```
-
-(HV-136: the `role=` field is gone. Role is derived server-side from the `(active bots, seat)` pair via the table in `hive/roles.md`. Operator-side role overrides created the source-of-truth contradiction that B3 surfaced; the table is canonical.)
-
-If `.bot-hive-identity` is missing (operator's main checkout):
-
-```bash
-gh api user --jq .login                                  # -> e.g. allavallc
-cat hive/handles.txt                                     # POSIX
-Get-Content hive/handles.txt                             # PowerShell
-printf 'colony=<login>\nhandle=<picked>\n' > .bot-hive-identity
-```
-
-## 2. Start the SSE listener in the background
-
-This is the only network step. `scripts/stream.{ps1,sh}` opens a long-lived SSE connection to `/api/bots/stream`, which:
-
-- Allocates the lowest free seat in your `(project, colony)` pair.
-- Re-derives every active bot's role from the consolidation table.
-- Writes `.bot-hive-role-notice` with your initial `role`, `seat`, `total`, and `skillFiles`.
-
-The open TCP socket IS the liveness signal — there is no heartbeat process. When this session ends (terminal closes, script killed, network truly dies), the socket closes and the server reclaims the seat after a 15-second grace window.
+## Step 1. Start the SSE listener
 
 ```bash
 # POSIX
@@ -66,11 +36,13 @@ nohup ./scripts/stream.sh >/dev/null 2>&1 &
 Start-Process powershell -ArgumentList "-NoProfile","-WindowStyle","Hidden","-File","./scripts/stream.ps1" -WindowStyle Hidden
 ```
 
-The script writes `.bot-hive-stream.pid` on start.
+The script connects to `/api/bots/stream?colony=<colony>`. The `colony` value comes from `gh api user --jq .login`. The server picks your handle from the colony's pool, assigns your seat and role, and sends a `your-role` event. The script writes `.bot-hive-stream.pid` on start.
 
-## 3. Wait for the initial role notice
+---
 
-Poll for `.bot-hive-role-notice` (max 30s). It appears as soon as the SSE handshake completes and the server sends `your-role`. Don't proceed past this gate — without it you don't know your seat or role.
+## Step 2. Wait for the role notice
+
+Poll for `.bot-hive-role-notice` (max 30s). It appears as soon as the SSE handshake completes and the server sends `your-role`.
 
 ```bash
 # POSIX
@@ -81,21 +53,37 @@ $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Date) -lt $deadline -and -not (Test-Path .bot-hive-role-notice)) { Start-Sleep -Milliseconds 200 }
 ```
 
-Parse the notice file. It's `key=value` per line:
+Parse the notice — `key=value` per line:
 
 ```
-role=PM + coder + tester
-seat=1
-total=1
-skillFiles=hive/skills/pm.md,hive/skills/coder.md,hive/skills/tester.md
-at=2026-05-12T20:00:00Z
+handle=scout
+role=coder
+seat=2
+total=2
+skillFiles=hive/skills/coder.md
+at=2026-05-14T20:00:00Z
 ```
 
-If the file never appears: surface the error (server unreachable, network blocked) — do not improvise a role. Exit and let the operator retry.
+If the file never appears: surface the error (server unreachable, network blocked). Do not improvise a role. Exit and let the operator retry.
 
-## 4. Read your role rubric and announce
+---
 
-Read **every** skill file listed in `skillFiles`. The union defines what you do and don't do this session.
+## Step 3. Write identity
+
+Write `.bot-hive-identity` with the server-assigned handle:
+
+```
+colony=<colony>
+handle=<handle from notice>
+```
+
+UTF-8, no BOM. On PowerShell use `[System.IO.File]::WriteAllText(path, content, [System.Text.UTF8Encoding]::new($false))` — never `Set-Content -Encoding utf8` (adds a BOM).
+
+---
+
+## Step 4. Read skill files and announce
+
+Read **every** skill file listed in `skillFiles` (repo-relative paths, e.g. `hive/skills/pm.md`). The union defines what you do and don't do this session.
 
 Announce in chat, one sentence:
 
@@ -103,125 +91,52 @@ Announce in chat, one sentence:
 I'm <colony>.<handle>, seat <n> of <total>, role: <role>, ready.
 ```
 
-Use the exact values from the notice file.
+Use exact values from the notice.
 
-## 5. Consume the marker and stop
+---
 
-If `.bot-hive-kickoff` exists, delete it now — kickoff is one-shot. Then stop. Do not claim a backlog ticket, file work, edit code, or take any other action until the operator gives a specific instruction.
+## Step 5. Consume the kickoff marker and stop
+
+If `.bot-hive-kickoff` exists, delete it — one-shot:
 
 ```bash
 rm -f .bot-hive-kickoff                                                # POSIX
 Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue      # PowerShell
 ```
 
-# Procedure B — `hive add coder` / `hive add tester`
+Then stop. Do not claim a ticket, file work, or edit code until the operator gives a specific instruction.
 
-## STOP — read this header before executing any step
-
-Three rules you must internalize before running B.1-B.6:
-
-1. **THIS session becomes the new coder/tester bot.** Not "this session creates a worktree for the operator to open in another terminal." Not "this session stays as its current identity and delegates the role." THIS session — the one you are reading this in, in this chat with the operator — transforms into the new bot. The terminal stays open; you stay in it; you ARE the new handle from B.4 onward.
-
-2. **Ignore cwd's `.bot-hive-identity`.** Your cwd is almost certainly the operator's main checkout, where `.bot-hive-identity` says something like `handle=wren`. That identity belongs to a DIFFERENT agent process (the PM, running in another terminal). You are NOT `wren`. You are about to be the handle that step B.1's spawn script picks for you.
-
-3. **Your final announcement (in B.4) is `I'm <colony>.<new-handle>, seat <n> of <total>, role: <coder|tester>, ready.`** Where `<new-handle>` is what the spawn script chose, NOT cwd's handle. If you say "I'm wren the PM, I spawned a worktree for you to open elsewhere" you have failed this procedure. Stop and re-read this header.
-
-If both Procedure A's triggers and Procedure B's triggers could apply (e.g., `.bot-hive-kickoff` is present in cwd AND the operator just typed `hive add coder`), Procedure B wins — the more specific phrase overrides.
-
-## B.1. Run the spawn helper
-
-Capture the worktree path from the script's output. The script creates the worktree, writes `.bot-hive-identity` and `.bot-hive-kickoff` inside it.
-
-```bash
-# POSIX
-./scripts/hive.sh add coder       # for `hive add coder`
-./scripts/hive.sh add tester      # for `hive add tester`
-
-# Windows PowerShell
-.\scripts\hive.ps1 add coder
-.\scripts\hive.ps1 add tester
-```
-
-The script refuses with a clear error if no PM bot is alive yet, or if `add tester` is called before a coder exists. Surface that error to the operator and stop — do not improvise around it.
-
-The script prints `Spawned bot: worktrees/<handle>` — extract `<handle>` for the next steps.
-
-## B.2. Start the SSE listener from the new worktree
-
-Same script as Procedure A step 2, but invoked with the new worktree as cwd so it reads the worktree's `.bot-hive-identity` (the new handle) instead of cwd's.
-
-```bash
-# POSIX -- run inside a subshell so the cd doesn't change your own cwd
-(cd worktrees/<handle> && nohup ./scripts/stream.sh > /dev/null 2>&1 &)
-
-# Windows PowerShell -- use -WorkingDirectory
-Start-Process powershell -ArgumentList "-NoProfile","-WindowStyle","Hidden","-File","./scripts/stream.ps1" -WorkingDirectory "worktrees/<handle>" -WindowStyle Hidden
-```
-
-The script writes `worktrees/<handle>/.bot-hive-stream.pid` on start.
-
-## B.3. Wait for the role notice in the new worktree
-
-Poll for `worktrees/<handle>/.bot-hive-role-notice` (max 30s). Same logic as Procedure A step 3 but the file lives in the worktree path, not cwd.
-
-If the file never appears: surface the error (server unreachable, network blocked) — do not improvise a role.
-
-## B.4. Read your role rubric and announce
-
-Read every skill file listed in `skillFiles` (paths are repo-relative; same `hive/skills/*.md` files). The union defines what you do and don't do this session.
-
-Announce in chat, one sentence:
-
-```
-I'm <colony>.<handle>, seat <n> of <total>, role: <role>, ready.
-```
-
-## B.5. Consume the kickoff marker
-
-```bash
-rm -f worktrees/<handle>/.bot-hive-kickoff                                                   # POSIX
-Remove-Item -Path "worktrees/<handle>/.bot-hive-kickoff" -ErrorAction SilentlyContinue      # PowerShell
-```
-
-## B.6. Operate from the worktree path going forward
-
-This session's actual cwd is still wherever the operator launched the agent (typically bot-hive root). The new bot identity lives at `worktrees/<handle>/`. Every subsequent operation that's worktree-specific runs with the worktree as cwd:
-
-| Operation | Invocation pattern |
-|---|---|
-| List your work | `(cd worktrees/<handle> && ./scripts/my-work.sh)` |
-| Claim a ticket | `(cd worktrees/<handle> && ./scripts/claim.sh HV-XXX)` |
-| Ship to in-review | `(cd worktrees/<handle> && ./scripts/in-review.sh HV-XXX)` |
-| Write a note | `(cd worktrees/<handle> && ./scripts/note.sh "<msg>")` |
-| Confirm role / identity | `(cd worktrees/<handle> && ./scripts/whoami.sh)` |
-
-PowerShell equivalent uses `Push-Location` / `Pop-Location` or `-WorkingDirectory` on `Start-Process`. The principle is the same: the worktree path is your effective working directory; your shell cwd is incidental.
-
-Edits to product code, tests, etc. happen on the worktree's branch (`<handle>-work`). Use `git -C worktrees/<handle> <command>` for any git operation that should land on the worktree branch instead of whatever branch is checked out in cwd.
+---
 
 ## Mid-session role changes
 
-When a peer joins or leaves your colony, the server pushes a new `your-role` down your open SSE stream and `stream.{ps1,sh}` rewrites `.bot-hive-role-notice`. The `UserPromptSubmit` hook (`scripts/check-role.{ps1,sh}`) reads the notice on your next operator prompt, surfaces a `[BOT-HIVE] Role changed: …` notice, and the agent host injects it into the prompt. Announce the new role to the operator at the start of your reply.
+When a peer joins or leaves your colony, the server pushes a new `your-role` event down your open SSE stream. `scripts/stream.{ps1,sh}` rewrites `.bot-hive-role-notice`. The `UserPromptSubmit` hook (`scripts/check-role.{ps1,sh}`) reads it on your next operator prompt and injects a `[BOT-HIVE] Role changed: …` notice. Announce the new role at the start of your reply and re-read any new skill files listed.
+
+---
 
 ## Sign-off
 
-When the operator says `stop your hive work` (or `sign off`, `leave the hive`), run the shutdown procedure in [`hive/bot-shutdown.md`](./bot-shutdown.md). Don't close the window until the procedure prints `Signed off. Safe to close this window.`.
+When the operator says `stop your hive work`, `sign off`, or `leave the hive`, run the procedure in [`hive/bot-shutdown.md`](./bot-shutdown.md). Don't close the terminal until the procedure prints `Signed off. Safe to close this window.`
+
+---
 
 ## Recovery — role drift mid-session
 
-If the operator (or any later instruction) asks you to do work outside your assigned role:
+If asked to do work outside your assigned role:
 
-1. Refuse politely, naming the mismatch: *"That's <other-role> work; ask the appropriate bot or change my identity file."*
-2. Re-read your role rubric.
+1. Refuse politely, naming the mismatch.
+2. Re-read your skill rubric.
 3. Continue operating per the rubric.
 
-Exception: when you are the only bot in the colony, the consolidation table assigns you every role (PM + coder + tester). There is no "wrong role" because there is no one else to do the work. The role lock is for collaboration, not for refusing to fill an empty seat.
+Exception: when you are the only bot in the colony, the consolidation table assigns every role to you. There is no "wrong role" in a solo colony.
+
+---
 
 ## Reference
 
 - `AGENTS.md` — agent-neutral conventions.
 - `hive/HIVE.md` — format spec.
 - `hive/roles.md` — role consolidation table.
-- `hive/seats.md` — seat assignment background.
+- `hive/seats.md` — seat assignment and liveness.
 - `hive/bot-shutdown.md` — sign-off procedure.
 - `tasks/lessons.md` — past mistakes.

@@ -9,9 +9,9 @@ A colony has N seats. The first bot to boot takes seat 1, the next takes seat 2,
 | Active bots | Bot 1 | Bot 2 | Bot 3 | Bot 4+ |
 |---|---|---|---|---|
 | 1 | PM + coder + tester | — | — | — |
-| 2 | PM + tester | coder | — | — |
-| 3 | PM | coder | tester | — |
-| 4+ | PM | coder | tester | coder (additional) |
+| 2 | PM + coder | tester | — | — |
+| 3 | PM | tester | coder | — |
+| 4+ | PM | tester | coder | coder (additional) |
 
 When a bot leaves, the server **renumbers** survivors so seats stay contiguous. Bot 4 becomes bot 3, bot 3 becomes bot 2, etc. Survivors detect the change on their next operator turn via a `UserPromptSubmit` hook and announce the new role to the operator.
 
@@ -23,9 +23,10 @@ For full design context: `docs/2026-05-12-bot-seat-assignment-design.md`. For th
 
 ### Boot
 1. Operator triggers kickoff (`start the hive` or `.bot-hive-kickoff` marker file).
-2. Bot runs `scripts/whoami.{sh,ps1}` which calls `POST /api/bots/join` and prints seat + role.
-3. Bot launches `scripts/heartbeat.{sh,ps1}` as a background process (writes PID to `.bot-hive-heartbeat.pid`).
-4. Bot reads its skill rubric and announces: `I'm <colony>.<handle>, seat N of T, role: X, ready.`
+2. Bot starts `scripts/stream.{sh,ps1}` in the background. The stream connects to `/api/bots/stream?colony=<colony>`. The server assigns a handle (from the colony's pool in `hive/handles.txt`), allocates the lowest free seat, derives the role from the consolidation table, and sends a `your-role` SSE event with `handle`, `seat`, `total`, `role`, and `skillFiles`.
+3. Bot waits for `.bot-hive-role-notice` (written by the stream script on receiving `your-role`), then reads it.
+4. Bot writes `.bot-hive-identity` (colony + assigned handle).
+5. Bot reads every skill file listed in `skillFiles` and announces: `I'm <colony>.<handle>, seat N of T, role: X, ready.`
 
 ### Running
 - The background heartbeat pings `POST /api/bots/heartbeat` every 5 minutes.
