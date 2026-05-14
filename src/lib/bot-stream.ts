@@ -18,6 +18,8 @@ export type PeerPush = {
   handle: string;
   role: string;
   seat: number;
+  skillFiles: string[];
+  departed?: string;
 };
 
 export type ConnectResult = {
@@ -154,6 +156,7 @@ export async function connectBot(
           handle: row.handle,
           role: derived.role,
           seat: row.seat,
+          skillFiles: derived.skillFiles,
         });
       }
     }
@@ -245,6 +248,8 @@ export async function disconnectBot(
             handle: r.handle,
             role: derived.role,
             seat: r.seat,
+            skillFiles: derived.skillFiles,
+            departed: handle,
           });
         }
       }

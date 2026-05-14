@@ -13,6 +13,7 @@ export type YourRoleEvent = {
   colony: string;
   handle: string;
   total: number;
+  departed?: string;
 };
 
 export type SnapshotEvent = {
