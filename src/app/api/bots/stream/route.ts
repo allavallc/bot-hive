@@ -1,17 +1,20 @@
-// HV-136 / HV-140: GET /api/bots/stream?repo_full_name=…&colony=…&handle=…
+// HV-136 / HV-140 / HV-141: GET /api/bots/stream?repo_full_name=…&colony=…&handle=…
 //
 // SSE-as-liveness — one long-lived stream per bot. The open TCP socket
 // IS the liveness signal. On open we insert/rebind the bot's row +
 // re-derive roles + push first event; on (graceful) close we hold the
 // row 15s, then mark offline + renumber + push role changes to peers.
 //
-// HV-140: cleanup is wired to BOTH cancel() and req.signal so disconnect
-// is detected reliably in the Node.js runtime (cancel() alone is not
-// guaranteed to fire on socket close; req.signal is the reliable path).
+// HV-140: cleanup wired to both cancel() and req.signal for reliable
+//         disconnect detection in the Node.js runtime.
+// HV-141: peer pushes go through Postgres NOTIFY (bot-notify.ts) so they
+//         reach bots on any instance during zero-downtime Render deploys.
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { bots, projects } from "@/db/schema";
+import { publishPeerPush } from "@/lib/bot-notify";
+import { type StreamEvent, registerStream, unregisterStream } from "@/lib/bot-registry";
 import { type PeerPush, connectBot, disconnectBot } from "@/lib/bot-stream";
 import { broadcast } from "@/lib/broadcast";
 import { and, eq } from "drizzle-orm";
@@ -20,37 +23,10 @@ export const dynamic = "force-dynamic";
 
 const GRACE_PERIOD_MS = 15_000;
 
-type StreamEvent =
-  | {
-      type: "your-role";
-      role: string;
-      seat: number;
-      skillFiles: string[];
-      colony: string;
-      handle: string;
-      total: number;
-    }
-  | { type: "snapshot"; colony: string; seats: { handle: string; seat: number; role: string }[] };
-
-const botStreams = new Map<string, (event: StreamEvent) => void>();
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 function botKey(projectId: string, colony: string, handle: string): string {
   return `${projectId}:${colony}:${handle}`;
-}
-
-function pushPeer(p: PeerPush, total: number, colony: string): void {
-  const send = botStreams.get(p.connectionId);
-  if (!send) return;
-  send({
-    type: "your-role",
-    role: p.role,
-    seat: p.seat,
-    skillFiles: [],
-    colony,
-    handle: p.handle,
-    total,
-  });
 }
 
 export async function GET(req: Request) {
@@ -88,11 +64,10 @@ export async function GET(req: Request) {
     connectionId,
   );
 
-  // Push role changes to peers' already-open streams.
+  // Push role changes to peers' open streams (cross-instance via Postgres NOTIFY).
   for (const p of peerPushes) {
-    pushPeer(p, snapshot.length, colony);
+    await publishPeerPush(p, snapshot.length, colony);
   }
-  // Project-wide broadcast for the modal.
   broadcast({
     type: "bot-joined",
     projectId: project.id,
@@ -113,7 +88,7 @@ export async function GET(req: Request) {
           // Stream closed mid-write. cancel() will run cleanup.
         }
       };
-      botStreams.set(connectionId, send);
+      registerStream(connectionId, send);
 
       controller.enqueue(encoder.encode(`: connected ${new Date().toISOString()}\n\n`));
       send({
@@ -133,9 +108,6 @@ export async function GET(req: Request) {
         } catch {
           clearInterval(keepalive);
         }
-        // Bump heartbeat so the legacy sweep (still wired into /join etc.
-        // in Phase 1) doesn't reap us as stale. Removed in Phase 2 with
-        // the rest of the heartbeat machinery.
         void db
           .update(bots)
           .set({ lastHeartbeatAt: new Date() })
@@ -153,17 +125,15 @@ export async function GET(req: Request) {
       cleanup = () => {
         cleanup = null; // idempotent — cancel() and req.signal can both fire
         clearInterval(keepalive);
-        botStreams.delete(connectionId);
+        unregisterStream(connectionId);
 
-        // Schedule the actual evict after grace. A rebind (same handle
-        // opens a new stream) clears this timer before it fires.
         const timer = setTimeout(async () => {
           pendingDisconnects.delete(key);
           try {
             const result = await disconnectBot(project.id, colony, handle, connectionId);
             if (!result) return;
             for (const p of result.peerPushes) {
-              pushPeer(p, result.snapshot.length, colony);
+              await publishPeerPush(p, result.snapshot.length, colony);
             }
             broadcast({
               type: "bot-left",
@@ -185,7 +155,6 @@ export async function GET(req: Request) {
   });
 
   // HV-140: req.signal is the reliable disconnect hook in Node.js runtime.
-  // cancel() alone may not fire when the TCP socket closes.
   req.signal.addEventListener("abort", () => cleanup?.(), { once: true });
 
   return new Response(stream, {
