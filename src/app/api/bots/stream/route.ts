@@ -186,7 +186,7 @@ export async function GET(req: Request) {
 
   // HV-140: req.signal is the reliable disconnect hook in Node.js runtime.
   // cancel() alone may not fire when the TCP socket closes.
-  req.signal.addEventListener('abort', () => cleanup?.(), { once: true });
+  req.signal.addEventListener("abort", () => cleanup?.(), { once: true });
 
   return new Response(stream, {
     headers: {
