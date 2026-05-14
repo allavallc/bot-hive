@@ -1,11 +1,13 @@
-// HV-136: GET /api/bots/stream?repo_full_name=…&colony=…&handle=…
+// HV-136 / HV-140: GET /api/bots/stream?repo_full_name=…&colony=…&handle=…
 //
 // SSE-as-liveness — one long-lived stream per bot. The open TCP socket
 // IS the liveness signal. On open we insert/rebind the bot's row +
 // re-derive roles + push first event; on (graceful) close we hold the
 // row 15s, then mark offline + renumber + push role changes to peers.
 //
-// Single-instance Render Free assumed for in-process registries.
+// HV-140: cleanup is wired to BOTH cancel() and req.signal so disconnect
+// is detected reliably in the Node.js runtime (cancel() alone is not
+// guaranteed to fire on socket close; req.signal is the reliable path).
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
@@ -149,6 +151,7 @@ export async function GET(req: Request) {
       }, 30_000);
 
       cleanup = () => {
+        cleanup = null; // idempotent — cancel() and req.signal can both fire
         clearInterval(keepalive);
         botStreams.delete(connectionId);
 
@@ -180,6 +183,10 @@ export async function GET(req: Request) {
       cleanup?.();
     },
   });
+
+  // HV-140: req.signal is the reliable disconnect hook in Node.js runtime.
+  // cancel() alone may not fire when the TCP socket closes.
+  req.signal.addEventListener("abort", () => cleanup?.(), { once: true });
 
   return new Response(stream, {
     headers: {
