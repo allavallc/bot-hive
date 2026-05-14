@@ -10,9 +10,9 @@ Why this file is a stub instead of carrying the rules itself:
 
 If you're a Claude Code session: read `AGENTS.md`, then `hive/HIVE.md`, then `hive/seats.md` (FS-028 — bot identity, seat assignment, sign-off — shipped 2026-05-12), then `tasks/lessons.md`, then start work per the swarm protocol.
 
-**Kickoff:** two equivalent triggers — execute the procedure in [`hive/bot-startup.md`](./hive/bot-startup.md) when either fires:
+**Kickoff:** two equivalent triggers — execute the single procedure in [`hive/bot-startup.md`](./hive/bot-startup.md) when either fires:
 
-1. The operator types `start the hive` in chat (operator's main checkout, or any session not spawned via Add-a-Bot).
-2. A `.bot-hive-kickoff` marker file exists at the worktree root (written by the Add-a-Bot spawn flow). One-shot — bootstrap consumes it.
+1. The operator types `start the hive` in chat.
+2. A `.bot-hive-kickoff` marker file exists at the worktree root. One-shot — bootstrap consumes it.
 
-Both paths are agent-neutral, no Claude-specific magic.
+The server assigns your handle and role. Both triggers run the same procedure — no Procedure A/B split. Agent-neutral, no Claude-specific magic.
