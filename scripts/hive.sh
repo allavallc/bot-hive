@@ -91,11 +91,12 @@ spawn_bot() {
     exit 1
   fi
 
-  # Pick the first handle in hive/handles.txt that is free.
-  # A handle is "free" if:
-  #   - no events log exists at hive/events/<colony>.<handle>.log, AND
-  #   - no worktree exists at worktrees/<handle>/ (orphaned spawn from a prior aborted run).
+  # Pick the first handle in hive/handles.txt that is free OR orphaned.
+  # "Free"     = no events log AND no worktree directory.
+  # "Orphaned" = worktree exists with .bot-hive-kickoff but no active stream pid —
+  #              a prior spawn ran but the bot session never connected. Reuse it.
   local handle=""
+  local reuse_worktree=false
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     case "$line" in \#*) continue ;; esac
@@ -107,7 +108,21 @@ spawn_bot() {
       continue
     fi
     if [ -d "worktrees/${trimmed}" ]; then
-      _hive_add_log "skipping '$trimmed': worktree exists"
+      if [ -f "worktrees/${trimmed}/.bot-hive-kickoff" ]; then
+        local alive=false
+        if [ -f "worktrees/${trimmed}/.bot-hive-stream.pid" ]; then
+          local pid
+          pid=$(cat "worktrees/${trimmed}/.bot-hive-stream.pid" 2>/dev/null)
+          [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && alive=true
+        fi
+        if [ "$alive" = false ]; then
+          _hive_add_log "reusing orphaned worktree '$trimmed' (kickoff present, no active stream)"
+          handle="$trimmed"
+          reuse_worktree=true
+          break
+        fi
+      fi
+      _hive_add_log "skipping '$trimmed': active worktree exists"
       continue
     fi
     handle="$trimmed"
@@ -122,28 +137,31 @@ spawn_bot() {
   _hive_add_log "picked handle='$handle'"
 
   local worktree_path="worktrees/${handle}"
-  if [ -d "$worktree_path" ]; then
-    _hive_add_log "refusing: worktree at $worktree_path unexpectedly exists (race condition?)"
-    echo "Error: worktree at $worktree_path already exists."
-    exit 1
+
+  if [ "$reuse_worktree" = false ]; then
+    if [ -d "$worktree_path" ]; then
+      _hive_add_log "refusing: worktree at $worktree_path unexpectedly exists (race condition?)"
+      echo "Error: worktree at $worktree_path already exists."
+      exit 1
+    fi
+
+    # Create the worktree on its own branch off main.
+    _hive_add_log "git worktree add $worktree_path -b ${handle}-work main"
+    if ! git worktree add "$worktree_path" -b "${handle}-work" main; then
+      _hive_add_log "git worktree add failed"
+      echo "Error: git worktree add failed"
+      exit 1
+    fi
+    _hive_add_log "worktree created"
+
+    # Identity file (no BOM; printf is plain bytes).
+    printf "colony=%s\nhandle=%s\n" "$colony" "$handle" > "$worktree_path/.bot-hive-identity"
+    _hive_add_log "wrote $worktree_path/.bot-hive-identity (colony=$colony handle=$handle)"
+
+    # One-shot kickoff marker -- bootstrap consumes (deletes) it.
+    : > "$worktree_path/.bot-hive-kickoff"
+    _hive_add_log "wrote $worktree_path/.bot-hive-kickoff (kickoff marker)"
   fi
-
-  # Create the worktree on its own branch off main.
-  _hive_add_log "git worktree add $worktree_path -b ${handle}-work main"
-  if ! git worktree add "$worktree_path" -b "${handle}-work" main; then
-    _hive_add_log "git worktree add failed"
-    echo "Error: git worktree add failed"
-    exit 1
-  fi
-  _hive_add_log "worktree created"
-
-  # Identity file (no BOM; printf is plain bytes).
-  printf "colony=%s\nhandle=%s\n" "$colony" "$handle" > "$worktree_path/.bot-hive-identity"
-  _hive_add_log "wrote $worktree_path/.bot-hive-identity (colony=$colony handle=$handle)"
-
-  # One-shot kickoff marker -- bootstrap consumes (deletes) it.
-  : > "$worktree_path/.bot-hive-kickoff"
-  _hive_add_log "wrote $worktree_path/.bot-hive-kickoff (kickoff marker)"
 
   _hive_add_log "spawn complete: worktrees/$handle"
 
@@ -152,8 +170,9 @@ spawn_bot() {
   echo "  colony=${colony}, handle=${handle}"
   echo "  intended role: ${intended_role} (server confirms based on consolidation rules)"
   echo ""
-  echo "Next: open a new terminal, cd ${worktree_path}, then start your agent (claude / codex / etc.)."
-  echo "The kickoff marker triggers bootstrap automatically."
+  echo "Next: open a new terminal at the repo root and type:"
+  echo "  hive add ${intended_role}"
+  echo "That session will connect as '${handle}' and receive its role from the server."
 }
 
 stop_bot() {

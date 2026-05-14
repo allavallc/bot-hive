@@ -95,11 +95,12 @@ function Invoke-SpawnBot {
         exit 1
     }
 
-    # Pick the first handle in hive/handles.txt that is free.
-    # A handle is "free" if:
-    #   - no events log exists at hive/events/<colony>.<handle>.log, AND
-    #   - no worktree exists at worktrees/<handle>/ (orphaned spawn from a prior aborted run).
+    # Pick the first handle in hive/handles.txt that is free OR orphaned.
+    # "Free"    = no events log AND no worktree directory.
+    # "Orphaned" = worktree exists with .bot-hive-kickoff but no active stream pid —
+    #              a prior spawn ran but the bot session never connected. Reuse it.
     $handle = $null
+    $reuseWorktree = $false
     foreach ($line in Get-Content $handlesFile) {
         $trimmed = $line.Trim()
         if (-not $trimmed) { continue }
@@ -111,7 +112,24 @@ function Invoke-SpawnBot {
         }
         $worktreeDir = "worktrees/$trimmed"
         if (Test-Path $worktreeDir) {
-            _hiveAddLog "skipping '$trimmed': worktree exists at $worktreeDir"
+            $kickoffFile = Join-Path $worktreeDir '.bot-hive-kickoff'
+            $pidFile     = Join-Path $worktreeDir '.bot-hive-stream.pid'
+            if (Test-Path $kickoffFile) {
+                $alive = $false
+                if (Test-Path $pidFile) {
+                    $pidVal = (Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+                    if ($pidVal) {
+                        try { Get-Process -Id $pidVal -ErrorAction Stop | Out-Null; $alive = $true } catch { }
+                    }
+                }
+                if (-not $alive) {
+                    _hiveAddLog "reusing orphaned worktree '$trimmed' at $worktreeDir (kickoff present, no active stream)"
+                    $handle = $trimmed
+                    $reuseWorktree = $true
+                    break
+                }
+            }
+            _hiveAddLog "skipping '$trimmed': active worktree exists at $worktreeDir"
             continue
         }
         $handle = $trimmed
@@ -126,32 +144,35 @@ function Invoke-SpawnBot {
     _hiveAddLog "picked handle='$handle'"
 
     $worktreePath = "worktrees/$handle"
-    if (Test-Path $worktreePath) {
-        _hiveAddLog "refusing: worktree at $worktreePath unexpectedly exists (race condition?)"
-        Write-Output "Error: worktree at $worktreePath already exists."
-        exit 1
+
+    if (-not $reuseWorktree) {
+        if (Test-Path $worktreePath) {
+            _hiveAddLog "refusing: worktree at $worktreePath unexpectedly exists (race condition?)"
+            Write-Output "Error: worktree at $worktreePath already exists."
+            exit 1
+        }
+
+        # Create the worktree on its own branch off main.
+        _hiveAddLog "git worktree add $worktreePath -b $handle-work main"
+        git worktree add $worktreePath -b "$handle-work" main
+        if ($LASTEXITCODE -ne 0) {
+            _hiveAddLog "git worktree add failed (exit $LASTEXITCODE)"
+            Write-Output "Error: git worktree add failed"
+            exit 1
+        }
+        _hiveAddLog "worktree created"
+
+        # Identity file -- write UTF-8 WITHOUT BOM (PowerShell 5.1's Set-Content -Encoding utf8 adds one; HV-136 lesson).
+        $identityPath = Join-Path $worktreePath '.bot-hive-identity'
+        $identityContent = "colony=$colony`nhandle=$handle`n"
+        [System.IO.File]::WriteAllText($identityPath, $identityContent, [System.Text.UTF8Encoding]::new($false))
+        _hiveAddLog "wrote $identityPath (colony=$colony handle=$handle, UTF-8 no BOM)"
+
+        # One-shot kickoff marker -- empty file, bootstrap consumes it.
+        $kickoffPath = Join-Path $worktreePath '.bot-hive-kickoff'
+        [System.IO.File]::WriteAllText($kickoffPath, "", [System.Text.UTF8Encoding]::new($false))
+        _hiveAddLog "wrote $kickoffPath (kickoff marker)"
     }
-
-    # Create the worktree on its own branch off main.
-    _hiveAddLog "git worktree add $worktreePath -b $handle-work main"
-    git worktree add $worktreePath -b "$handle-work" main
-    if ($LASTEXITCODE -ne 0) {
-        _hiveAddLog "git worktree add failed (exit $LASTEXITCODE)"
-        Write-Output "Error: git worktree add failed"
-        exit 1
-    }
-    _hiveAddLog "worktree created"
-
-    # Identity file -- write UTF-8 WITHOUT BOM (PowerShell 5.1's Set-Content -Encoding utf8 adds one; HV-136 lesson).
-    $identityPath = Join-Path $worktreePath '.bot-hive-identity'
-    $identityContent = "colony=$colony`nhandle=$handle`n"
-    [System.IO.File]::WriteAllText($identityPath, $identityContent, [System.Text.UTF8Encoding]::new($false))
-    _hiveAddLog "wrote $identityPath (colony=$colony handle=$handle, UTF-8 no BOM)"
-
-    # One-shot kickoff marker -- empty file, bootstrap consumes it.
-    $kickoffPath = Join-Path $worktreePath '.bot-hive-kickoff'
-    [System.IO.File]::WriteAllText($kickoffPath, "", [System.Text.UTF8Encoding]::new($false))
-    _hiveAddLog "wrote $kickoffPath (kickoff marker)"
 
     _hiveAddLog "spawn complete: worktrees/$handle"
 
@@ -160,8 +181,9 @@ function Invoke-SpawnBot {
     Write-Output "  colony=$colony, handle=$handle"
     Write-Output "  intended role: $IntendedRole (server confirms based on consolidation rules)"
     Write-Output ""
-    Write-Output "Next: open a new terminal, cd $worktreePath, then start your agent (claude / codex / etc.)."
-    Write-Output "The kickoff marker triggers bootstrap automatically."
+    Write-Output "Next: open a new terminal at the repo root and type:"
+    Write-Output "  hive add $IntendedRole"
+    Write-Output "That session will connect as '$handle' and receive its role from the server."
 }
 
 function Invoke-StopBot {
