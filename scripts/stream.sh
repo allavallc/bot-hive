@@ -88,7 +88,7 @@ set_state_paths() {
 }
 
 write_role_notice() {
-    local role="$1" seat="$2" total="$3" skill_files="$4"
+    local role="$1" seat="$2" total="$3" skill_files="$4" departed="$5"
     {
         echo "handle=$HANDLE"
         echo "role=$role"
@@ -96,8 +96,9 @@ write_role_notice() {
         echo "total=$total"
         echo "skillFiles=$skill_files"
         echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        [ -n "$departed" ] && echo "departed=$departed"
     } > "$STATE_DIR/.bot-hive-role-notice"
-    log "wrote .bot-hive-role-notice (role='$role' seat=$seat total=$total)"
+    log "wrote .bot-hive-role-notice (role='$role' seat=$seat total=$total departed='$departed')"
 }
 
 URL="${API_BASE}/api/bots/stream?repo_full_name=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$REPO" 2>/dev/null || echo "$REPO")&colony=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$COLONY" 2>/dev/null || echo "$COLONY")"
@@ -117,12 +118,13 @@ while true; do
                     seat=$(echo "$payload" | sed -E 's/.*"seat":([0-9]+).*/\1/')
                     total=$(echo "$payload" | sed -E 's/.*"total":([0-9]+).*/\1/')
                     skill_files=$(echo "$payload" | python3 -c "import json,sys; d=json.load(sys.stdin); print(','.join(d.get('skillFiles',[])))" 2>/dev/null || echo "")
-                    log "event: your-role handle='$evt_handle' role='$role' seat=$seat total=$total"
+                    departed=$(echo "$payload" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('departed',''))" 2>/dev/null || echo "")
+                    log "event: your-role handle='$evt_handle' role='$role' seat=$seat total=$total departed='$departed'"
                     if [ -z "$HANDLE" ]; then
                         HANDLE="$evt_handle"
                         set_state_paths "$evt_handle"
                     fi
-                    write_role_notice "$role" "$seat" "$total" "$skill_files"
+                    write_role_notice "$role" "$seat" "$total" "$skill_files" "$departed"
                 else
                     log "event: (non-role) $payload"
                 fi

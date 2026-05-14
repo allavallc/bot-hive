@@ -36,12 +36,16 @@ Write-CheckRoleLog "invoked; notice file present, reading"
 $role = $null
 $seat = $null
 $total = $null
+$skillFiles = $null
+$departed = $null
 Get-Content $noticeFile | ForEach-Object {
-    if ($_ -match '^role=(.+)$')  { $role  = $Matches[1].Trim() }
-    if ($_ -match '^seat=(.+)$')  { $seat  = $Matches[1].Trim() }
-    if ($_ -match '^total=(.+)$') { $total = $Matches[1].Trim() }
+    if ($_ -match '^role=(.+)$')       { $role       = $Matches[1].Trim() }
+    if ($_ -match '^seat=(.+)$')       { $seat       = $Matches[1].Trim() }
+    if ($_ -match '^total=(.+)$')      { $total      = $Matches[1].Trim() }
+    if ($_ -match '^skillFiles=(.*)$') { $skillFiles  = $Matches[1].Trim() }
+    if ($_ -match '^departed=(.+)$')   { $departed   = $Matches[1].Trim() }
 }
-Write-CheckRoleLog "parsed notice: role='$role' seat='$seat' total='$total'"
+Write-CheckRoleLog "parsed notice: role='$role' seat='$seat' total='$total' skillFiles='$skillFiles' departed='$departed'"
 
 # Consume the notice (one-shot -- same event shouldn't re-fire).
 Remove-Item $noticeFile -Force -ErrorAction SilentlyContinue
@@ -72,5 +76,8 @@ if ($lastAnnounced -eq $role) {
 "role=$role" | Out-File -FilePath $bootStamp -Encoding utf8
 Write-CheckRoleLog "ROLE CHANGED: '$lastAnnounced' -> '$role'; announcing to operator"
 
-Write-Output "[BOT-HIVE] Role changed: you are now seat $seat of $total, role: $role."
-Write-Output "Announce this to the operator before continuing."
+$msg = "[BOT-HIVE] Role changed: you are now seat $seat of $total, role: $role."
+if ($departed) { $msg += " ($departed left the colony.)" }
+if ($skillFiles) { $msg += " Load skill files: $skillFiles." }
+Write-Output $msg
+Write-Output "Announce this proactively to the operator before your next reply — do not wait for them to ask."

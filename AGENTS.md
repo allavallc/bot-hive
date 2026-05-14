@@ -36,7 +36,10 @@ To add a bot to the colony, the operator opens a new terminal and types `start t
 
 There is no role argument to choose — the server derives the role from the consolidation table in `hive/roles.md` based on how many bots are already active in the colony. Role assignment is automatic and server-authoritative.
 
-Existing bots receive their updated role notice on their next operator prompt via the `UserPromptSubmit` hook and announce the change.
+Existing bots receive their updated role notice on their next operator prompt via the `UserPromptSubmit` hook. When the hook fires with a `[BOT-HIVE] Role changed:` message, **announce it proactively at the start of your reply** — do not wait for the operator to ask. Name who left, state your new role, and confirm which skill files you loaded. Examples:
+
+- Role unchanged: "I see that `scout` left. I'll continue as coder."
+- Role expanded: "I see that `scout` left. Taking over as tester in addition to PM. Loading `hive/skills/tester.md`."
 
 ## Worktree isolation (preferred)
 

@@ -118,13 +118,22 @@ function Set-StatePaths {
 
 function Write-RoleNotice {
     param($Event)
-    $notice = "handle=$($Script:handle)`nrole=$($Event.role)`nseat=$($Event.seat)`ntotal=$($Event.total)`nskillFiles=$($Event.skillFiles -join ',')`nat=$((Get-Date).ToUniversalTime().ToString('o'))`n"
+    $lines = @(
+        "handle=$($Script:handle)",
+        "role=$($Event.role)",
+        "seat=$($Event.seat)",
+        "total=$($Event.total)",
+        "skillFiles=$($Event.skillFiles -join ',')",
+        "at=$((Get-Date).ToUniversalTime().ToString('o'))"
+    )
+    if ($Event.departed) { $lines += "departed=$($Event.departed)" }
+    $notice = ($lines -join "`n") + "`n"
     [System.IO.File]::WriteAllText(
         (Join-Path $Script:stateDir ".bot-hive-role-notice"),
         $notice,
         [System.Text.UTF8Encoding]::new($false)
     )
-    Write-StreamLog "wrote .bot-hive-role-notice (role='$($Event.role)' seat=$($Event.seat) total=$($Event.total))"
+    Write-StreamLog "wrote .bot-hive-role-notice (role='$($Event.role)' seat=$($Event.seat) total=$($Event.total) departed='$($Event.departed)')"
 }
 
 Add-Type -AssemblyName System.Net.Http | Out-Null
