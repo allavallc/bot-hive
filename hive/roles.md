@@ -25,23 +25,26 @@ Roles **consolidate when bots are few** and **split as more bots are spawned**. 
 | Active bots | Bot 1 | Bot 2 | Bot 3 | Bot 4+ |
 |---|---|---|---|---|
 | 1 | PM + coder + tester | — | — | — |
-| 2 | PM + tester | coder | — | — |
-| 3 | PM | coder | tester | — |
-| 4+ | PM | coder | tester | coder (additional) |
+| 2 | PM + coder | tester | — | — |
+| 3 | PM | tester | coder | — |
+| 4+ | PM | tester | coder | coder (additional) |
 
 The PM bot is the highest-tier role and **sheds responsibilities as more bots arrive**:
-- When bot 2 spawns, PM stops coding (coder takes that)
-- When bot 3 spawns, PM stops testing (tester takes that)
+- When bot 2 spawns, PM hands off testing (tester takes that); PM keeps coding
+- When bot 3 spawns, PM hands off coding (coder takes that); PM is now dedicated PM only
 - After that, PM stays dedicated; new bots scale the coder pool
 
 ### How a bot determines its role
 
-Roles are assigned **within a colony**, not across the whole hive. Each colony does its own consolidation calculation independently — the user's colony having one bot doesn't affect Tony's colony's role assignment.
+Roles are assigned **by the server**, within a colony. Each colony is isolated — `allavallc`'s bot count has no effect on any other colony's role assignment.
 
-1. On session start (or after a peer joins/leaves), read `.bot-hive-identity` to know which colony you belong to.
-2. Count active bots **in your colony**. A bot is active if `hive/events/<colony>.<handle>.log` exists and has a recent entry (within the stale-claim threshold, currently 2 hours per HV-089).
-3. Apply the table above. The bot's position is determined by how recent its first claim/presence event is — earlier = higher tier within the colony.
-4. Read the rubric file(s) for the role(s) you're now responsible for.
+On session start, the bot connects to the SSE stream (`/api/bots/stream?colony=<colony>`). The server:
+1. Looks up active bots in this colony.
+2. Assigns the next free seat and a handle from the colony's handle pool.
+3. Derives the role from the consolidation table above.
+4. Sends a `your-role` event with `handle`, `seat`, `total`, `role`, and `skillFiles`.
+
+The bot reads the `skillFiles` listed in the event. That is the complete role rubric for this session. No client-side counting.
 
 ### Mid-session role changes
 
