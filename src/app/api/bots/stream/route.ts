@@ -13,10 +13,10 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { bots, projects } from "@/db/schema";
+import { publishPeerPush } from "@/lib/bot-notify";
+import { type StreamEvent, registerStream, unregisterStream } from "@/lib/bot-registry";
 import { type PeerPush, connectBot, disconnectBot } from "@/lib/bot-stream";
 import { broadcast } from "@/lib/broadcast";
-import { registerStream, unregisterStream, type StreamEvent } from "@/lib/bot-registry";
-import { publishPeerPush } from "@/lib/bot-notify";
 import { and, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";

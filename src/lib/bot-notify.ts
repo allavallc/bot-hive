@@ -8,11 +8,11 @@
 // A dedicated postgres client handles LISTEN (postgres.js reconnects
 // automatically). The main Drizzle pool handles NOTIFY.
 
-import postgres from "postgres";
-import { sql as drizzleSql } from "drizzle-orm";
 import { db } from "@/db";
+import { type YourRoleEvent, deliverToConnection } from "@/lib/bot-registry";
 import type { PeerPush } from "@/lib/bot-stream";
-import { deliverToConnection, type YourRoleEvent } from "@/lib/bot-registry";
+import { sql as drizzleSql } from "drizzle-orm";
+import postgres from "postgres";
 
 const CHANNEL = "bot_push";
 
