@@ -93,6 +93,14 @@ Before flipping the ticket to approved, mentally check:
 
 If any check fails, reject with a specific reason naming the failure.
 
+## Colony size check — mandatory before any review
+
+**The tester role is meaningful only at 3+ active bots (HV-123).**
+
+At ≤2 active bots: do not review any in-review tickets. All tickets — `User-facing: yes` AND `User-facing: no` — wait for the human to click Accept on the board. If you see a `User-facing: no` ticket in in-review in a 2-bot colony, write a note flagging it for human review via `./scripts/note.sh`, then move on. Do not self-review.
+
+At 3+ active bots: proceed normally per this rubric.
+
 ## Identity check before any action
 
-Run `./scripts/whoami.sh` (or `.ps1`) to confirm your role. The tester role only exists at colony size 3+. If your colony has 2 bots, the older bot (PM) is also acting as tester. If 1 bot, the bot does all three roles.
+Run `./scripts/whoami.sh` (or `.ps1`) to confirm your role and colony size. If colony size ≤2, apply the colony size check above — do not perform reviews.

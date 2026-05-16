@@ -824,10 +824,10 @@ Why a new ticket rather than picking one of the originals? Two reasons: it surfa
 
 ## When work is complete
 
-All completed tickets — `User-facing: yes` and `User-facing: no` alike — stop in `hive/in-review/` for a review pass before reaching `done/`. The `User-facing` flag routes who reviews:
+All completed tickets — `User-facing: yes` and `User-facing: no` alike — stop in `hive/in-review/` for a review pass before reaching `done/`. The `User-facing` flag routes who reviews, **subject to colony size**:
 
 - `User-facing: yes` → the human reviews and clicks **Accept** on the board → ticket moves to `done/`.
-- `User-facing: no` → the tester bot reviews against "Done when" → ticket moves to `done/` (or back to `in-progress/` on reject).
+- `User-facing: no` → **at 3+ bots**: the tester bot reviews against "Done when" → ticket moves to `done/` (or back to `in-progress/` on reject). **At ≤2 bots**: routes to the human Accept button; there is no dedicated bot tester at this colony size (HV-123).
 
 Dev bots ship every ticket via `./scripts/in-review.sh HV-XXX` (or `.ps1`). The helper refuses the move if the ticket's `User-facing` field is empty — set `yes` or `no` explicitly first. See [Acceptance loop](#acceptance-loop) for the full handoff steps.
 
@@ -842,10 +842,10 @@ Dev bots ship every ticket via `./scripts/in-review.sh HV-XXX` (or `.ps1`). The 
 
 ## Acceptance loop
 
-All tickets route through `in-review/` between `in-progress/` and `done/`. The `User-facing` flag (set on the ticket; required at handoff) routes who acts as the *separate* reviewer (never the dev bot):
+All tickets route through `in-review/` between `in-progress/` and `done/`. The `User-facing` flag (set on the ticket; required at handoff) routes who acts as the *separate* reviewer (never the dev bot), subject to colony size:
 
 - `User-facing: yes` → the human is the reviewer. They click **Accept** on the board → ticket moves to `done/` with `Verification: human-reviewed`. The tester bot must not touch these.
-- `User-facing: no` → the tester bot is the reviewer. It reads `## How to test`, executes the steps, and either accepts (→ `done/` with `Verification: bot-reviewed`) or rejects (→ `in-progress/` with `Rejection reason`).
+- `User-facing: no` → **at 3+ active bots**: the tester bot is the reviewer. It reads `## How to test`, executes the steps, and either accepts (→ `done/` with `Verification: bot-reviewed`) or rejects (→ `in-progress/` with `Rejection reason`). **At ≤2 active bots (HV-123)**: the human is the reviewer for all tickets, including `User-facing: no`. There is no bot-tester at this colony size — both bots code, all review stays with the human. The Accept button is always available on the board regardless of colony size.
 
 `./scripts/in-review.sh HV-XXX` enforces this routing at the gate: it refuses to move a ticket to `in-review/` unless `User-facing` is set to `yes` or `no`. Dev bots set the field at ticket-creation time; missing it is a hard error at handoff.
 
