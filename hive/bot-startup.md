@@ -42,15 +42,47 @@ The script connects to `/api/bots/stream?colony=<colony>`. The `colony` value co
 
 ## Step 2. Wait for the role notice
 
-Poll for `.bot-hive-role-notice` (max 30s). It appears as soon as the SSE handshake completes and the server sends `your-role`.
+Poll for `.bot-hive-role-notice` **or** `.bot-hive-role-ptr` at cwd (max 30s, 200ms interval).
+
+- If `.bot-hive-role-notice` appears first: read it directly.
+- If `.bot-hive-role-ptr` appears first: read the path from it (e.g. `worktrees/scout`), then poll for `.bot-hive-role-notice` at that path (another 30s max).
+
+This two-file protocol handles the secondary-bot case: a bot that starts at the same repo root as an existing bot has its state files written to a worktree subdirectory; `.bot-hive-role-ptr` is the pointer the stream script leaves at cwd so startup can find it.
 
 ```bash
-# POSIX
-for i in $(seq 1 150); do [ -f .bot-hive-role-notice ] && break; sleep 0.2; done
+# POSIX — poll for notice or ptr
+deadline=$(($(date +%s) + 30))
+notice_path=".bot-hive-role-notice"
+while [ "$(date +%s)" -lt "$deadline" ]; do
+  if [ -f ".bot-hive-role-notice" ]; then notice_path=".bot-hive-role-notice"; break; fi
+  if [ -f ".bot-hive-role-ptr" ]; then
+    subdir=$(cat .bot-hive-role-ptr)
+    inner_deadline=$(($(date +%s) + 30))
+    while [ "$(date +%s)" -lt "$inner_deadline" ]; do
+      [ -f "$subdir/.bot-hive-role-notice" ] && notice_path="$subdir/.bot-hive-role-notice" && break 2
+      sleep 0.2
+    done
+    break
+  fi
+  sleep 0.2
+done
 
 # Windows PowerShell
 $deadline = (Get-Date).AddSeconds(30)
-while ((Get-Date) -lt $deadline -and -not (Test-Path .bot-hive-role-notice)) { Start-Sleep -Milliseconds 200 }
+$noticePath = ".bot-hive-role-notice"
+while ((Get-Date) -lt $deadline) {
+  if (Test-Path ".bot-hive-role-notice") { $noticePath = ".bot-hive-role-notice"; break }
+  if (Test-Path ".bot-hive-role-ptr") {
+    $subdir = (Get-Content ".bot-hive-role-ptr" -Raw).Trim()
+    $inner = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $inner) {
+      if (Test-Path "$subdir\.bot-hive-role-notice") { $noticePath = "$subdir\.bot-hive-role-notice"; break }
+      Start-Sleep -Milliseconds 200
+    }
+    break
+  }
+  Start-Sleep -Milliseconds 200
+}
 ```
 
 Parse the notice — `key=value` per line:

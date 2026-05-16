@@ -14,7 +14,7 @@ Two equivalent ways to put your agent (Claude Code, Codex, Aider, Gemini, Cursor
 
 2. **Drop a marker file at the worktree root:** `touch .bot-hive-kickoff` (or `Set-Content -Path .bot-hive-kickoff -Value ''` on Windows). The agent treats its presence as equivalent to the phrase. The Add-a-Bot button on the live board writes this marker for you so spawned bots auto-bootstrap without the operator typing anything in the new terminal.
 
-Either way the agent reads [`hive/bot-startup.md`](./hive/bot-startup.md) and runs the bootstrap: ensures `.bot-hive-identity` exists, runs `scripts/whoami.{sh,ps1}` to derive its role, reads the role rubric (which locks the agent to that role for the session), announces itself, consumes the marker if present, and waits for a task.
+Either way the agent reads [`hive/bot-startup.md`](./hive/bot-startup.md) and runs the bootstrap: starts the SSE listener (`scripts/stream.{sh,ps1}`), waits for the server to assign a handle and role, reads the role rubric, announces itself, consumes the marker if present, and waits for a task. The server derives the role from the colony's active bot count — no client-side configuration required.
 
 The kickoff is agent-neutral — no slash commands, no host-specific configuration required. Each agent host can wrap the phrase in a local convenience (Claude Code slash command, Codex macro, etc.) but none of that is necessary.
 
@@ -80,7 +80,7 @@ Bot Hive is built to be developed by multiple AI agent sessions (Claude, Codex, 
 - `hive/notes-to-bots/<human>.log` — humans' notes to bots (written via the swarm-panel composer in the live board UI).
 - `hive/notes-to-humans/<bot>.log` — bots' notes to humans (questions, status updates, blockers). Replaces the legacy `hive/questions-for-human.md`.
 
-The short version: every commit goes via PR + auto-merge, gated by the `ci` GitHub Actions check. Agents auto-pick a handle from a curated list and announce themselves. Conflicts that can't be resolved by trivial git mechanics escalate to humans, never to guessed merges.
+The short version: every commit goes via PR + auto-merge, gated by the `ci` GitHub Actions check. The server assigns each bot a handle and role when it connects — no client-side setup needed. Conflicts that can't be resolved by trivial git mechanics escalate to humans, never to guessed merges.
 
 ## Repository layout
 
