@@ -11,12 +11,14 @@ Operators can also run `./scripts/hive.sh stop` (POSIX) or `.\scripts\hive.ps1 s
 
 HV-136: there's no `/leave` API call anymore. Killing the SSE listener closes the TCP socket, which the server detects within ~1s and reaps the seat after a 15s grace window. Three steps.
 
+Run these commands from this bot's session root. If startup assigned you a `worktrees/<handle>/` path via `.bot-hive-startups/<startup-id>.json`, use that worktree as the session root for shutdown too.
+
 ## 1. Stop the SSE listener
 
 ```bash
-# POSIX
+# POSIX — use taskkill, not kill. bash kill cannot see Windows PIDs.
 if [ -f .bot-hive-stream.pid ]; then
-  kill "$(cat .bot-hive-stream.pid)" 2>/dev/null || true
+  taskkill /F /PID "$(cat .bot-hive-stream.pid)" >nul 2>&1 || true
   rm -f .bot-hive-stream.pid
 fi
 
@@ -55,4 +57,4 @@ The kanban "See Bot Team" modal updates within ~1s on the `bot-left` SSE broadca
 
 ## If the listener can't be stopped
 
-If `kill` / `Stop-Process` fails (the script is already dead, the PID file is stale, etc.), just close the terminal. The TCP socket dies when the parent shell exits regardless. The server's 15s grace + reclaim takes care of the rest.
+If `taskkill` / `Stop-Process` fails (the script is already dead, the PID file is stale, etc.), the stream process was launched detached and closing the terminal will NOT kill it. The stream's built-in dead-man's switch will exit within 30s of noticing the session-active file is gone, which triggers the server's 15s grace + reclaim.

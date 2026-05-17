@@ -26,6 +26,13 @@ function Write-CheckRoleLog {
     } catch { }
 }
 
+# Touch session-active file so stream.ps1 knows the agent is still alive.
+try {
+    $actFile = Join-Path (Get-Location).Path ".bot-hive-session-active"
+    [System.IO.File]::WriteAllBytes($actFile, [byte[]]@())
+} catch { }
+Write-CheckRoleLog "touched .bot-hive-session-active"
+
 $noticeFile = ".bot-hive-role-notice"
 if (-not (Test-Path $noticeFile)) {
     Write-CheckRoleLog "invoked; no notice file; exit 0"
@@ -56,13 +63,14 @@ if (-not $role) {
     exit 0
 }
 
-# Suppress the very first notice (which arrives on stream open and
-# matches the role the bot already announced at bootstrap). We detect
-# "first" via a tiny stamp file.
+# Normally stream.ps1 writes .bot-hive-role-bootannounced on the first
+# your-role event (the boot assignment). If it's missing here, that means
+# stream.ps1 didn't run yet or wrote nothing -- treat this notice as the
+# boot baseline and suppress it so we don't announce the initial role.
 $bootStamp = ".bot-hive-role-bootannounced"
 if (-not (Test-Path $bootStamp)) {
     "role=$role" | Out-File -FilePath $bootStamp -Encoding utf8
-    Write-CheckRoleLog "first notice ever; stamped $bootStamp with role='$role'; suppressing announce"
+    Write-CheckRoleLog "no bootStamp (fallback); stamped with role='$role'; suppressing announce"
     exit 0
 }
 
