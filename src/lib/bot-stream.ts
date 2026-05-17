@@ -7,6 +7,8 @@
 // open stream. Single-instance Render Free assumed; multi-replica
 // fan-out is a follow-up.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { type DbHandle, db as defaultDb } from "@/db";
 import { bots } from "@/db/schema";
 import type { SeatMapEntry } from "@/lib/broadcast";
@@ -23,6 +25,7 @@ export type PeerPush = {
 };
 
 export type ConnectResult = {
+  handle: string;
   seat: number;
   selfRole: string;
   selfSkillFiles: string[];
@@ -36,7 +39,39 @@ export type DisconnectResult = {
   snapshot: SeatMapEntry[];
 } | null;
 
+// Handle pool — loaded once at startup, used inside the advisory-locked
+// transaction so concurrent no-handle connections can't race to the same name.
+let handlePool: string[] | null = null;
+
+function loadHandlePool(): string[] {
+  if (handlePool) return handlePool;
+  const raw = readFileSync(join(process.cwd(), "hive", "handles.txt"), "utf-8");
+  handlePool = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  return handlePool;
+}
+
+async function pickHandle(db: DbHandle, projectId: string, colony: string): Promise<string> {
+  const pool = loadHandlePool();
+  const active = await db
+    .select({ handle: bots.handle })
+    .from(bots)
+    .where(and(eq(bots.projectId, projectId), eq(bots.colony, colony), eq(bots.status, "active")));
+  const taken = new Set(active.map((r) => r.handle));
+  for (const h of pool) {
+    if (!taken.has(h)) return h;
+  }
+  const base = pool[0] ?? "bot";
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
 async function acquireColonyLock(db: DbHandle, projectId: string, colony: string): Promise<void> {
+  // Session-scoped exclusive lock per colony; released automatically when the transaction commits.
   await db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${projectId} || ':' || ${colony}))`);
 }
 
@@ -80,12 +115,16 @@ async function lowestFreeSeat(
 export async function connectBot(
   projectId: string,
   colony: string,
-  handle: string,
+  requestedHandle: string | null,
   connectionId: string,
   db: DbHandle = defaultDb,
 ): Promise<ConnectResult> {
   return db.transaction(async (tx) => {
     await acquireColonyLock(tx, projectId, colony);
+
+    // Assign handle inside the lock so concurrent no-handle connections
+    // can't race to the same name.
+    const handle = requestedHandle ?? (await pickHandle(tx, projectId, colony));
 
     // Read current rows + capture each handle's stored role pre-write.
     const before = await activeRows(tx, projectId, colony);
@@ -167,7 +206,7 @@ export async function connectBot(
       role: roleForSeat(total, r.seat).role,
     }));
 
-    return { seat: mySeat, selfRole, selfSkillFiles, peerPushes, snapshot };
+    return { handle, seat: mySeat, selfRole, selfSkillFiles, peerPushes, snapshot };
   });
 }
 
@@ -220,16 +259,28 @@ export async function disconnectBot(
     const departingSeat = row.seat;
     await tx.update(bots).set({ status: "offline", connectionId: null }).where(eq(bots.id, row.id));
 
-    // Renumber: every active row with seat > departingSeat decrements by 1.
+    // Renumber in two steps so the partial unique index on active seats
+    // never sees seat N+1 collide with still-active seat N mid-update.
     await tx
       .update(bots)
-      .set({ seat: sql`${bots.seat} - 1` })
+      .set({ seat: sql`${bots.seat} + 1000` })
       .where(
         and(
           eq(bots.projectId, projectId),
           eq(bots.colony, colony),
           eq(bots.status, "active"),
           sql`${bots.seat} > ${departingSeat}`,
+        ),
+      );
+    await tx
+      .update(bots)
+      .set({ seat: sql`${bots.seat} - 1001` })
+      .where(
+        and(
+          eq(bots.projectId, projectId),
+          eq(bots.colony, colony),
+          eq(bots.status, "active"),
+          sql`${bots.seat} > 1000`,
         ),
       );
 
