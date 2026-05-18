@@ -42,7 +42,13 @@ describe("connectBot — colony grows from 0 to 5", () => {
     expect(second.selfRole).toBe("coder");
     // Wren's role changed from PM+coder+tester to PM+tester — must be pushed.
     expect(second.peerPushes).toEqual([
-      { connectionId: "conn-wren", handle: "wren", role: "PM + tester", seat: 1 },
+      {
+        connectionId: "conn-wren",
+        handle: "wren",
+        role: "PM + tester",
+        seat: 1,
+        skillFiles: ["hive/skills/pm.md", "hive/skills/tester.md"],
+      },
     ]);
   });
 
@@ -55,7 +61,13 @@ describe("connectBot — colony grows from 0 to 5", () => {
     expect(third.selfRole).toBe("tester");
     // wren PM+tester → PM. buzz coder → coder (unchanged). Only wren in peerPushes.
     expect(third.peerPushes).toEqual([
-      { connectionId: "conn-wren", handle: "wren", role: "PM", seat: 1 },
+      {
+        connectionId: "conn-wren",
+        handle: "wren",
+        role: "PM",
+        seat: 1,
+        skillFiles: ["hive/skills/pm.md"],
+      },
     ]);
   });
 

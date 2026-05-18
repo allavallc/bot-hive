@@ -25,13 +25,13 @@ Roles **consolidate when bots are few** and **split as more bots are spawned**. 
 | Active bots | Bot 1 | Bot 2 | Bot 3 | Bot 4+ |
 |---|---|---|---|---|
 | 1 | PM + coder + tester | — | — | — |
-| 2 | PM + coder | tester | — | — |
-| 3 | PM | tester | coder | — |
-| 4+ | PM | tester | coder | coder (additional) |
+| 2 | PM + tester | coder | — | — |
+| 3 | PM | coder | tester | — |
+| 4+ | PM | coder | tester | coder (additional) |
 
 The PM bot is the highest-tier role and **sheds responsibilities as more bots arrive**:
-- When bot 2 spawns, PM hands off testing (tester takes that); PM keeps coding
-- When bot 3 spawns, PM hands off coding (coder takes that); PM is now dedicated PM only
+- When bot 2 spawns, PM hands off coding (coder takes that); PM keeps testing
+- When bot 3 spawns, PM hands off testing (tester takes that); PM is now dedicated PM only
 - After that, PM stays dedicated; new bots scale the coder pool
 
 ### How a bot determines its role

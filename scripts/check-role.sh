@@ -29,10 +29,12 @@ log "invoked; notice file present, reading"
 # writes one and grep won't match `^role=` against `\xef\xbb\xbfrole=`).
 NOTICE_BODY=$(sed '1s/^\xef\xbb\xbf//' "$NOTICE_FILE")
 
-ROLE=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^role='  | head -1 | cut -d= -f2- | tr -d '\r' || true)
-SEAT=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^seat='  | head -1 | cut -d= -f2- | tr -d '\r' || true)
-TOTAL=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^total=' | head -1 | cut -d= -f2- | tr -d '\r' || true)
-log "parsed notice: role='$ROLE' seat='$SEAT' total='$TOTAL'"
+ROLE=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^role='       | head -1 | cut -d= -f2- | tr -d '\r' || true)
+SEAT=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^seat='       | head -1 | cut -d= -f2- | tr -d '\r' || true)
+TOTAL=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^total='     | head -1 | cut -d= -f2- | tr -d '\r' || true)
+SKILL_FILES=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^skillFiles=' | head -1 | cut -d= -f2- | tr -d '\r' || true)
+DEPARTED=$(printf '%s\n' "$NOTICE_BODY" | grep -E '^departed='  | head -1 | cut -d= -f2- | tr -d '\r' || true)
+log "parsed notice: role='$ROLE' seat='$SEAT' total='$TOTAL' skillFiles='$SKILL_FILES' departed='$DEPARTED'"
 
 rm -f "$NOTICE_FILE"
 log "deleted $NOTICE_FILE (one-shot consume)"
@@ -57,7 +59,8 @@ fi
 printf 'role=%s\n' "$ROLE" > "$BOOT_STAMP"
 log "ROLE CHANGED: '$LAST' -> '$ROLE'; announcing to operator"
 
-cat <<EOF
-[BOT-HIVE] Role changed: you are now seat ${SEAT} of ${TOTAL}, role: ${ROLE}.
-Announce this to the operator before continuing.
-EOF
+MSG="[BOT-HIVE] Role changed: you are now seat ${SEAT} of ${TOTAL}, role: ${ROLE}."
+[ -n "$DEPARTED" ] && MSG="$MSG ($DEPARTED left the colony.)"
+[ -n "$SKILL_FILES" ] && MSG="$MSG Load skill files: ${SKILL_FILES}."
+printf '%s\n' "$MSG"
+printf 'Announce this proactively to the operator before your next reply -- do not wait for them to ask.\n'

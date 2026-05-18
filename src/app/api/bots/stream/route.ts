@@ -11,6 +11,8 @@
 //         reach bots on any instance during zero-downtime Render deploys.
 
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { db } from "@/db";
 import { bots, projects } from "@/db/schema";
 import { publishPeerPush } from "@/lib/bot-notify";
@@ -29,13 +31,42 @@ function botKey(projectId: string, colony: string, handle: string): string {
   return `${projectId}:${colony}:${handle}`;
 }
 
+let handlePool: string[] | null = null;
+
+function loadHandlePool(): string[] {
+  if (handlePool) return handlePool;
+  const raw = readFileSync(join(process.cwd(), "hive", "handles.txt"), "utf-8");
+  handlePool = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  return handlePool;
+}
+
+async function assignHandle(projectId: string, colony: string): Promise<string> {
+  const pool = loadHandlePool();
+  const activeRows = await db
+    .select({ handle: bots.handle })
+    .from(bots)
+    .where(and(eq(bots.projectId, projectId), eq(bots.colony, colony), eq(bots.status, "active")));
+  const active = new Set(activeRows.map((r) => r.handle));
+  for (const h of pool) {
+    if (!active.has(h)) return h;
+  }
+  // Pool exhausted: append numeric suffix to first pool entry.
+  const base = pool[0] ?? "bot";
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-${n}`;
+    if (!active.has(candidate)) return candidate;
+  }
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const repoFullName = url.searchParams.get("repo_full_name") ?? "";
   const colony = url.searchParams.get("colony") ?? "";
-  const handle = url.searchParams.get("handle") ?? "";
-  if (!repoFullName || !colony || !handle) {
-    return new Response("repo_full_name, colony, handle are required", { status: 400 });
+  if (!repoFullName || !colony) {
+    return new Response("repo_full_name and colony are required", { status: 400 });
   }
 
   const [project] = await db
@@ -46,6 +77,8 @@ export async function GET(req: Request) {
   if (!project) {
     return new Response(`no project registered for repo '${repoFullName}'`, { status: 404 });
   }
+
+  const handle = url.searchParams.get("handle") || (await assignHandle(project.id, colony));
 
   const connectionId = randomUUID();
   const key = botKey(project.id, colony, handle);
