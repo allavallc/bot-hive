@@ -13,6 +13,7 @@ export type YourRoleEvent = {
   colony: string;
   handle: string;
   total: number;
+  sessionId?: string;
   departed?: string;
 };
 
@@ -22,7 +23,21 @@ export type SnapshotEvent = {
   seats: { handle: string; seat: number; role: string }[];
 };
 
-export type StreamEvent = YourRoleEvent | SnapshotEvent;
+export type BotCoordinationEvent = {
+  type: "bot-event";
+  eventId: string;
+  projectId: string;
+  colony: string;
+  handle: string;
+  kind: string;
+  message: string;
+  targetHandle?: string | null;
+  targetRole?: string | null;
+  data?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type StreamEvent = YourRoleEvent | SnapshotEvent | BotCoordinationEvent;
 
 const streams = new Map<string, (event: StreamEvent) => void>();
 

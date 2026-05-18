@@ -1,3 +1,22 @@
+## Verification Protocol
+
+Running `tsc --noEmit` and `vitest run` is necessary but not sufficient.
+
+After passing compile + test:
+- For every doc file that contains examples (bot-startup.md, bot-shutdown.md, etc.):
+  read the example and find the code that generates it
+  confirm every field in the example exists in the writer
+- For every schema change: grep for all consumers and confirm they handle the new field
+
+Do not declare done until both layers pass.
+
+## Completion Checklist
+- [ ] tsc --noEmit: 0 errors
+- [ ] vitest run: all N tests pass (state exact count)
+- [ ] biome: 0 issues
+- [ ] Doc/code cross-reference: list every doc file checked and what field was verified
+- [ ] New fields: list all schema changes and every consumer confirmed
+
 # Bot Hive — way of working
 
 Canonical project rules for **any agent** (AI or human) working on bot-hive. Agent-neutral by design: Claude Code reads this via the `CLAUDE.md` pointer; Codex/Cursor/Aider/Gemini and any future agent should read this directly. Format-neutral guidance for the hive workflow itself lives in `hive/HIVE.md`.
@@ -8,7 +27,7 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 Two equivalent triggers, both run the single procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
 
-1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Preflight check first: if a live `.bot-hive-stream.pid` already exists in cwd, another agent owns this session — stop and tell the operator.
+1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. For local development, **`start the hive local`** or **`start the hive -local`** runs the same startup procedure but forces the listener to use `http://localhost:3000`. Preflight checks for stale `.bot-hive-stream.pid` files. If a live stream already owns this cwd, continue startup with a request-scoped handoff; the stream helper creates this bot's isolated state under `worktrees/<handle>/`.
 2. **`.bot-hive-kickoff` marker file** exists at the cwd root (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed during bootstrap.
 
 The server assigns your handle and role. You do not need to know them before connecting — they arrive in the `your-role` SSE event at step 2 of the startup procedure.
@@ -32,7 +51,7 @@ The operator should not close the terminal until they see the all-clear line.
 
 ## Spawn additional bots
 
-To add a bot to the colony, the operator opens a new terminal and types `start the hive`. The server detects the new connection, assigns the next free handle and the appropriate role, and pushes the updated role to all connected bots via SSE.
+To add a bot to the colony, the operator opens a new terminal and types `start the hive` (or `start the hive local` during local testing). The server detects the new stream connection, assigns the appropriate role, and pushes updated roles to all connected bots via SSE. When multiple terminals start from the same repo root, the startup procedure uses `.bot-hive-startups/<startup-id>.json` to hand the new agent its isolated `worktrees/<handle>/` session root.
 
 There is no role argument to choose — the server derives the role from the consolidation table in `hive/roles.md` based on how many bots are already active in the colony. Role assignment is automatic and server-authoritative.
 
@@ -45,7 +64,7 @@ Existing bots receive their updated role notice on their next operator prompt vi
 
 When the human spawns you via the **"Add a bot"** button on the live board, your session starts in a dedicated git worktree at `worktrees/<your-handle>/` on a feature branch `<handle>-work`. Two bots in two worktrees physically can't edit the same files — coordination protocol catches the rest.
 
-If you weren't spawned via the button (running in the main repo working dir), no harm — Bot Hive's protocol still works without worktrees. The button + worktree flow is a hardening, not a requirement.
+If you are the only bot in a checkout, running from the main repo can work. For multiple real Hive bots, worktrees are still the isolation boundary, but the operator does not need to manage them manually: same-root startup creates an isolated worktree and returns that path in the startup handoff. Once assigned a worktree, use it as your session root for all future commands.
 
 ## Bot CLI helpers (start here)
 
@@ -491,3 +510,15 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 - `tasks/local-dev-state.md` — per-machine setup snapshots.
 - `README.md` — project overview, quickstart for humans.
 - `CLAUDE.md` — Claude Code-specific shim (just points here).
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
+
+Rules:
+- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
+- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

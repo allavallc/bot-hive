@@ -15,11 +15,10 @@
 // session cookie.
 
 import { db } from "@/db";
-import { humanNotes } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { installationOctokit } from "@/lib/github";
+import { type ProjectEventEntry, appendDbProjectEvents } from "@/lib/project-events";
 import { getProjectForUser } from "@/lib/projects";
-import { and, desc, eq, gt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -30,14 +29,7 @@ const MAX_AGE_DAYS = 7;
 const ISO_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\b/;
 
 type Octokit = Awaited<ReturnType<typeof installationOctokit>>;
-type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
-
-type Entry = {
-  kind: EntryKind;
-  ts: string;
-  actor: string;
-  raw: string;
-};
+type Entry = ProjectEventEntry;
 
 async function readFile(
   oct: Octokit,
@@ -186,23 +178,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }
   });
 
-  // HV-094: human-to-bot notes from DB (replaces the old hive/notes-to-bots
-  // Git read path). Source of truth is the human_notes table.
+  // HV-094 + HV-148: DB-backed live events. human_notes replaces the old
+  // hive/notes-to-bots Git path; bot_events is the live coordination stream.
   const cutoffDate = new Date(cutoffMs);
-  const noteRows = await db
-    .select()
-    .from(humanNotes)
-    .where(and(eq(humanNotes.projectId, project.id), gt(humanNotes.createdAt, cutoffDate)))
-    .orderBy(desc(humanNotes.createdAt))
-    .limit(MAX_LINES);
-  for (const n of noteRows) {
-    sink.push({
-      kind: "note-to-bots",
-      ts: n.createdAt.toISOString(),
-      actor: n.actor,
-      raw: n.message,
-    });
-  }
+  await appendDbProjectEvents(db, project.id, cutoffDate, MAX_LINES, sink);
 
   sink.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
   const entries = sink.slice(0, MAX_LINES);

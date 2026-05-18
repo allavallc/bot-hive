@@ -11,10 +11,9 @@
 //         reach bots on any instance during zero-downtime Render deploys.
 
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { db } from "@/db";
 import { bots, projects } from "@/db/schema";
+import { appendBotLog } from "@/lib/bot-log";
 import { publishPeerPush } from "@/lib/bot-notify";
 import { type StreamEvent, registerStream, unregisterStream } from "@/lib/bot-registry";
 import { type PeerPush, connectBot, disconnectBot } from "@/lib/bot-stream";
@@ -29,36 +28,6 @@ const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 function botKey(projectId: string, colony: string, handle: string): string {
   return `${projectId}:${colony}:${handle}`;
-}
-
-let handlePool: string[] | null = null;
-
-function loadHandlePool(): string[] {
-  if (handlePool) return handlePool;
-  const raw = readFileSync(join(process.cwd(), "hive", "handles.txt"), "utf-8");
-  handlePool = raw
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("#"));
-  return handlePool;
-}
-
-async function assignHandle(projectId: string, colony: string): Promise<string> {
-  const pool = loadHandlePool();
-  const activeRows = await db
-    .select({ handle: bots.handle })
-    .from(bots)
-    .where(and(eq(bots.projectId, projectId), eq(bots.colony, colony), eq(bots.status, "active")));
-  const active = new Set(activeRows.map((r) => r.handle));
-  for (const h of pool) {
-    if (!active.has(h)) return h;
-  }
-  // Pool exhausted: append numeric suffix to first pool entry.
-  const base = pool[0] ?? "bot";
-  for (let n = 2; ; n++) {
-    const candidate = `${base}-${n}`;
-    if (!active.has(candidate)) return candidate;
-  }
 }
 
 export async function GET(req: Request) {
@@ -78,23 +47,37 @@ export async function GET(req: Request) {
     return new Response(`no project registered for repo '${repoFullName}'`, { status: 404 });
   }
 
-  const handle = url.searchParams.get("handle") || (await assignHandle(project.id, colony));
-
+  const requestedHandle = url.searchParams.get("handle") || null;
   const connectionId = randomUUID();
+  const sessionId = connectionId.slice(0, 8);
+
+  // Handle assignment happens inside connectBot's advisory-locked transaction
+  // so concurrent no-handle connections can't race to the same name.
+  const { handle, seat, selfRole, selfSkillFiles, peerPushes, snapshot } = await connectBot(
+    project.id,
+    colony,
+    requestedHandle,
+    connectionId,
+  );
+
   const key = botKey(project.id, colony, handle);
 
   // Rebind: cancel any pending disconnect for this (project, colony, handle).
+  // Safe to do after connectBot — disconnectBot checks connectionId and is a
+  // no-op if the row was already rebound to the new connectionId.
   const pending = pendingDisconnects.get(key);
   if (pending) {
     clearTimeout(pending);
     pendingDisconnects.delete(key);
   }
 
-  const { seat, selfRole, selfSkillFiles, peerPushes, snapshot } = await connectBot(
-    project.id,
+  appendBotLog(
     colony,
+    "events",
     handle,
-    connectionId,
+    selfRole,
+    sessionId,
+    `connected seat=${seat} total=${snapshot.length} role=${selfRole}`,
   );
 
   // Push role changes to peers' open streams (cross-instance via Postgres NOTIFY).
@@ -111,10 +94,23 @@ export async function GET(req: Request) {
 
   const encoder = new TextEncoder();
   let cleanup: (() => void) | null = null;
+  let liveRole = selfRole;
 
   const stream = new ReadableStream({
     start(controller) {
       const send = (event: StreamEvent) => {
+        if (event.type === "your-role" && event.role !== liveRole) {
+          // Role changed via peer push — update live role and log it.
+          liveRole = event.role;
+          appendBotLog(
+            colony,
+            "events",
+            handle,
+            event.role,
+            sessionId,
+            `role changed to ${event.role} seat=${event.seat} total=${event.total}${event.departed ? ` (${event.departed} left)` : ""}`,
+          );
+        }
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         } catch {
@@ -132,6 +128,7 @@ export async function GET(req: Request) {
         colony,
         handle,
         total: snapshot.length,
+        sessionId,
       });
       send({ type: "snapshot", colony, seats: snapshot });
 
@@ -165,6 +162,7 @@ export async function GET(req: Request) {
           try {
             const result = await disconnectBot(project.id, colony, handle, connectionId);
             if (!result) return;
+            appendBotLog(colony, "events", handle, liveRole, sessionId, "disconnected (graceful)");
             for (const p of result.peerPushes) {
               await publishPeerPush(p, result.snapshot.length, colony);
             }

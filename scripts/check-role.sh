@@ -16,6 +16,10 @@ log() {
     printf '%s [check-role] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+# Touch session-active file so stream.sh knows the agent is still alive.
+touch "$(pwd)/.bot-hive-session-active" 2>/dev/null || true
+log "touched .bot-hive-session-active"
+
 NOTICE_FILE=".bot-hive-role-notice"
 BOOT_STAMP=".bot-hive-role-bootannounced"
 

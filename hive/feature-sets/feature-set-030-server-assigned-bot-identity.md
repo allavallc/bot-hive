@@ -5,7 +5,7 @@
 
 ## Goal
 
-Make bot startup impossible to fail. Every bot — PM, coder, tester — starts the same way: open a terminal, type `start the hive`. The server assigns the handle and role. No Procedure A/B split. No pre-written identity files. No role arguments.
+Make bot startup impossible to fail. Every bot — PM, coder, tester — starts through one startup procedure. The server assigns the role, and local runtime state is isolated per bot cwd. No Procedure A/B split. No role arguments.
 
 ## Rationale
 
@@ -16,12 +16,12 @@ FS-028 moved role derivation into the platform DB. But startup still required:
 
 Procedure B failed repeatedly in production — the agent kept relaying the spawn script's output to the operator instead of continuing to start the stream. Every patch (ironclad prologue, inject-bot-startup hook, hive-spawn fixes) addressed symptoms. The root cause is Procedure B itself: it is cognitively too complex for an LLM to execute reliably.
 
-This FS eliminates the root cause by making all bots start identically. The server picks the handle from the colony's pool and returns it in the `your-role` SSE event. The stream script creates the working directory (worktree) automatically for secondary bots. Agents never need to know their handle before connecting.
+This FS eliminates the root cause by making startup boring and request-scoped. The operator can open another terminal in the same repo root and type `start the hive`; the stream uses a startup id to write `.bot-hive-startups/<startup-id>.json`, creates/uses `worktrees/<handle>/` when another bot already owns the root cwd, and receives the server-authoritative role in the `your-role` SSE event. Multiple real Hive bots still use separate worktrees for state isolation, but the operator does not manage those worktrees manually.
 
 ## Tickets
 
 - **HV-144** — Server: make `handle` optional on stream connect; assign from `hive/handles.txt` pool; add `handle` to `your-role` event
-- **HV-145** — Stream scripts (`stream.ps1`, `stream.sh`): connect colony-only; receive handle; write `.bot-hive-identity`; create worktree for secondary bots
+- **HV-145** — Stream scripts (`stream.ps1`, `stream.sh`): request-scoped startup handoff; bind cwd-local identity when present; receive role; create/use worktree for same-root secondary startup
 - **HV-146** — `hive.ps1`/`hive.sh`: remove `add coder`/`add tester`; keep `stop`
 
 ## Ticket order

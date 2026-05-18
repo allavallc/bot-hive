@@ -253,6 +253,38 @@ export const colonySettings = pgTable(
   }),
 );
 
+// FS-031 / HV-147: live bot-originated coordination events.
+//
+// These rows are transient operational state, not durable project history.
+// Bots POST questions, blockers, handoffs, review signals, and status updates
+// here so the server can broadcast them over SSE immediately. GitHub remains
+// the durable substrate for code, PRs, and accepted ticket lifecycle state.
+export const botEvents = pgTable(
+  "bot_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    colony: text("colony").notNull(),
+    handle: text("handle").notNull(),
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    targetHandle: text("target_handle"),
+    targetRole: text("target_role"),
+    data: jsonb("data").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    projectCreatedIdx: index("bot_events_project_created_idx").on(t.projectId, t.createdAt),
+    projectColonyCreatedIdx: index("bot_events_project_colony_created_idx").on(
+      t.projectId,
+      t.colony,
+      t.createdAt,
+    ),
+  }),
+);
+
 // FS-022: swarm health monitoring anomalies.
 //
 // A periodic cron walks repo state + DB and writes a row here whenever an

@@ -19,6 +19,15 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", ".next", "drizzle", "build", "out", "next-env.d.ts", "worktrees"]
+    "ignore": [
+      "node_modules",
+      ".next",
+      "drizzle",
+      "build",
+      "out",
+      "next-env.d.ts",
+      "worktrees",
+      ".bot-hive-startups"
+    ]
   }
 }

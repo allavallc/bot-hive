@@ -1,9 +1,9 @@
 "use client";
 
-// Admin inbox: a single fixed-position button (mirrors AddBotButton's
-// shape) that opens a centered modal containing the Suggestions inbox
-// and Swarm health panel, stacked. Always visible to admin users —
-// `Inbox · 0` when nothing's pending, `Inbox · N` otherwise.
+// Admin inbox: a single fixed-position button that opens a centered modal
+// containing the Suggestions inbox and Swarm health panel, stacked.
+// Always visible to admin users — `Inbox · 0` when nothing's pending,
+// `Inbox · N` otherwise.
 
 import { useCallback, useEffect, useState } from "react";
 import styles from "./admin-inbox.module.css";

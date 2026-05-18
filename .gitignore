@@ -62,7 +62,29 @@ Thumbs.db
 
 # HV-136 SSE listener runtime state and diagnostic log. Worktree-local;
 # never committed.
+# Per-bot text logs (activity + events). Persists between sessions; never committed.
+logs/
+
 .bot-hive-stream.pid
 .bot-hive-role-notice
 .bot-hive-role-bootannounced
+.bot-hive-role-ptr
+.bot-hive-startups/
 .bot-hive.log
+.bot-hive-session-active
+
+# Local-only override for the Bot Hive API base URL. Useful when testing
+# terminal agents against localhost instead of production.
+.bot-hive-api-url
+
+# other things
+improving-agents.md
+startup-coding-humans.md
+
+# Knowledge graph output — generated, never committed.
+graphify-out/
+src/graphify-out/
+
+# Editor / tool state
+.codex/
+.dev-server.log

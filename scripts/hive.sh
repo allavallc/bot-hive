@@ -2,19 +2,74 @@
 # scripts/hive.sh -- bot-hive CLI helper.
 #
 # Usage:
+#   ./scripts/hive.sh start [local]   Start this bot and print the assigned role handoff
 #   ./scripts/hive.sh stop            Stop this bot: kill SSE listener, clean state, print all-clear
 #
 # To add more bots: open a new terminal and type "start the hive".
-# The server assigns each bot its handle and role automatically.
+# The server assigns each bot's role automatically.
 
 set -e
 
 usage() {
   echo "Usage:"
+  echo "  ./scripts/hive.sh start [local]   Start this bot + print assigned role"
   echo "  ./scripts/hive.sh stop            Stop this bot + clean local state"
   echo ""
   echo "To add more bots: open a new terminal and type 'start the hive'."
-  echo "The server assigns each bot its handle and role automatically."
+  echo "The server assigns each bot's role automatically."
+}
+
+start_bot() {
+  local mode="${1:-}"
+  local startup_id
+  startup_id="startup-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+
+  if [ -f .bot-hive-stream.pid ]; then
+    local stream_pid
+    stream_pid=$(cat .bot-hive-stream.pid 2>/dev/null || true)
+    if [ -n "$stream_pid" ] && ! kill -0 "$stream_pid" 2>/dev/null; then
+      rm -f .bot-hive-stream.pid
+    fi
+  fi
+
+  local started_at
+  started_at=$(date +%s)
+  if [ "$mode" = "local" ] || [ "$mode" = "-local" ] || [ "$mode" = "--local" ]; then
+    BOT_HIVE_API_URL=http://localhost:3000 nohup ./scripts/stream.sh --startup-id "$startup_id" >/dev/null 2>&1 &
+  else
+    nohup ./scripts/stream.sh --startup-id "$startup_id" >/dev/null 2>&1 &
+  fi
+
+  local deadline handoff_path notice_path handoff_json state_dir
+  deadline=$(( $(date +%s) + 30 ))
+  handoff_path=".bot-hive-startups/$startup_id.json"
+  notice_path=""
+  handoff_json=""
+  state_dir="$(pwd)"
+
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if [ -f "$handoff_path" ]; then
+      handoff_json="$handoff_path"
+      state_dir=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["stateDir"])' "$handoff_path")
+      notice_path="$state_dir/.bot-hive-role-notice"
+      break
+    fi
+    sleep 0.2
+  done
+
+  if [ -z "$notice_path" ] || [ ! -f "$notice_path" ]; then
+    echo "STARTUP_ID=$startup_id"
+    echo "ERROR=no startup handoff appeared within 30s"
+    [ -f .bot-hive.log ] && tail -80 .bot-hive.log
+    exit 2
+  fi
+
+  echo "STARTUP_ID=$startup_id"
+  echo "HANDOFF_PATH=$handoff_path"
+  echo "NOTICE_PATH=$notice_path"
+  echo "SESSION_ROOT=$state_dir"
+  echo "---NOTICE---"
+  cat "$notice_path"
 }
 
 stop_bot() {
@@ -64,12 +119,15 @@ stop_bot() {
 }
 
 cmd="${1:-}"
-role="${2:-}"
+mode="${2:-}"
 
 case "$cmd" in
   add)
     echo "Role assignment is now server-side. Open a new terminal and type 'start the hive' -- the server will assign the correct role."
     exit 1
+    ;;
+  start)
+    start_bot "$mode"
     ;;
   stop)
     stop_bot

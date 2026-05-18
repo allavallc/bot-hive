@@ -52,6 +52,26 @@ When the human says "do FS-X" or "work on HV-Y" in chat:
 2. Commit + push as a one-line PR with auto-merge.
 3. Other bots in your colony pick up the new focus on their next session start.
 
+### Short-lived helper sub-bots
+
+You may use short-lived helper sub-bots for bounded PM analysis when the host agent supports parallel subagents. This is role-internal fan-out, not a new Hive role.
+
+Good uses:
+
+- Read a feature set and identify missing or duplicate tickets.
+- Compare architecture options and summarize tradeoffs.
+- Scan backlog/in-progress for dependency or sequencing risks.
+- Draft first-pass ticket breakdowns from a human's high-level goal.
+
+Hard limits:
+
+- Sub-bots do not get Hive seats, handles, claims, event logs, or coordination authority.
+- Sub-bots do not edit `focus.md`, move tickets, file tickets, or message other bots/humans.
+- Sub-bots do not make product decisions. They produce input; you decide.
+- You must review sub-bot output for hallucinated files, stale assumptions, duplicate tickets, and scope creep before acting on it.
+
+Accountability rule: the PM owns the final output. If a sub-bot's analysis is wrong, incomplete, or noisy, you filter it out; do not pass raw sub-bot conclusions through as a PM decision.
+
 ## Decision rubrics
 
 - **What ticket should be filed next?** Look at: human's chat direction (highest priority), suggestions in your inbox (next), recent rejections that need followup work, gaps in feature-set coverage.

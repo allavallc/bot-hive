@@ -5,6 +5,7 @@ One procedure for all bots. Every session — PM, coder, tester — runs the sam
 **Triggers** (either one fires this procedure):
 
 1. The operator types `start the hive` in chat.
+   - Local development variants: `start the hive local` or `start the hive -local`. These run the same procedure, but Step 1 must force `BOT_HIVE_API_URL=http://localhost:3000`.
 2. A `.bot-hive-kickoff` marker file exists at the cwd (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed at step 5.
 
 If neither has fired, wait silently. Do not start work, claim tickets, or read skill files before completing startup.
@@ -13,77 +14,41 @@ Both triggers are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, a
 
 ---
 
-## Preflight — concurrent-owner check
+## Preflight — cwd ownership
 
-Before running steps 1–5, check whether another agent already owns this session:
+Use the checked-in Hive helper for startup. Do not paste or reconstruct the long PowerShell/Bash internals in chat. The helper creates a unique startup id, clears only a stale PID file, starts the SSE listener, waits for the request-scoped handoff, and prints the assigned notice.
 
-- POSIX: `[ -f .bot-hive-stream.pid ] && kill -0 "$(cat .bot-hive-stream.pid)" 2>/dev/null`
-- Windows PowerShell: `if (Test-Path .bot-hive-stream.pid) { try { Get-Process -Id (Get-Content .bot-hive-stream.pid) -ErrorAction Stop | Out-Null; $true } catch { $false } }`
+```bash
+# POSIX production
+./scripts/hive.sh start
 
-If a live owner is found, **stop**. Tell the operator: "Another session is already running as a bot here. To add a new bot, open a fresh terminal and type `start the hive` there."
+# POSIX local
+./scripts/hive.sh start local
 
-Only continue if no live owner is found.
+# Windows PowerShell production
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\hive.ps1 start
+
+# Windows PowerShell local
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\hive.ps1 start local
+```
+
+The script connects to `/api/bots/stream?colony=<colony>` without a handle on the first connection. The `colony` value comes from `gh api user --jq .login`, with `.bot-hive-identity` as a local fallback only for the colony name. The server picks a handle from the colony's active-seat pool, assigns your seat and role, then sends a `your-role` event. The script writes `.bot-hive-stream.pid` on start. If the same stream later reconnects, it reconnects with the handle already assigned to that stream; a fresh startup never reuses cwd `.bot-hive-identity` as its handle.
+
+The API base URL is resolved in this order:
+
+1. `BOT_HIVE_API_URL` environment variable.
+2. Local `.bot-hive-api-url` file at the repo root.
+3. Production fallback: `https://bot-hive-j0ax.onrender.com`.
+
+`.bot-hive-api-url` remains an optional local override, but `start the hive local` is the preferred path for local development because the intent is explicit in the operator prompt.
 
 ---
 
-## Step 1. Start the SSE listener
+## Step 1. Parse the helper output
 
-```bash
-# POSIX
-nohup ./scripts/stream.sh >/dev/null 2>&1 &
+The helper prints `STARTUP_ID`, `HANDOFF_PATH`, `NOTICE_PATH`, `SESSION_ROOT`, then `---NOTICE---` followed by the assigned notice. If `ERROR=` is printed, surface it and stop; do not improvise a role.
 
-# Windows PowerShell
-Start-Process powershell -ArgumentList "-NoProfile","-WindowStyle","Hidden","-File","./scripts/stream.ps1" -WindowStyle Hidden
-```
-
-The script connects to `/api/bots/stream?colony=<colony>`. The `colony` value comes from `gh api user --jq .login`. The server picks your handle from the colony's pool, assigns your seat and role, and sends a `your-role` event. The script writes `.bot-hive-stream.pid` on start.
-
----
-
-## Step 2. Wait for the role notice
-
-Poll for `.bot-hive-role-notice` **or** `.bot-hive-role-ptr` at cwd (max 30s, 200ms interval).
-
-- If `.bot-hive-role-notice` appears first: read it directly.
-- If `.bot-hive-role-ptr` appears first: read the path from it (e.g. `worktrees/scout`), then poll for `.bot-hive-role-notice` at that path (another 30s max).
-
-This two-file protocol handles the secondary-bot case: a bot that starts at the same repo root as an existing bot has its state files written to a worktree subdirectory; `.bot-hive-role-ptr` is the pointer the stream script leaves at cwd so startup can find it.
-
-```bash
-# POSIX — poll for notice or ptr
-deadline=$(($(date +%s) + 30))
-notice_path=".bot-hive-role-notice"
-while [ "$(date +%s)" -lt "$deadline" ]; do
-  if [ -f ".bot-hive-role-notice" ]; then notice_path=".bot-hive-role-notice"; break; fi
-  if [ -f ".bot-hive-role-ptr" ]; then
-    subdir=$(cat .bot-hive-role-ptr)
-    inner_deadline=$(($(date +%s) + 30))
-    while [ "$(date +%s)" -lt "$inner_deadline" ]; do
-      [ -f "$subdir/.bot-hive-role-notice" ] && notice_path="$subdir/.bot-hive-role-notice" && break 2
-      sleep 0.2
-    done
-    break
-  fi
-  sleep 0.2
-done
-
-# Windows PowerShell
-$deadline = (Get-Date).AddSeconds(30)
-$noticePath = ".bot-hive-role-notice"
-while ((Get-Date) -lt $deadline) {
-  if (Test-Path ".bot-hive-role-notice") { $noticePath = ".bot-hive-role-notice"; break }
-  if (Test-Path ".bot-hive-role-ptr") {
-    $subdir = (Get-Content ".bot-hive-role-ptr" -Raw).Trim()
-    $inner = (Get-Date).AddSeconds(30)
-    while ((Get-Date) -lt $inner) {
-      if (Test-Path "$subdir\.bot-hive-role-notice") { $noticePath = "$subdir\.bot-hive-role-notice"; break }
-      Start-Sleep -Milliseconds 200
-    }
-    break
-  }
-  Start-Sleep -Milliseconds 200
-}
-```
+If the handoff points at a worktree, treat that worktree as this bot's session root for all future file reads, shell commands, ticket claims, and shutdown. The chat terminal did not need to move; the agent must use the assigned worktree path as its working directory.
 
 Parse the notice — `key=value` per line:
 
@@ -93,27 +58,31 @@ role=coder
 seat=2
 total=2
 skillFiles=hive/skills/coder.md
+session_id=a3f9c2d1
 at=2026-05-14T20:00:00Z
 ```
 
 If the file never appears: surface the error (server unreachable, network blocked). Do not improvise a role. Exit and let the operator retry.
 
+After parsing the startup notice, delete that notice file and the startup handoff file if present. Future role changes will write a new notice in this bot's session root.
+
 ---
 
-## Step 3. Write identity
+## Step 2. Confirm identity
 
-Write `.bot-hive-identity` with the server-assigned handle:
+The stream script writes `.bot-hive-identity` in this bot's session root with the server-assigned handle:
 
 ```
 colony=<colony>
 handle=<handle from notice>
+session_id=<first 8 chars of connection id>
 ```
 
-UTF-8, no BOM. On PowerShell use `[System.IO.File]::WriteAllText(path, content, [System.Text.UTF8Encoding]::new($false))` — never `Set-Content -Encoding utf8` (adds a BOM).
+Confirm the file exists at the session root. Do not write a second root identity file for a bot whose handoff points at `worktrees/<handle>/`.
 
 ---
 
-## Step 4. Read skill files and announce
+## Step 3. Read skill files and announce
 
 Read **every** skill file listed in `skillFiles` (repo-relative paths, e.g. `hive/skills/pm.md`). The union defines what you do and don't do this session.
 
@@ -127,7 +96,27 @@ Use exact values from the notice.
 
 ---
 
-## Step 5. Consume the kickoff marker and stop
+## Step 3b. Open activity log
+
+Read `.bot-hive-identity` in your session root. It contains `colony`, `handle`, and `session_id`. Compose your log prefix:
+
+```
+<handle>-<role>-<session_id>-<ISO timestamp>
+```
+
+Example: `wren-pm-a3f9c2d1-2026-05-15T14:23:02Z`
+
+Create `logs/<colony>/` if it does not exist, then write the first entry to `logs/<colony>/activity.log`:
+
+```
+<prefix>: started; colony=<colony> handle=<handle> seat=<n>/<total> role=<role>
+```
+
+Use this same prefix format for every subsequent log entry in this session — only the timestamp changes. Log all significant activity: reading skill files, claiming a ticket, key decisions, findings, blockers, completing a ticket, role changes. Write one line per event. Do not delete the log; entries from previous bot sessions in the same colony remain and are valuable history.
+
+---
+
+## Step 4. Consume the kickoff marker and stop
 
 If `.bot-hive-kickoff` exists, delete it — one-shot:
 

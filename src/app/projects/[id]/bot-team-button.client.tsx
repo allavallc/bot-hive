@@ -1,7 +1,6 @@
 "use client";
 
-// "See Bot Team" — fixed-position trigger button mirroring AddBotButton +
-// AdminInbox shape. Opens a centered modal listing every active bot in
+// "See Bot Team" — fixed-position trigger button mirroring AdminInbox shape. Opens a centered modal listing every active bot in
 // the project, grouped by colony with seat numbers + roles. Subscribes
 // to the existing project SSE stream so the modal updates live when
 // bots join, leave, or are reclaimed.

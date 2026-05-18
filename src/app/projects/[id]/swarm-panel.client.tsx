@@ -12,13 +12,18 @@ import styles from "./swarm-panel.module.css";
 // writers never conflict. The panel renders a merged, newest-first view.
 // The composer at the top writes notes (use @cc2 or @swarm to target).
 
-type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans";
+type EntryKind = "lifecycle" | "note-to-bots" | "note-to-humans" | "bot-event";
 
 type Entry = {
   kind: EntryKind;
   ts: string;
   actor: string;
   raw: string;
+  meta?: {
+    eventKind?: string;
+    targetHandle?: string | null;
+    targetRole?: string | null;
+  };
 };
 
 const STORAGE_KEY = "bot-hive:swarm-panel:open";
@@ -42,6 +47,16 @@ function parseLifecycle(raw: string): Lifecycle {
   const hvId = parts[1] ?? "";
   const action = parts[2] ?? "";
   return { hvId, action };
+}
+
+function botEventLabel(entry: Entry): string {
+  const kind = entry.meta?.eventKind ?? "event";
+  const target = entry.meta?.targetHandle
+    ? ` -> ${entry.meta.targetHandle}`
+    : entry.meta?.targetRole
+      ? ` -> ${entry.meta.targetRole}`
+      : "";
+  return `${kind}${target}: ${entry.raw}`;
 }
 
 export function SwarmPanel({ projectId }: { projectId: string }) {
@@ -183,6 +198,8 @@ export function SwarmPanel({ projectId }: { projectId: string }) {
             if (e.kind === "lifecycle") {
               const { hvId, action } = parseLifecycle(e.raw);
               body = `${action} ${hvId}`.trim();
+            } else if (e.kind === "bot-event") {
+              body = botEventLabel(e);
             } else {
               body = e.raw;
             }

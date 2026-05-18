@@ -6,6 +6,12 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["dotenv/config"],
     testTimeout: 10_000,
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "worktrees/**",
+    ],
   },
   resolve: {
     alias: {

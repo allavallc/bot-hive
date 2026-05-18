@@ -41,6 +41,18 @@ export type BroadcastEvent =
       colony: string;
       departed: { handle: string; seat: number };
       seatMap: SeatMapEntry[];
+    }
+  | {
+      type: "bot-event";
+      projectId: string;
+      eventId: string;
+      colony: string;
+      handle: string;
+      kind: string;
+      message: string;
+      targetHandle?: string | null;
+      targetRole?: string | null;
+      createdAt: string;
     };
 
 type Subscriber = (event: BroadcastEvent) => void;
