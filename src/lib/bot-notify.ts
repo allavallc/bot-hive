@@ -50,10 +50,11 @@ export async function publishPeerPush(p: PeerPush, total: number, colony: string
       type: "your-role",
       role: p.role,
       seat: p.seat,
-      skillFiles: [],
+      skillFiles: p.skillFiles,
       colony,
       handle: p.handle,
       total,
+      ...(p.departed !== undefined && { departed: p.departed }),
     },
   };
   try {

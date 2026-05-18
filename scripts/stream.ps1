@@ -1,21 +1,22 @@
-# scripts/stream.ps1 -- HV-136 bot SSE listener with diagnostic logging.
+# scripts/stream.ps1 -- FS-030 bot SSE listener.
 #
-# Opens a long-lived SSE connection to /api/bots/stream and writes
-# .bot-hive-role-notice whenever the server pushes a `your-role` event.
-# The UserPromptSubmit hook surfaces that notice on the bot's next
-# operator prompt.
+# Connects to /api/bots/stream with colony only. The server assigns a
+# handle and returns it in the first your-role event. This script writes
+# .bot-hive-identity (colony + handle) and .bot-hive-role-notice after
+# receiving the assignment.
 #
-# Single script, single role: hold the connection open. When this
-# process dies, the TCP socket closes and the server reaps the seat
-# (15-second grace). No PID-file based heartbeat. No /join. No /leave.
+# Multi-bot isolation: if another bot's .bot-hive-stream.pid is already
+# alive at cwd, this script creates worktrees/<handle>/ and writes all
+# state files there. It also writes .bot-hive-role-ptr at cwd pointing
+# to the worktree so the startup procedure knows where to look.
 #
-# Diagnostic log: .bot-hive.log in cwd (same dir as the pid file).
-# Tagged lines from this script use [stream]. Format:
-#   <ISO8601-UTC> [stream] <message>
+# Single role: hold the SSE connection. When this process dies the TCP
+# socket closes and the server reaps the seat (15s grace).
+#
+# Diagnostic log: .bot-hive.log in cwd.
 
 $ErrorActionPreference = "Stop"
 
-# Resolve log path once at start so logging keeps working even if cwd shifts.
 $Script:logPath = (Join-Path (Get-Location).Path ".bot-hive.log")
 
 function Write-StreamLog {
@@ -27,9 +28,7 @@ function Write-StreamLog {
             "$ts [stream] $Message" + [Environment]::NewLine,
             [System.Text.UTF8Encoding]::new($false)
         )
-    } catch {
-        # Logging must never break the script. Swallow.
-    }
+    } catch { }
 }
 
 Write-StreamLog "starting (pid=$PID, cwd=$((Get-Location).Path))"
@@ -37,24 +36,15 @@ Write-StreamLog "starting (pid=$PID, cwd=$((Get-Location).Path))"
 $apiBase = if ($env:BOT_HIVE_API_URL) { $env:BOT_HIVE_API_URL } else { "https://bot-hive-j0ax.onrender.com" }
 Write-StreamLog "api base: $apiBase"
 
-# Resolve identity from .bot-hive-identity at the worktree root.
-if (-not (Test-Path ".bot-hive-identity")) {
-    Write-StreamLog "FATAL: .bot-hive-identity not found in $((Get-Location).Path)"
-    Write-Error "stream.ps1: .bot-hive-identity not found"
-    exit 2
-}
+# Colony from gh CLI.
 $colony = $null
-$handle = $null
-Get-Content ".bot-hive-identity" | ForEach-Object {
-    if ($_ -match '^colony=(.+)$') { $colony = $Matches[1].Trim() }
-    if ($_ -match '^handle=(.+)$') { $handle = $Matches[1].Trim() }
-}
-if (-not $colony -or -not $handle) {
-    Write-StreamLog "FATAL: .bot-hive-identity must set colony= and handle= (got colony='$colony' handle='$handle')"
-    Write-Error "stream.ps1: .bot-hive-identity must set colony= and handle="
+try { $colony = (gh api user --jq .login 2>$null) } catch { }
+if (-not $colony) {
+    Write-StreamLog "FATAL: could not resolve colony via 'gh api user'"
+    Write-Error "stream.ps1: could not resolve colony from 'gh api user'"
     exit 2
 }
-Write-StreamLog "identity: colony=$colony handle=$handle"
+Write-StreamLog "colony: $colony"
 
 # Repo full name from origin.
 $originUrl = ""
@@ -70,11 +60,72 @@ $repoFullName = $originUrl `
     -replace '^git@[^:]+:', ''
 Write-StreamLog "repo: $repoFullName"
 
-# Write our PID so bot-shutdown.md can stop us cleanly.
-$PID | Out-File -FilePath ".bot-hive-stream.pid" -Encoding ascii -Force
-Write-StreamLog "wrote .bot-hive-stream.pid (PID=$PID)"
+# Detect if cwd already has a live stream (secondary bot scenario).
+$cwdPath = (Get-Location).Path
+$existingPidFile = Join-Path $cwdPath ".bot-hive-stream.pid"
+$isSecondary = $false
+if (Test-Path $existingPidFile) {
+    $existingPid = (Get-Content $existingPidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($existingPid) {
+        try { Get-Process -Id $existingPid -ErrorAction Stop | Out-Null; $isSecondary = $true } catch { }
+    }
+}
+Write-StreamLog "secondary=$isSecondary"
 
-$noticeFile = ".bot-hive-role-notice"
+# Write PID to cwd now (primary) or skip until we know the handle (secondary).
+if (-not $isSecondary) {
+    $PID | Out-File -FilePath (Join-Path $cwdPath ".bot-hive-stream.pid") -Encoding ascii -Force
+    Write-StreamLog "wrote .bot-hive-stream.pid (PID=$PID)"
+}
+
+# State paths — set after we know the handle (secondary) or immediately (primary).
+$Script:stateDir = $cwdPath
+$Script:handle = $null
+$Script:worktreeCreated = $false
+
+function Set-StatePaths {
+    param([string]$Handle)
+    if ($isSecondary) {
+        $worktreePath = Join-Path $cwdPath "worktrees\$Handle"
+        if (-not (Test-Path $worktreePath)) {
+            Write-StreamLog "creating worktree at $worktreePath"
+            git worktree add $worktreePath -b "$Handle-work" main 2>&1 | ForEach-Object { Write-StreamLog "git: $_" }
+            $Script:worktreeCreated = $true
+        } else {
+            Write-StreamLog "worktree $worktreePath already exists"
+        }
+        $Script:stateDir = $worktreePath
+        # Write PID to worktree.
+        $PID | Out-File -FilePath (Join-Path $worktreePath ".bot-hive-stream.pid") -Encoding ascii -Force
+        Write-StreamLog "wrote $worktreePath\.bot-hive-stream.pid (PID=$PID)"
+        # Write ptr at cwd so startup procedure can find the notice.
+        [System.IO.File]::WriteAllText(
+            (Join-Path $cwdPath ".bot-hive-role-ptr"),
+            "worktrees/$Handle",
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        Write-StreamLog "wrote .bot-hive-role-ptr -> worktrees/$Handle"
+    }
+    # Write identity file.
+    $identityContent = "colony=$colony`nhandle=$Handle`n"
+    [System.IO.File]::WriteAllText(
+        (Join-Path $Script:stateDir ".bot-hive-identity"),
+        $identityContent,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Write-StreamLog "wrote .bot-hive-identity (colony=$colony handle=$Handle)"
+}
+
+function Write-RoleNotice {
+    param($Event)
+    $notice = "handle=$($Script:handle)`nrole=$($Event.role)`nseat=$($Event.seat)`ntotal=$($Event.total)`nskillFiles=$($Event.skillFiles -join ',')`nat=$((Get-Date).ToUniversalTime().ToString('o'))`n"
+    [System.IO.File]::WriteAllText(
+        (Join-Path $Script:stateDir ".bot-hive-role-notice"),
+        $notice,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Write-StreamLog "wrote .bot-hive-role-notice (role='$($Event.role)' seat=$($Event.seat) total=$($Event.total))"
+}
 
 Add-Type -AssemblyName System.Net.Http | Out-Null
 
@@ -87,7 +138,7 @@ $maxRetryDelay = 30
 try {
     while ($true) {
         try {
-            $qs = "repo_full_name=$([uri]::EscapeDataString($repoFullName))&colony=$([uri]::EscapeDataString($colony))&handle=$([uri]::EscapeDataString($handle))"
+            $qs = "repo_full_name=$([uri]::EscapeDataString($repoFullName))&colony=$([uri]::EscapeDataString($colony))"
             $url = "$apiBase/api/bots/stream?$qs"
             Write-StreamLog "connecting to $url"
             $resp = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
@@ -99,7 +150,7 @@ try {
                 continue
             }
             Write-StreamLog "SSE stream open"
-            $retryDelaySeconds = 2  # reset on a clean open
+            $retryDelaySeconds = 2
             $stream = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
             $reader = New-Object System.IO.StreamReader($stream)
 
@@ -114,10 +165,13 @@ try {
                     try {
                         $evt = $payload | ConvertFrom-Json -ErrorAction Stop
                         if ($evt.type -eq "your-role") {
-                            Write-StreamLog "event: your-role role='$($evt.role)' seat=$($evt.seat) total=$($evt.total)"
-                            $notice = "role=$($evt.role)`nseat=$($evt.seat)`ntotal=$($evt.total)`nskillFiles=$($evt.skillFiles -join ',')`nat=$((Get-Date).ToUniversalTime().ToString('o'))`n"
-                            [System.IO.File]::WriteAllText((Resolve-Path -LiteralPath ".").Path + "\$noticeFile", $notice, [System.Text.UTF8Encoding]::new($false))
-                            Write-StreamLog "wrote $noticeFile"
+                            Write-StreamLog "event: your-role handle='$($evt.handle)' role='$($evt.role)' seat=$($evt.seat) total=$($evt.total)"
+                            if (-not $Script:handle) {
+                                # First your-role: set up identity + state paths.
+                                $Script:handle = $evt.handle
+                                Set-StatePaths -Handle $evt.handle
+                            }
+                            Write-RoleNotice -Event $evt
                         } else {
                             Write-StreamLog "event: type=$($evt.type) payload=$payload"
                         }
@@ -125,10 +179,8 @@ try {
                         Write-StreamLog "JSON parse error on payload: $payload -- $($_.Exception.Message)"
                     }
                 } elseif ($line.StartsWith(":")) {
-                    # SSE comment / keepalive. Log so we can see the connection is alive.
                     Write-StreamLog "keepalive: $($line.Trim())"
                 }
-                # Other lines (blank, `event:`, etc.) ignored.
             }
             Write-StreamLog "inner loop exited (EndOfStream); will reconnect"
         } catch {
