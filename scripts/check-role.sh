@@ -10,6 +10,12 @@
 
 set -eu
 
+STATE_DIR="$(node ./scripts/bot-session.mjs state-dir 2>/dev/null || pwd)"
+if [ -d "$STATE_DIR" ]; then
+  cd "$STATE_DIR"
+fi
+
+
 LOG_FILE="$(pwd)/.bot-hive.log"
 
 log() {

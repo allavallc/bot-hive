@@ -13,6 +13,12 @@
 
 set -euo pipefail
 
+STATE_DIR="$(node ./scripts/bot-session.mjs state-dir 2>/dev/null || pwd)"
+if [ -d "$STATE_DIR" ]; then
+  cd "$STATE_DIR"
+fi
+
+
 LOG_FILE="$(pwd)/.bot-hive.log"
 log() {
     printf '%s [whoami] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$LOG_FILE" 2>/dev/null || true

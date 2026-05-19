@@ -13,6 +13,12 @@
 
 $ErrorActionPreference = "SilentlyContinue"
 
+try {
+    $stateDir = (& node ./scripts/bot-session.mjs state-dir 2>$null | Select-Object -First 1)
+    if ($LASTEXITCODE -eq 0 -and $stateDir) { Set-Location $stateDir.Trim() }
+} catch { }
+
+
 $Script:logPath = (Join-Path (Get-Location).Path ".bot-hive.log")
 function Write-CheckRoleLog {
     param([string]$Message)

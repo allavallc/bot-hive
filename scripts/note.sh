@@ -15,6 +15,12 @@
 
 set -euo pipefail
 
+STATE_DIR="$(node ./scripts/bot-session.mjs state-dir 2>/dev/null || pwd)"
+if [ -d "$STATE_DIR" ]; then
+  cd "$STATE_DIR"
+fi
+
+
 if [ -z "${1:-}" ]; then
   echo "usage: $0 \"<message>\"" >&2
   exit 2

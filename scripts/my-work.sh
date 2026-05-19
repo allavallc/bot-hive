@@ -13,6 +13,12 @@
 
 set -euo pipefail
 
+STATE_DIR="$(node ./scripts/bot-session.mjs state-dir 2>/dev/null || pwd)"
+if [ -d "$STATE_DIR" ]; then
+  cd "$STATE_DIR"
+fi
+
+
 # Resolve bot identity. Prefer .bot-hive-identity in the worktree.
 BOT_HIVE_COLONY=""
 BOT_HIVE_HANDLE_RESOLVED=""

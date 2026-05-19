@@ -125,7 +125,6 @@ if (Test-Path $existingPidFile) {
 if (-not $isSecondary) {
     foreach ($stalePath in @(
         (Join-Path $cwdPath ".bot-hive-role-notice"),
-        (Join-Path $cwdPath ".bot-hive-role-ptr"),
         (Join-Path $cwdPath ".bot-hive-role-bootannounced")
     )) {
         if (Test-Path $stalePath) {

@@ -8,7 +8,7 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 Two equivalent triggers, both run the single procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
 
-1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Preflight check first: if a live `.bot-hive-stream.pid` already exists in cwd, another agent owns this session — stop and tell the operator.
+1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Run the wrapper-backed procedure in `hive/bot-startup.md`; duplicate detection is session-aware, so a live root `.bot-hive-stream.pid` only blocks the same terminal/session, not a valid second bot from a fresh terminal.
 2. **`.bot-hive-kickoff` marker file** exists at the cwd root (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed during bootstrap.
 
 The server assigns your handle and role. You do not need to know them before connecting — they arrive in the `your-role` SSE event at step 2 of the startup procedure.
@@ -26,13 +26,13 @@ When the operator wants you to leave the hive, they'll say one of these phrases 
 
 Recognize any of them as the shutdown trigger, the same way `start the hive` is the kickoff trigger. Run the procedure in [`hive/bot-shutdown.md`](./hive/bot-shutdown.md): kill the SSE listener (the open TCP socket IS the liveness signal — the server reclaims the seat after a 15s grace), delete the local state files (`.bot-hive-role-notice`, `.bot-hive-role-bootannounced`, etc.), and only then print `Signed off. Safe to close this window.`.
 
-Operators can also run `./scripts/hive.sh stop` (or `.\scripts\hive.ps1 stop`) directly from a terminal to perform this procedure without an agent.
+Operators can also run `./scripts/hive.sh start|stop` (or `.\scripts\hive.ps1 start|stop`) directly from a terminal to perform startup/shutdown without an agent.
 
 The operator should not close the terminal until they see the all-clear line.
 
 ## Spawn additional bots
 
-To add a bot to the colony, the operator opens a new terminal and types `start the hive`. The server detects the new connection, assigns the next free handle and the appropriate role, and pushes the updated role to all connected bots via SSE.
+To add a bot to the colony, the operator opens a new terminal and types `start the hive`. The startup wrapper allows a fresh terminal to continue in secondary mode even when the repo root already has a live stream; the server then assigns the next free handle and the appropriate role and pushes updates to all connected bots via SSE.
 
 There is no role argument to choose — the server derives the role from the consolidation table in `hive/roles.md` based on how many bots are already active in the colony. Role assignment is automatic and server-authoritative.
 
@@ -55,7 +55,8 @@ Five scripts wrap the protocol so you don't have to construct git/gh calls by ha
 - **`scripts/claim.{sh,ps1}` `<HV-id>`** — claim a backlog ticket end-to-end: pulls fresh, verifies no peer has an open PR for the ticket, creates a branch, moves the file to `in-progress/`, updates the frontmatter (Status / Assigned to / Started / Last touched), appends a `claim` event to your `hive/events/<colony>.<handle>.log`, opens an auto-merging claim PR.
 - **`scripts/in-review.{sh,ps1}` `<HV-id>`** — ship a claimed ticket to in-review when work is complete. Moves the file from `in-progress/` to `in-review/`, updates Status / Completed / Last touched, appends an `in-review` event, commits, pushes to the claim branch, and **verifies the file actually landed in `in-review/` on the remote**. Use this — never do the move by hand. Manual `git mv` + commit has been silently dropped during cherry-picks; the helper makes it atomic and verified.
 - **`scripts/note.{sh,ps1}` `"<message>"`** — write a note from you to humans. Sanitizes tabs/newlines, appends a TSV line to `hive/notes-to-humans/<colony>.<handle>.log`, opens an auto-merging tiny PR. Use `@<human-handle>` or `@<colony>.<bot-handle>` to address a specific actor.
-- **`scripts/hive.{sh,ps1}`** — operator-facing CLI for stopping bots:
+- **`scripts/hive.{sh,ps1}`** — operator-facing CLI for bot startup/shutdown:
+  - `./scripts/hive.sh start` — run the canonical startup wrapper (`hive/bot-startup.md`) from a terminal without hand-assembling preflight / stream / handoff steps.
   - `./scripts/hive.sh stop` — run the shutdown procedure (`hive/bot-shutdown.md`) from a terminal without needing an agent: kill the SSE listener, delete local state files, print `Signed off. Safe to close this window.`
 
 `.bot-hive-identity` at the worktree root holds the bot's colony and handle (written at boot):
