@@ -13,16 +13,28 @@ Both triggers are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, a
 
 ---
 
-## Preflight — concurrent-owner check
+## Preflight — same-terminal duplicate check
 
-Before running steps 1–5, check whether another agent already owns this session:
+Do **not** treat a live root `.bot-hive-stream.pid` as a fatal condition. A live
+root stream may belong to a different terminal, and that is the normal
+secondary-bot case.
 
-- POSIX: `[ -f .bot-hive-stream.pid ] && kill -0 "$(cat .bot-hive-stream.pid)" 2>/dev/null`
-- Windows PowerShell: `if (Test-Path .bot-hive-stream.pid) { try { Get-Process -Id (Get-Content .bot-hive-stream.pid) -ErrorAction Stop | Out-Null; $true } catch { $false } }`
+The stream launcher is the source of truth for duplicate protection:
 
-If a live owner is found, **stop**. Tell the operator: "Another session is already running as a bot here. To add a new bot, open a fresh terminal and type `start the hive` there."
+- `scripts/stream.{sh,ps1}` rejects a second startup from the **same terminal
+  session** using `.bot-hive-session-owner` + `client_session_id`.
+- If another terminal already owns the root stream, the launcher treats the new
+  startup as a **secondary bot**, creates/uses `worktrees/<handle>/`, and writes
+  `.bot-hive-role-ptr` at cwd so startup can find the role notice.
 
-Only continue if no live owner is found.
+So before running steps 1–5, do only this:
+
+- If `.bot-hive-session-owner` exists **for this same terminal session**, stop.
+- Otherwise continue and let `scripts/stream.{sh,ps1}` decide whether this is a
+  primary bot, a secondary bot, or a same-session duplicate.
+
+If the launcher reports a duplicate-session refusal, surface it and stop. Do
+not invent a role or worktree path yourself.
 
 ---
 

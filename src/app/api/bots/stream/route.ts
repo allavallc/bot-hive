@@ -78,9 +78,15 @@ export async function GET(req: Request) {
     return new Response(`no project registered for repo '${repoFullName}'`, { status: 404 });
   }
 
-  const handle = url.searchParams.get("handle") || (await assignHandle(project.id, colony));
+  const requestedHandle =
+    url.searchParams.get("handle") || (await assignHandle(project.id, colony));
+  const clientSessionId = url.searchParams.get("client_session_id");
 
   const connectionId = randomUUID();
+
+  const { handle, rebound, seat, selfRole, selfSkillFiles, peerPushes, snapshot } =
+    await connectBot(project.id, colony, requestedHandle, connectionId, undefined, clientSessionId);
+
   const key = botKey(project.id, colony, handle);
 
   // Rebind: cancel any pending disconnect for this (project, colony, handle).
@@ -90,24 +96,19 @@ export async function GET(req: Request) {
     pendingDisconnects.delete(key);
   }
 
-  const { seat, selfRole, selfSkillFiles, peerPushes, snapshot } = await connectBot(
-    project.id,
-    colony,
-    handle,
-    connectionId,
-  );
-
   // Push role changes to peers' open streams (cross-instance via Postgres NOTIFY).
   for (const p of peerPushes) {
     await publishPeerPush(p, snapshot.length, colony);
   }
-  broadcast({
-    type: "bot-joined",
-    projectId: project.id,
-    colony,
-    joined: { handle, seat },
-    seatMap: snapshot,
-  });
+  if (!rebound) {
+    broadcast({
+      type: "bot-joined",
+      projectId: project.id,
+      colony,
+      joined: { handle, seat },
+      seatMap: snapshot,
+    });
+  }
 
   const encoder = new TextEncoder();
   let cleanup: (() => void) | null = null;
@@ -132,6 +133,7 @@ export async function GET(req: Request) {
         colony,
         handle,
         total: snapshot.length,
+        clientSessionId: clientSessionId ?? undefined,
       });
       send({ type: "snapshot", colony, seats: snapshot });
 
@@ -141,18 +143,9 @@ export async function GET(req: Request) {
         } catch {
           clearInterval(keepalive);
         }
-        void db
-          .update(bots)
-          .set({ lastHeartbeatAt: new Date() })
-          .where(
-            and(
-              eq(bots.projectId, project.id),
-              eq(bots.colony, colony),
-              eq(bots.handle, handle),
-              eq(bots.connectionId, connectionId),
-            ),
-          )
-          .catch((err) => console.warn("[bots/stream] keepalive heartbeat:", err));
+        // HV-136: keepalive signal to client proves stream is alive. Removed DB
+        // write — it was dead code (SSE socket is the only liveness signal) and
+        // misleadingly suggested liveness could be detected from lastHeartbeatAt.
       }, 30_000);
 
       cleanup = () => {

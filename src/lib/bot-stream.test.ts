@@ -175,4 +175,15 @@ describe("disconnectBot — colony shrinks from 5 to 0", () => {
     const second = await connectBot(pid, "allavallc", "wren", "conn-b", tx);
     expect(second.seat).toBe(first.seat);
   });
+
+  test("same client session id rebinds the original handle instead of taking a new seat", async ({
+    tx,
+  }) => {
+    const pid = await seedProject(tx);
+    const first = await connectBot(pid, "allavallc", "wren", "conn-a", tx, "tty:pts/1:/repo");
+    const second = await connectBot(pid, "allavallc", "buzz", "conn-b", tx, "tty:pts/1:/repo");
+    expect(second.handle).toBe("wren");
+    expect(second.seat).toBe(first.seat);
+    expect(second.snapshot).toEqual([{ handle: "wren", seat: 1, role: "PM + coder + tester" }]);
+  });
 });

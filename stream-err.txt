@@ -1,0 +1,45 @@
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:41 char:35
++         $cmd = ($proc.CommandLine ?? "").ToLowerInvariant()
++                                   ~~
+Unexpected token '??' in expression or statement.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:41 char:34
++         $cmd = ($proc.CommandLine ?? "").ToLowerInvariant()
++                                  ~
+Missing closing ')' in expression.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:37 char:52
++     for ($i = 0; $i -lt 12 -and $currentPid; $i++) {
++                                                    ~
+Missing closing '}' in statement block or type definition.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:35 char:30
++ function Get-ClientSessionId {
++                              ~
+Missing closing '}' in statement block or type definition.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:41 char:40
++         $cmd = ($proc.CommandLine ?? "").ToLowerInvariant()
++                                        ~
+Unexpected token ')' in expression or statement.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:41 char:59
++         $cmd = ($proc.CommandLine ?? "").ToLowerInvariant()
++                                                           ~
+An expression was expected after '('.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:43 char:48
++             return "winproc:$($proc.ProcessId):$name:$((Get-Location) ...
++                                                ~~~~~~
+Variable reference is not valid. ':' was not followed by a valid variable name character. Consider using ${} to 
+delimit the name.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:46 char:5
++     }
++     ~
+Unexpected token '}' in expression or statement.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:49 char:18
++     return "ppid:$parentPid:$((Get-Location).Path)"
++                  ~~~~~~~~~~~
+Variable reference is not valid. ':' was not followed by a valid variable name character. Consider using ${} to 
+delimit the name.
+At C:\Users\adefilippo\MyDocuments\17_projects\bot-hive\scripts\stream.ps1:50 char:1
++ }
++ ~
+Unexpected token '}' in expression or statement.
+    + CategoryInfo          : ParserError: (:) [], ParseException
+    + FullyQualifiedErrorId : UnexpectedToken
+ 

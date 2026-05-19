@@ -1,0 +1,32 @@
+﻿
+> bot-hive@0.1.0 dev
+> next dev
+
+node.exe :  ΓÜá Port 3000 is in use by process 28084, using available port 3001 instead.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( ΓÜá Port 3000 ...t 3001 instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Γû▓ Next.js 15.5.15
+   - Local:        http://localhost:3001
+   - Network:      http://10.5.0.2:3001
+   - Environments: .env
+
+ Γ£ô Starting...
+ Γ£ô Ready in 1769ms
+ ΓÜá Found a change in next.config.ts. Restarting the server to apply the changes...
+   Γû▓ Next.js 15.5.15
+   - Local:        http://localhost:3001
+   - Network:      http://10.5.0.2:3001
+   - Environments: .env
+
+ Γ£ô Starting...
+
+   We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+   The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+   	- include was updated to add '.next-win32/types/**/*.ts'
+
+ Γ£ô Ready in 1453ms

@@ -9,6 +9,8 @@ worktrees/
 
 # Next.js
 .next/
+.next-linux/
+.next-win32/
 out/
 build/
 
@@ -66,3 +68,16 @@ Thumbs.db
 .bot-hive-role-notice
 .bot-hive-role-bootannounced
 .bot-hive.log
+.bot-hive-api-url
+.bot-hive-session-active
+.bot-hive-startups/
+.dev-server.log
+.codex/
+logs/
+
+# Local Graphify artifacts and checkout — use locally, never commit.
+graphify/
+graphify-out/
+src/graphify-out/
+.graphify_ast.json
+.graphify_detect.json

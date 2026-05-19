@@ -19,6 +19,26 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", ".next", "drizzle", "build", "out", "next-env.d.ts", "worktrees"]
+    "ignore": [
+      "node_modules",
+      ".next",
+      ".next-linux",
+      ".next-win32",
+      "drizzle",
+      "build",
+      "out",
+      "next-env.d.ts",
+      "worktrees",
+      "graphify",
+      "graphify-out",
+      ".bot-hive-startups",
+      ".codex",
+      "logs",
+      ".dev-server.log",
+      ".bot-hive-api-url",
+      ".bot-hive-session-active",
+      ".graphify_ast.json",
+      ".graphify_detect.json"
+    ]
   }
 }

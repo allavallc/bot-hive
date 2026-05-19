@@ -317,6 +317,10 @@ export const bots = pgTable(
     // specific bot. NULL when no stream is open (old /join flow or
     // disconnected). Last-writer-wins on reopen.
     connectionId: text("connection_id"),
+    // Stable local-session identity from the stream launcher. Lets the
+    // server rebind the same logical bot if the operator accidentally
+    // starts it twice from the same terminal/session.
+    clientSessionId: text("client_session_id"),
     role: text("role"),
   },
   (t) => ({
@@ -324,6 +328,11 @@ export const bots = pgTable(
       t.projectId,
       t.colony,
       t.handle,
+    ),
+    projectColonyClientSessionUnique: unique("bots_project_colony_client_session_unique").on(
+      t.projectId,
+      t.colony,
+      t.clientSessionId,
     ),
     activeSeatUnique: uniqueIndex("bots_project_colony_active_seat_uniq")
       .on(t.projectId, t.colony, t.seat)

@@ -17,6 +17,7 @@
 
 $ErrorActionPreference = "Stop"
 
+$Script:ownerFile = Join-Path (Get-Location).Path ".bot-hive-session-owner"
 $Script:logPath = (Join-Path (Get-Location).Path ".bot-hive.log")
 
 function Write-StreamLog {
@@ -31,7 +32,79 @@ function Write-StreamLog {
     } catch { }
 }
 
+function Get-ClientSessionId {
+    $currentPid = $PID
+    for ($i = 0; $i -lt 12 -and $currentPid; $i++) {
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $currentPid" -ErrorAction SilentlyContinue
+        if (-not $proc) { break }
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($proc.Name).ToLowerInvariant()
+        $commandLine = if ($null -ne $proc.CommandLine) { [string]$proc.CommandLine } else { "" }
+        $cmd = $commandLine.ToLowerInvariant()
+        if ($name -match 'claude|codex|cursor|windows terminal|wezterm|ghostty|conhost|wt') {
+            return "winproc:$($proc.ProcessId):${name}:$((Get-Location).Path)"
+        }
+        $currentPid = $proc.ParentProcessId
+    }
+    $selfProc = Get-CimInstance Win32_Process -Filter "ProcessId = $PID" -ErrorAction SilentlyContinue
+    $parentPid = if ($selfProc) { $selfProc.ParentProcessId } else { 0 }
+    return "ppid:${parentPid}:$((Get-Location).Path)"
+}
+
+$Script:clientSessionId = Get-ClientSessionId
+
+function Remove-SessionOwner {
+    try {
+        if (Test-Path $Script:ownerFile) {
+            $lines = Get-Content $Script:ownerFile -ErrorAction SilentlyContinue
+            $ownerPid = ($lines | Where-Object { $_ -like 'pid=*' } | Select-Object -First 1)
+            $ownerSession = ($lines | Where-Object { $_ -like 'client_session_id=*' } | Select-Object -First 1)
+            if ($ownerPid -and $ownerSession) {
+                $ownerPid = $ownerPid.Substring(4)
+                $ownerSession = $ownerSession.Substring(18)
+                if ($ownerPid -eq "$PID" -and $ownerSession -eq $Script:clientSessionId) {
+                    Remove-Item $Script:ownerFile -Force -ErrorAction SilentlyContinue
+                    Write-StreamLog "deleted .bot-hive-session-owner"
+                }
+            }
+        }
+    } catch { }
+}
+
 Write-StreamLog "starting (pid=$PID, cwd=$((Get-Location).Path))"
+Write-StreamLog "client_session_id=$Script:clientSessionId"
+
+if (Test-Path $Script:ownerFile) {
+    try {
+        $lines = Get-Content $Script:ownerFile -ErrorAction SilentlyContinue
+        $ownerPid = ($lines | Where-Object { $_ -like 'pid=*' } | Select-Object -First 1)
+        $ownerSession = ($lines | Where-Object { $_ -like 'client_session_id=*' } | Select-Object -First 1)
+        if ($ownerPid -and $ownerSession) {
+            $ownerPid = $ownerPid.Substring(4)
+            $ownerSession = $ownerSession.Substring(18)
+            if ($ownerPid -ne "$PID") {
+                try {
+                    Get-Process -Id $ownerPid -ErrorAction Stop | Out-Null
+                    if ($ownerSession -eq $Script:clientSessionId) {
+                        Write-StreamLog "duplicate startup refused for client_session_id=$Script:clientSessionId owner_pid=$ownerPid"
+                        throw "stream.ps1: duplicate hive stream refused for this terminal session (owner pid $ownerPid)"
+                    }
+                } catch [System.Exception] {
+                    if ($_.Exception.Message -like 'stream.ps1:*') { throw }
+                }
+            }
+        }
+    } catch {
+        if ($_.Exception.Message -like 'stream.ps1:*') { throw }
+    }
+}
+
+@(
+    "client_session_id=$Script:clientSessionId",
+    "pid=$PID",
+    "cwd=$((Get-Location).Path)",
+    "at=$((Get-Date).ToUniversalTime().ToString('o'))"
+) | Out-File -FilePath $Script:ownerFile -Encoding utf8 -Force
+Write-StreamLog "wrote .bot-hive-session-owner (client_session_id=$Script:clientSessionId pid=$PID)"
 
 $apiBase = if ($env:BOT_HIVE_API_URL) { $env:BOT_HIVE_API_URL } else { "https://bot-hive-j0ax.onrender.com" }
 Write-StreamLog "api base: $apiBase"
@@ -138,7 +211,7 @@ $maxRetryDelay = 30
 try {
     while ($true) {
         try {
-            $qs = "repo_full_name=$([uri]::EscapeDataString($repoFullName))&colony=$([uri]::EscapeDataString($colony))"
+            $qs = "repo_full_name=$([uri]::EscapeDataString($repoFullName))&colony=$([uri]::EscapeDataString($colony))&client_session_id=$([uri]::EscapeDataString($Script:clientSessionId))"
             $url = "$apiBase/api/bots/stream?$qs"
             Write-StreamLog "connecting to $url"
             $resp = $client.GetAsync($url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
@@ -194,5 +267,6 @@ try {
         }
     }
 } finally {
+    Remove-SessionOwner
     Write-StreamLog "script exiting (normal/exception/PowerShell shutdown)"
 }

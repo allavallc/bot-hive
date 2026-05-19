@@ -8,7 +8,7 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 Two equivalent triggers, both run the single procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
 
-1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Preflight check first: if a live `.bot-hive-stream.pid` already exists in cwd, another agent owns this session — stop and tell the operator.
+1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Run the startup procedure in [`hive/bot-startup.md`](./hive/bot-startup.md) exactly as written — do not abort just because a live root `.bot-hive-stream.pid` exists. A different terminal may already own the root stream, which is the normal secondary-bot case.
 2. **`.bot-hive-kickoff` marker file** exists at the cwd root (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed during bootstrap.
 
 The server assigns your handle and role. You do not need to know them before connecting — they arrive in the `your-role` SSE event at step 2 of the startup procedure.
@@ -488,3 +488,16 @@ Stale local main = guaranteed push conflict + collision risk. The `git pull` is 
 - `tasks/local-dev-state.md` — per-machine setup snapshots.
 - `README.md` — project overview, quickstart for humans.
 - `CLAUDE.md` — Claude Code-specific shim (just points here).
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

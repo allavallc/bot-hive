@@ -23,6 +23,8 @@ export type PeerPush = {
 };
 
 export type ConnectResult = {
+  handle: string;
+  rebound: boolean;
   seat: number;
   selfRole: string;
   selfSkillFiles: string[];
@@ -48,6 +50,7 @@ async function activeRows(db: DbHandle, projectId: string, colony: string) {
       seat: bots.seat,
       role: bots.role,
       connectionId: bots.connectionId,
+      clientSessionId: bots.clientSessionId,
     })
     .from(bots)
     .where(and(eq(bots.projectId, projectId), eq(bots.colony, colony), eq(bots.status, "active")))
@@ -80,9 +83,10 @@ async function lowestFreeSeat(
 export async function connectBot(
   projectId: string,
   colony: string,
-  handle: string,
+  requestedHandle: string,
   connectionId: string,
   db: DbHandle = defaultDb,
+  clientSessionId?: string | null,
 ): Promise<ConnectResult> {
   return db.transaction(async (tx) => {
     await acquireColonyLock(tx, projectId, colony);
@@ -91,22 +95,50 @@ export async function connectBot(
     const before = await activeRows(tx, projectId, colony);
     const prevRoleByHandle = new Map(before.map((r) => [r.handle, r.role ?? ""]));
 
+    const [existingBySession] = clientSessionId
+      ? await tx
+          .select()
+          .from(bots)
+          .where(
+            and(
+              eq(bots.projectId, projectId),
+              eq(bots.colony, colony),
+              eq(bots.clientSessionId, clientSessionId),
+            ),
+          )
+          .limit(1)
+      : [undefined];
+
+    const handle = existingBySession?.handle ?? requestedHandle;
+
     // Find or create this bot's row.
-    const [existing] = await tx
-      .select()
-      .from(bots)
-      .where(and(eq(bots.projectId, projectId), eq(bots.colony, colony), eq(bots.handle, handle)))
-      .limit(1);
+    const existing =
+      existingBySession ??
+      (
+        await tx
+          .select()
+          .from(bots)
+          .where(
+            and(eq(bots.projectId, projectId), eq(bots.colony, colony), eq(bots.handle, handle)),
+          )
+          .limit(1)
+      )[0];
 
     let myId: string;
     let mySeat: number;
+    let rebound = false;
     if (existing && existing.status === "active") {
       // Rebind: same handle reopens (e.g. reconnect within grace).
       myId = existing.id;
       mySeat = existing.seat;
+      rebound = true;
       await tx
         .update(bots)
-        .set({ connectionId, lastHeartbeatAt: new Date() })
+        .set({
+          connectionId,
+          clientSessionId: clientSessionId ?? existing.clientSessionId,
+          lastHeartbeatAt: new Date(),
+        })
         .where(eq(bots.id, myId));
     } else if (existing) {
       // Reactivate an offline row at the lowest free seat.
@@ -118,6 +150,7 @@ export async function connectBot(
           seat: mySeat,
           status: "active",
           connectionId,
+          clientSessionId: clientSessionId ?? existing.clientSessionId,
           lastHeartbeatAt: new Date(),
         })
         .where(eq(bots.id, myId));
@@ -126,7 +159,14 @@ export async function connectBot(
       mySeat = await lowestFreeSeat(tx, projectId, colony);
       const [inserted] = await tx
         .insert(bots)
-        .values({ projectId, colony, handle, seat: mySeat, connectionId })
+        .values({
+          projectId,
+          colony,
+          handle,
+          seat: mySeat,
+          connectionId,
+          clientSessionId: clientSessionId ?? null,
+        })
         .returning({ id: bots.id });
       myId = inserted.id;
       prevRoleByHandle.set(handle, "");
@@ -167,7 +207,7 @@ export async function connectBot(
       role: roleForSeat(total, r.seat).role,
     }));
 
-    return { seat: mySeat, selfRole, selfSkillFiles, peerPushes, snapshot };
+    return { handle, rebound, seat: mySeat, selfRole, selfSkillFiles, peerPushes, snapshot };
   });
 }
 

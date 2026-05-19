@@ -16,14 +16,59 @@ set -euo pipefail
 
 CWD="$(pwd)"
 LOG_FILE="$CWD/.bot-hive.log"
+OWNER_FILE="$CWD/.bot-hive-session-owner"
 
 log() {
     printf '%s [stream] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
-trap 'log "script exiting via trap (signal or normal exit)"' EXIT
+cleanup_owner() {
+    if [ -f "$OWNER_FILE" ]; then
+        local owner_pid owner_session
+        owner_pid=$(sed -n 's/^pid=//p' "$OWNER_FILE" 2>/dev/null | head -n1)
+        owner_session=$(sed -n 's/^client_session_id=//p' "$OWNER_FILE" 2>/dev/null | head -n1)
+        if [ "$owner_pid" = "$$" ] && [ "$owner_session" = "$CLIENT_SESSION_ID" ]; then
+            rm -f "$OWNER_FILE"
+            log "deleted .bot-hive-session-owner"
+        fi
+    fi
+    log "script exiting via trap (signal or normal exit)"
+}
+
+session_key() {
+    local tty_name
+    tty_name=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
+    if [ -n "$tty_name" ] && [ "$tty_name" != "?" ]; then
+        printf 'tty:%s:%s' "$tty_name" "$CWD"
+        return
+    fi
+    printf 'ppid:%s:%s' "$PPID" "$CWD"
+}
+
+CLIENT_SESSION_ID="$(session_key)"
+
+trap cleanup_owner EXIT
 
 log "starting (pid=$$, cwd=$CWD)"
+log "client_session_id=$CLIENT_SESSION_ID"
+
+if [ -f "$OWNER_FILE" ]; then
+    owner_pid=$(sed -n 's/^pid=//p' "$OWNER_FILE" 2>/dev/null | head -n1)
+    owner_session=$(sed -n 's/^client_session_id=//p' "$OWNER_FILE" 2>/dev/null | head -n1)
+    if [ -n "$owner_pid" ] && kill -0 "$owner_pid" 2>/dev/null && [ "$owner_session" = "$CLIENT_SESSION_ID" ] && [ "$owner_pid" != "$$" ]; then
+        log "duplicate startup refused for client_session_id=$CLIENT_SESSION_ID owner_pid=$owner_pid"
+        echo "stream.sh: duplicate hive stream refused for this terminal session (owner pid $owner_pid)" >&2
+        exit 4
+    fi
+fi
+
+{
+    echo "client_session_id=$CLIENT_SESSION_ID"
+    echo "pid=$$"
+    echo "cwd=$CWD"
+    echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$OWNER_FILE"
+log "wrote .bot-hive-session-owner (client_session_id=$CLIENT_SESSION_ID pid=$$)"
 
 API_BASE="${BOT_HIVE_API_URL:-https://bot-hive-j0ax.onrender.com}"
 log "api base: $API_BASE"
@@ -100,7 +145,7 @@ write_role_notice() {
     log "wrote .bot-hive-role-notice (role='$role' seat=$seat total=$total)"
 }
 
-URL="${API_BASE}/api/bots/stream?repo_full_name=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$REPO" 2>/dev/null || echo "$REPO")&colony=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$COLONY" 2>/dev/null || echo "$COLONY")"
+URL="${API_BASE}/api/bots/stream?repo_full_name=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$REPO" 2>/dev/null || echo "$REPO")&colony=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$COLONY" 2>/dev/null || echo "$COLONY")&client_session_id=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$CLIENT_SESSION_ID" 2>/dev/null || echo "$CLIENT_SESSION_ID")"
 
 RETRY=2
 MAX_RETRY=30
