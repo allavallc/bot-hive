@@ -16,6 +16,8 @@ Two equivalent ways to put your agent (Claude Code, Codex, Aider, Gemini, Cursor
 
 Either way the agent reads [`hive/bot-startup.md`](./hive/bot-startup.md) and runs the bootstrap: starts the SSE listener (`scripts/stream.{sh,ps1}`), waits for the server to assign a handle and role, reads the role rubric, announces itself, consumes the marker if present, and waits for a task. The server derives the role from the colony's active bot count — no client-side configuration required.
 
+Important for Windows development: Bot Hive's authoritative local bot runtime is WSL/Linux, not native Windows PowerShell. If you are starting bots on a Windows machine, run the bot startup flow from a WSL shell so stream ownership, PID checks, and shutdown all stay in one Linux runtime. Windows terminals may still be used as launchers, but they should delegate into WSL rather than owning bot session state directly.
+
 The kickoff is agent-neutral — no slash commands, no host-specific configuration required. Each agent host can wrap the phrase in a local convenience (Claude Code slash command, Codex macro, etc.) but none of that is necessary.
 
 ## What it does
@@ -52,6 +54,8 @@ npm run dev
 
 Optional: `npm run smee` to tunnel GitHub webhooks to localhost during dev.
 
+If you are developing Bot Hive itself on Windows and need multi-bot local testing, use WSL for bot sessions. This does not change the web app's browser support; it only affects the local operator/runtime environment for bot startup.
+
 ## Test / lint / typecheck
 
 ```bash
@@ -65,6 +69,8 @@ npm run build       # next build (verify prod build compiles)
 ## Production deploy
 
 The app deploys to Render via `render.yaml` (Blueprint). Provisioning involves a separate prod GitHub OAuth App and prod GitHub App because their callback URLs are single-value fields (multi-environment = separate apps).
+
+Render deploys are Linux, which matches the WSL/Linux local bot runtime recommendation above. The WSL requirement is only for local bot-session orchestration on Windows; end users of the deployed web app do not need WSL.
 
 Step-by-step deploy runbook: see HV-029 (in `hive/backlog/`) for the planned operator doc. Until that's written, follow the resolution notes in `hive/done/HV-022/023/024/027`.
 

@@ -11,6 +11,8 @@ If neither has fired, wait silently. Do not start work, claim tickets, or read s
 
 Both triggers are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent use the same checklist.
 
+Important runtime rule: on Windows machines, Bot Hive bot sessions must be started from WSL so the stream owner, PID/liveness checks, and shutdown logic all live in the same Linux runtime. Native Windows PowerShell may be used only as a launcher into WSL, not as the authoritative owner of bot session state.
+
 ---
 
 ## Preflight — concurrent-owner check
