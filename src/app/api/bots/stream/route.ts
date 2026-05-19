@@ -141,18 +141,9 @@ export async function GET(req: Request) {
         } catch {
           clearInterval(keepalive);
         }
-        void db
-          .update(bots)
-          .set({ lastHeartbeatAt: new Date() })
-          .where(
-            and(
-              eq(bots.projectId, project.id),
-              eq(bots.colony, colony),
-              eq(bots.handle, handle),
-              eq(bots.connectionId, connectionId),
-            ),
-          )
-          .catch((err) => console.warn("[bots/stream] keepalive heartbeat:", err));
+        // HV-136: keepalive signal to client proves stream is alive. Removed DB
+        // write — it was dead code (SSE socket is the only liveness signal) and
+        // misleadingly suggested liveness could be detected from lastHeartbeatAt.
       }, 30_000);
 
       cleanup = () => {
