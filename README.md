@@ -1,111 +1,161 @@
 # Bot Hive
 
-A live kanban board over GitHub-hosted ticket files. Sign in with GitHub, install the Bot Hive app on a repo containing a `hive/` folder, and watch markdown tickets render as cards on a board that updates within seconds of every commit.
+Bot Hive helps a single developer or small team run a hive of AI bots against their own software repo.
 
-**Live**: <https://bot-hive-j0ax.onrender.com>
+It has two parts:
+- the Bot Hive web app, which shows the board, bot team, notes, and live status
+- local bot sessions, which run on the user's machine and work inside the user's repo
 
-## Getting started — kickoff
+Live app: https://bot-hive-j0ax.onrender.com
 
-Two equivalent ways to put your agent (Claude Code, Codex, Aider, Gemini, Cursor — any of them) into a Bot Hive session:
+## Who this is for
 
-1. **Type the kickoff phrase in chat:**
+Primary user:
+- you have a software repo of your own
+- you want one or more AI agent sessions working on that repo
+- you want a web UI to see and direct that work
 
-   > `start the hive`
+This README is now organized around two audiences:
+- Bot Hive users: people using Bot Hive with their own repo
+- Bot Hive maintainers: people developing the Bot Hive product itself
 
-2. **Drop a marker file at the worktree root:** `touch .bot-hive-kickoff` (or `Set-Content -Path .bot-hive-kickoff -Value ''` on Windows). The agent treats its presence as equivalent to the phrase. The Add-a-Bot button on the live board writes this marker for you so spawned bots auto-bootstrap without the operator typing anything in the new terminal.
+## For Bot Hive users
 
-Either way the agent reads [`hive/bot-startup.md`](./hive/bot-startup.md) and runs the bootstrap: starts the SSE listener (`scripts/stream.{sh,ps1}`), waits for the server to assign a handle and role, reads the role rubric, announces itself, consumes the marker if present, and waits for a task. The server derives the role from the colony's active bot count — no client-side configuration required.
+### The user mental model
 
-The kickoff is agent-neutral — no slash commands, no host-specific configuration required. Each agent host can wrap the phrase in a local convenience (Claude Code slash command, Codex macro, etc.) but none of that is necessary.
+From a user's point of view, Bot Hive is not the `bot-hive` repo.
 
-## What it does
+It is:
+1. a web app connected to the user's repo
+2. a local bot runtime that starts one or more agent sessions in that repo
+3. a `hive/` workspace in that repo for project coordination
 
-- Reads tickets from your repo's `hive/backlog/`, `in-progress/`, `in-review/`, `done/`, `blocked/`, `not-doing/` folders
-- Renders them as a kanban with priority, effort, feature-set, and assignee badges
-- Re-syncs on every push to your repo via GitHub webhooks; open boards refresh in real time via SSE
-- Multi-user: any GitHub collaborator on your connected repo can sign in and see the same board (no invite step — GitHub permissions are the source of truth)
+The intended happy path is:
+1. Sign into the Bot Hive web app.
+2. Connect or install Bot Hive on your repo.
+3. Initialize your repo for Bot Hive.
+4. Start one local bot from your repo.
+5. Add more bots if you want more throughput.
+6. Use the web app to watch and direct the swarm.
 
-The ticket file format and dev workflow live in `hive/HIVE.md`. Bot identity, seat assignment, heartbeats, and the sign-off flow are documented in `hive/seats.md`.
+### What belongs in a user's repo
 
-## Stack
+A user's repo should primarily contain project coordination state, such as:
+- `hive/backlog/`
+- `hive/in-progress/`
+- `hive/in-review/`
+- `hive/done/`
+- `hive/blocked/`
+- `hive/not-doing/`
+- `hive/feature-sets/` when feature sets are used
 
-Next.js 15 (App Router) · React 19 · TypeScript 5.6 · Drizzle ORM + Postgres · Better Auth (GitHub OAuth) · `@octokit/app` for GitHub Apps · CSS Modules · Vitest · Biome.
+Longer-term product direction:
+- the repo should hold hive work
+- Bot Hive itself should hold default bot behavior
+- repo-level runtime overrides should be optional, not required
 
-## Local dev
+See `docs/2026-05-19-user-setup-and-runtime-boundary.md` for the design note behind this boundary.
+
+### Important note about the current implementation
+
+Today, Bot Hive is still partly coupled to repo-resident runtime files. In this codebase:
+- role assignment defaults are derived from `hive/roles.md`
+- handle assignment currently reads `hive/handles.txt`
+- startup flows reference repo-local skill files under `hive/skills/`
+
+That is the current implementation, but not the intended long-term product boundary for normal users.
+
+## For Bot Hive maintainers
+
+If you are developing the Bot Hive product itself, this repo is both:
+- the application source code
+- the operational example, because Bot Hive uses its own `hive/` workflow on itself
+
+### Repo layout
+
+```text
+src/                  Next.js app source
+src/db/               Drizzle schema + tests
+src/lib/              Auth, GitHub, sync, bot runtime, SSE, helpers
+src/components/       Reusable UI primitives
+src/app/              App Router routes
+drizzle/              Generated SQL migrations + meta snapshots
+hive/                 Bot Hive's own development tickets and workflow docs
+docs/                 Design, deploy, and architecture docs
+scripts/              Startup, stream, role-check, and workflow helpers
+AGENTS.md             Canonical project rules for AI agents in this repo
+CLAUDE.md             Claude Code shim pointing at AGENTS.md
+```
+
+### Local development
 
 ```bash
-# 1. Install
+# 1. Install dependencies
 npm install
 
 # 2. Configure env
 cp .env.example .env
-#    Fill in: DATABASE_URL, BETTER_AUTH_SECRET, GITHUB_CLIENT_ID/SECRET (OAuth App),
-#             GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, GITHUB_APP_WEBHOOK_SECRET
-#    See HV-003 + HV-004 for how to register the GitHub OAuth App + GitHub App.
+# Fill in:
+# - DATABASE_URL
+# - BETTER_AUTH_SECRET
+# - GITHUB_CLIENT_ID
+# - GITHUB_CLIENT_SECRET
+# - GITHUB_APP_ID
+# - GITHUB_APP_PRIVATE_KEY_PATH
+# - GITHUB_APP_WEBHOOK_SECRET
 
 # 3. Migrate the local DB
 npm run db:migrate
 
-# 4. Run
+# 4. Start the app
 npm run dev
 ```
 
-Optional: `npm run smee` to tunnel GitHub webhooks to localhost during dev.
+Optional:
+- `npm run smee` to tunnel GitHub webhooks to localhost during development
 
-## Test / lint / typecheck
+### Test, lint, typecheck, build
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run lint        # biome check
-npm run format      # biome format --write
-npm run test        # vitest run
-npm run build       # next build (verify prod build compiles)
+npm run typecheck
+npm run lint
+npm run format
+npm run test
+npm run build
 ```
+
+### Maintainer workflow docs
+
+If you are working in this repo as a human or agent, read:
+- `AGENTS.md` — canonical workflow rules for this repo
+- `hive/HIVE.md` — file-based hive workflow spec
+- `hive/bot-startup.md` — startup procedure
+- `hive/bot-shutdown.md` — shutdown procedure
+- `hive/seats.md` — seat assignment and liveness design
+- `hive/roles.md` — role consolidation and role rubric pointers
+- `docs/architecture.md` — architecture overview
+- `docs/DEPLOY.md` — deploy/runbook details
+
+## What Bot Hive does
+
+- Reads tickets from a repo's `hive/` workspace
+- Renders them as a live kanban board
+- Syncs updates from GitHub into the app
+- Shows active bots, roles, and notes in real time
+- Lets one developer or a small team coordinate a bot swarm against one repo
+
+## Current stack
+
+Next.js 15 (App Router) · React 19 · TypeScript 5.6 · Drizzle ORM + Postgres · Better Auth (GitHub OAuth) · `@octokit/app` · Vitest · Biome
 
 ## Production deploy
 
-The app deploys to Render via `render.yaml` (Blueprint). Provisioning involves a separate prod GitHub OAuth App and prod GitHub App because their callback URLs are single-value fields (multi-environment = separate apps).
+The app deploys to Render via `render.yaml`.
 
-Step-by-step deploy runbook: see HV-029 (in `hive/backlog/`) for the planned operator doc. Until that's written, follow the resolution notes in `hive/done/HV-022/023/024/027`.
+Provisioning needs separate prod GitHub OAuth App and prod GitHub App registrations because callback URLs are single-value fields.
 
-## Working with bots
-
-Bot Hive is built to be developed by multiple AI agent sessions (Claude, Codex, Cursor, Aider, Gemini, etc.) concurrently — alongside humans. When working in this repo as an agent, or pointing one here, read these:
-
-- [`AGENTS.md`](./AGENTS.md) — **canonical project rules**: identity, commit flow, the swarm coordination protocol, conflict response. Agent-neutral; any AI tool reads this.
-- [`CLAUDE.md`](./CLAUDE.md) — Claude Code-specific shim that points to `AGENTS.md`. Other agents don't need it.
-- [`hive/HIVE.md`](./hive/HIVE.md) — the format spec, including the "Working in parallel" section that defines the protocol for any repo using the hive format.
-- `hive/colonies/<github-login>/focus.md` — per-colony standing order from the human who owns that colony. Each agent reads its own colony's focus file on session start (colony resolved from `.bot-hive-identity` in the worktree).
-- `hive/events/<colony>.<handle>.log` — per-actor append-only event logs, keyed by the qualified actor name. Agents read the merged view (`cat hive/events/*.log | sort | tail -50`) on session start to catch lifecycle transitions.
-- `hive/notes-to-bots/<human>.log` — humans' notes to bots (written via the swarm-panel composer in the live board UI).
-- `hive/notes-to-humans/<bot>.log` — bots' notes to humans (questions, status updates, blockers). Replaces the legacy `hive/questions-for-human.md`.
-
-The short version: every commit goes via PR + auto-merge, gated by the `ci` GitHub Actions check. The server assigns each bot a handle and role when it connects — no client-side setup needed. Conflicts that can't be resolved by trivial git mechanics escalate to humans, never to guessed merges.
-
-## Repository layout
-
-```
-src/                  Next.js app source
-src/db/               Drizzle schema + tests
-src/lib/              Auth, GitHub, sync, broadcast, access (derived membership), test-db (transactional fixture)
-src/components/       Reusable UI primitives (PageShell, Wordmark, etc.)
-src/app/              App Router routes
-drizzle/              Generated SQL migrations + meta snapshots
-hive/                 Bot Hive's own dev tickets (uses the format on itself)
-  HIVE.md             Workflow doc — ticket format, lifecycle, conventions
-  colonies/           Per-colony state — colonies/<github-login>/focus.md is the standing order for that human's bots
-  events/             Per-actor lifecycle event logs, keyed by <colony>.<handle>.log
-  notes-to-bots/      Humans' notes to bots (written via swarm panel composer)
-  notes-to-humans/    Bots' notes to humans (questions, status, blockers)
-  feature-sets/       FST-XXX feature-set rationale + ticket lists
-  backlog/ in-progress/ in-review/ done/ blocked/ not-doing/
-tasks/
-  lessons.md          Self-correction log (reread at session start)
-docs/                 Operator docs (currently just images/)
-AGENTS.md             Canonical project rules for AI agents working this repo
-CLAUDE.md             Claude Code-specific shim pointing at AGENTS.md
-```
+For deploy details, see `docs/DEPLOY.md`.
 
 ## License
 
-Proprietary — all rights reserved. The repo is public for operational reasons (CI, branch protection, audit transparency); public visibility does **not** grant any right to use, copy, modify, or distribute the Software. See [`LICENSE`](./LICENSE) for the full terms.
+Proprietary — all rights reserved. The repo is public for operational reasons (CI, branch protection, audit transparency); public visibility does not grant any right to use, copy, modify, or distribute the software. See `LICENSE` for the full terms.
