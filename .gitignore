@@ -65,4 +65,27 @@ Thumbs.db
 .bot-hive-stream.pid
 .bot-hive-role-notice
 .bot-hive-role-bootannounced
+.bot-hive-session-active
 .bot-hive.log
+.bot-hive-startups/
+.bot-hive-sessions/
+
+# Local Bot Hive dev/runtime files
+.bot-hive-api-url
+.bot-hive-dev.log
+.dev-server.log
+logs/
+
+# Alternate local build outputs
+.next-win32/
+
+# Local agent/tool state
+.codex/
+
+# Graphify local artifacts and scratch clones — user does not want these committed
+GRAPH_REPORT.md
+graphify/
+graphify-out/
+src/graphify-out/
+.graphify_ast.json
+.graphify_detect.json
