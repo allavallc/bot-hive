@@ -11,6 +11,7 @@ With multiple colonies and multiple bots per colony, humans need a single place 
 
 ## Tickets
 - HV-148 — Fix local board mismatch where in-progress shows active bots but the My Bot Team modal renders no bots
+- HV-149 — Fix `GET /api/bots/colony` returning 500 so bot-team surfaces have a stable source of truth
 - HV-XXX: API — `GET /api/projects/[id]/bot-team` returns `[{colony, bot, roles[], doingNow, lastActive}]`. Reads from `hive/events/<colony>.<handle>.log` for last activity, infers roles via the same logic as `whoami.*` (FS-023), reads `hive/in-progress/` for "doing now."
 - HV-XXX: Modal component — table grouped by colony. Sortable. Shows handle in colony's robotColor.
 - HV-XXX: Trigger — "My Bot Team" button next to "Add a bot" on the project page.
