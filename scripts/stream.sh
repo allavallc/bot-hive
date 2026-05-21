@@ -22,12 +22,25 @@ fi
 
 CWD="$(pwd)"
 LOG_FILE="$CWD/.bot-hive.log"
+PID_FILE_PATH=""
 
 log() {
   printf '%s [stream] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
-trap 'log "script exiting via trap (signal or normal exit)"' EXIT
+cleanup_pid_file() {
+  local pid_path="$1"
+  [ -n "$pid_path" ] || return 0
+  [ -f "$pid_path" ] || return 0
+  local recorded_pid
+  recorded_pid="$(cat "$pid_path" 2>/dev/null || true)"
+  if [ "$recorded_pid" = "$$" ]; then
+    rm -f "$pid_path"
+    log "removed stream pid file $pid_path"
+  fi
+}
+
+trap 'cleanup_pid_file "$PID_FILE_PATH"; log "script exiting via trap (signal or normal exit)"' EXIT
 log "starting (pid=$$, cwd=$CWD, startup_id=$STARTUP_ID)"
 
 read_local_value() {
@@ -37,11 +50,61 @@ read_local_value() {
 }
 
 LOCAL_API_BASE_PATH="$CWD/.bot-hive-api-url"
+LOCAL_DEV_LOG_PATH="$CWD/.bot-hive-dev.log"
+read_dev_log_urls() {
+  local log_path="$1"
+  [ -f "$log_path" ] || return 0
+  python3 - "$log_path" <<'PY'
+import re, sys
+path = sys.argv[1]
+try:
+    text = open(path, 'r', encoding='utf-8', errors='ignore').read()
+except OSError:
+    raise SystemExit(0)
+locals_ = re.findall(r'Local:\s+(http://localhost:\d+)', text)
+networks = re.findall(r'Network:\s+(http://[^\s]+)', text)
+if locals_:
+    print(f"LOCAL={locals_[-1]}")
+if networks:
+    print(f"NETWORK={networks[-1]}")
+PY
+}
+probe_api_base() {
+  local base="$1"
+  [ -n "$base" ] || return 1
+  curl -fsS --max-time 2 "$base/" >/dev/null 2>&1
+}
+DEV_LOG_LOCAL_API_BASE=""
+DEV_LOG_NETWORK_API_BASE=""
+while IFS='=' read -r key value; do
+  case "$key" in
+    LOCAL) DEV_LOG_LOCAL_API_BASE="$value" ;;
+    NETWORK) DEV_LOG_NETWORK_API_BASE="$value" ;;
+  esac
+done < <(read_dev_log_urls "$LOCAL_DEV_LOG_PATH")
 if [ -n "${BOT_HIVE_API_URL:-}" ]; then
   API_BASE="$BOT_HIVE_API_URL"
 elif [ -f "$LOCAL_API_BASE_PATH" ]; then
   API_BASE="$(tr -d '\r\n' < "$LOCAL_API_BASE_PATH")"
 else
+  API_BASE="${DEV_LOG_LOCAL_API_BASE:-}"
+  if [ -z "$API_BASE" ] && [ -n "$DEV_LOG_NETWORK_API_BASE" ]; then
+    API_BASE="$DEV_LOG_NETWORK_API_BASE"
+  fi
+fi
+if [ -n "$DEV_LOG_LOCAL_API_BASE" ] && [ -n "$API_BASE" ] && [ "$DEV_LOG_LOCAL_API_BASE" != "$API_BASE" ] && [[ "$API_BASE" == http://localhost:* ]]; then
+  log "api base override: .bot-hive-api-url said '$API_BASE' but .bot-hive-dev.log shows '$DEV_LOG_LOCAL_API_BASE'; preferring dev log local URL"
+  API_BASE="$DEV_LOG_LOCAL_API_BASE"
+fi
+if [[ "$API_BASE" == http://localhost:* ]] && ! probe_api_base "$API_BASE" && [ -n "$DEV_LOG_NETWORK_API_BASE" ]; then
+  log "api base localhost probe failed for '$API_BASE'; falling back to dev-log network URL '$DEV_LOG_NETWORK_API_BASE'"
+  API_BASE="$DEV_LOG_NETWORK_API_BASE"
+fi
+if [ -n "$API_BASE" ] && [ -z "${BOT_HIVE_API_URL:-}" ]; then
+  printf '%s\n' "$API_BASE" > "$LOCAL_API_BASE_PATH"
+  log "api base persisted to .bot-hive-api-url: $API_BASE"
+fi
+if [ -z "$API_BASE" ]; then
   API_BASE="https://bot-hive-j0ax.onrender.com"
 fi
 log "api base: $API_BASE"
@@ -92,6 +155,7 @@ if [ "$IS_SECONDARY" = false ]; then
     fi
   done
   echo "$$" > "$CWD/.bot-hive-stream.pid"
+  PID_FILE_PATH="$CWD/.bot-hive-stream.pid"
   log "wrote .bot-hive-stream.pid (PID=$$)"
 fi
 
@@ -123,6 +187,7 @@ set_state_paths() {
     fi
     STATE_DIR="$wt"
     echo "$$" > "$wt/.bot-hive-stream.pid"
+    PID_FILE_PATH="$wt/.bot-hive-stream.pid"
     log "wrote $wt/.bot-hive-stream.pid (PID=$$)"
   fi
   printf 'colony=%s\nhandle=%s\nsession_id=%s\n' "$COLONY" "$handle" "$SESSION_ID" > "$STATE_DIR/.bot-hive-identity"
@@ -139,6 +204,7 @@ import json, os, sys, datetime
 handoff_dir, startup_id, state_dir, colony, handle, role, seat, total, skill_files, departed, session_id = sys.argv[1:]
 payload = {
     "startupId": startup_id,
+    "state": "live",
     "stateDir": os.path.abspath(state_dir),
     "noticePath": os.path.join(os.path.abspath(state_dir), ".bot-hive-role-notice"),
     "colony": colony,
@@ -149,6 +215,8 @@ payload = {
     "skillFiles": [s for s in skill_files.split(",") if s],
     "departed": departed,
     "sessionId": session_id,
+    "streamPid": os.getpid(),
+    "reason": "",
     "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
 }
 with open(os.path.join(handoff_dir, f"{startup_id}.json"), "w", encoding="utf-8") as f:

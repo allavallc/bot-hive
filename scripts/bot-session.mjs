@@ -65,6 +65,16 @@ export function clearSessionRecord(sharedRoot, clientSessionId) {
   } catch {}
 }
 
+export function readCurrentSessionRecord({ cwd = process.cwd(), execImpl = execFileSync } = {}) {
+  const sharedRoot = getSharedHiveRoot(cwd, execImpl);
+  const clientSessionId = deriveClientSessionId({ cwd, execImpl });
+  return {
+    sharedRoot,
+    clientSessionId,
+    record: readSessionRecord(sharedRoot, clientSessionId),
+  };
+}
+
 export function pidIsAlive(pid) {
   const n = Number.parseInt(`${pid ?? ""}`, 10);
   if (!Number.isFinite(n) || n <= 0) return false;
@@ -182,7 +192,7 @@ export function resolveStateDir({
   const sharedRoot = getSharedHiveRoot(cwd, execImpl);
   const sessionId = clientSessionId || deriveClientSessionId({ cwd, execImpl });
   const record = readSessionRecord(sharedRoot, sessionId);
-  if (record?.stateDir && fs.existsSync(record.stateDir)) {
+  if (record?.stateDir) {
     return path.resolve(record.stateDir);
   }
   return path.resolve(cwd);
@@ -207,6 +217,26 @@ function main(argv) {
   }
   if (command === "clear-current") {
     clearSessionRecord(sharedRoot, clientSessionId);
+    return;
+  }
+  if (command === "current-record-env") {
+    const { record } = readCurrentSessionRecord({ cwd });
+    if (!record) return;
+    const entries = {
+      client_session_id: clientSessionId,
+      state_dir: record.stateDir || "",
+      notice_path: record.noticePath || "",
+      startup_id: record.startupId || "",
+      startup_mode: record.mode || "",
+      stream_pid: record.streamPid || "",
+      handle: record.handle || "",
+      session_id: record.sessionId || "",
+    };
+    process.stdout.write(
+      `${Object.entries(entries)
+        .map(([key, value]) => `${key}=${value}`)
+        .join("\n")}\n`,
+    );
     return;
   }
   throw new Error(`unknown command: ${command}`);

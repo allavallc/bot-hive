@@ -9,7 +9,8 @@ A view-only modal triggered by a button on the project board, mirroring Add-a-Bo
 ## Rationale
 With multiple colonies and multiple bots per colony, humans need a single place to see who's working on what. Without it, surfacing colony state means reading event logs by hand. The modal is read-only — no claim/release controls — to keep it cheap to ship and impossible to break.
 
-## Tickets (skeletons)
+## Tickets
+- HV-148 — Fix local board mismatch where in-progress shows active bots but the My Bot Team modal renders no bots
 - HV-XXX: API — `GET /api/projects/[id]/bot-team` returns `[{colony, bot, roles[], doingNow, lastActive}]`. Reads from `hive/events/<colony>.<handle>.log` for last activity, infers roles via the same logic as `whoami.*` (FS-023), reads `hive/in-progress/` for "doing now."
 - HV-XXX: Modal component — table grouped by colony. Sortable. Shows handle in colony's robotColor.
 - HV-XXX: Trigger — "My Bot Team" button next to "Add a bot" on the project page.

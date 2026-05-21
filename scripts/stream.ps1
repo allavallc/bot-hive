@@ -22,6 +22,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Script:logPath = (Join-Path (Get-Location).Path ".bot-hive.log")
+$Script:pidFilePath = $null
 
 function Write-StreamLog {
     param([string]$Message)
@@ -35,9 +36,95 @@ function Write-StreamLog {
     } catch { }
 }
 
+function Remove-OwnPidFile {
+    if (-not $Script:pidFilePath) { return }
+    if (-not (Test-Path $Script:pidFilePath)) { return }
+    try {
+        $recordedPid = (Get-Content $Script:pidFilePath -ErrorAction Stop | Select-Object -First 1)
+        if ($recordedPid -and [int]$recordedPid -eq $PID) {
+            Remove-Item $Script:pidFilePath -Force -ErrorAction SilentlyContinue
+            Write-StreamLog "removed stream pid file $Script:pidFilePath"
+        }
+    } catch { }
+}
+
 $cwdPath = (Get-Location).Path
 
-Write-StreamLog "starting (pid=$PID, cwd=$cwdPath)"
+function Write-StartupLaunch {
+    if (-not $StartupId) { return }
+    $launchDir = Join-Path $cwdPath ".bot-hive-launches"
+    New-Item -ItemType Directory -Force -Path $launchDir | Out-Null
+    $payload = [ordered]@{
+        startupId = $StartupId
+        pid = $PID
+        cwd = (Resolve-Path $cwdPath | Select-Object -ExpandProperty Path)
+        at = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText(
+        (Join-Path $launchDir "$StartupId.json"),
+        $payload,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Write-StreamLog "wrote startup launch .bot-hive-launches/$StartupId.json"
+}
+
+function Write-StartupResult {
+    param(
+        [string]$State,
+        [string]$Reason = "",
+        $Event = $null
+    )
+    if (-not $StartupId) { return }
+    $handoffDir = Join-Path $cwdPath ".bot-hive-startups"
+    New-Item -ItemType Directory -Force -Path $handoffDir | Out-Null
+    $resolvedStateDir = ""
+    $resolvedNoticePath = ""
+    if ($Script:stateDir -and (Test-Path $Script:stateDir)) {
+        $resolvedStateDir = Resolve-Path $Script:stateDir | Select-Object -ExpandProperty Path
+        $resolvedNoticePath = Join-Path $resolvedStateDir ".bot-hive-role-notice"
+    } elseif ($Script:stateDir) {
+        $resolvedStateDir = $Script:stateDir
+        $resolvedNoticePath = Join-Path $Script:stateDir ".bot-hive-role-notice"
+    }
+    $payload = [ordered]@{
+        startupId = $StartupId
+        state = $State
+        stateDir = $resolvedStateDir
+        noticePath = $resolvedNoticePath
+        colony = $colony
+        handle = $Script:handle
+        role = if ($Event) { $Event.role } else { $null }
+        seat = if ($Event) { $Event.seat } else { $null }
+        total = if ($Event) { $Event.total } else { $null }
+        skillFiles = if ($Event) { @($Event.skillFiles) } else { @() }
+        sessionId = $Script:sessionId
+        streamPid = $PID
+        reason = $Reason
+        at = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText(
+        (Join-Path $handoffDir "$StartupId.json"),
+        $payload,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Write-StreamLog "wrote startup result state=$State path=.bot-hive-startups/$StartupId.json reason='$Reason'"
+}
+
+function Fail-Startup {
+    param(
+        [string]$Reason,
+        [int]$ExitCode,
+        [string]$Message
+    )
+    Write-StartupResult -State "failed" -Reason $Reason
+    Write-StreamLog "FATAL: $Message (reason=$Reason exit=$ExitCode)"
+    Write-Error $Message
+    exit $ExitCode
+}
+
+Write-StreamLog "starting (pid=$PID, cwd=$cwdPath, startup_id=$StartupId)"
+Write-StartupLaunch
+Write-StartupResult -State "pending"
 
 function Read-LocalValue {
     param(
@@ -57,12 +144,28 @@ function Read-LocalValue {
 }
 
 $localApiBasePath = Join-Path $cwdPath ".bot-hive-api-url"
-$apiBase = if ($env:BOT_HIVE_API_URL) {
-    $env:BOT_HIVE_API_URL
-} elseif (Test-Path $localApiBasePath) {
-    (Get-Content $localApiBasePath -Raw -ErrorAction SilentlyContinue).Trim()
-} else {
-    "https://bot-hive-j0ax.onrender.com"
+$localDevLogPath = Join-Path $cwdPath ".bot-hive-dev.log"
+. (Join-Path $PSScriptRoot "lib/api-base.ps1")
+$apiBaseDecision = Resolve-BotHiveApiBase `
+    -PersistedApiBasePath $localApiBasePath `
+    -DevLogPath $localDevLogPath `
+    -EnvApiBase $env:BOT_HIVE_API_URL `
+    -DefaultApiBase "https://bot-hive-j0ax.onrender.com"
+$apiBase = $apiBaseDecision.ApiBase
+if ($apiBaseDecision.CandidatesTried -and $apiBaseDecision.CandidatesTried.Count -gt 0) {
+    Write-StreamLog "api base candidates: $($apiBaseDecision.CandidatesTried -join '; ')"
+}
+if ($apiBaseDecision.ReachabilityChecked -and -not $apiBaseDecision.Reachable) {
+    Write-StreamLog "api base warning: no reachable candidate found; proceeding with '$apiBase' from source '$($apiBaseDecision.Source)'"
+    if ($StartupId) {
+        Fail-Startup -Reason "api-base-unreachable" -ExitCode 9 -Message "stream.ps1: no reachable API base candidate for startup (tried: $($apiBaseDecision.CandidatesTried -join '; '))"
+    }
+}
+if (-not $env:BOT_HIVE_API_URL -and $apiBase) {
+    [System.IO.File]::WriteAllText($localApiBasePath, "$apiBase`n", [System.Text.UTF8Encoding]::new($false))
+    Write-StreamLog "api base persisted to .bot-hive-api-url: $apiBase (source=$($apiBaseDecision.Source))"
+} elseif ($env:BOT_HIVE_API_URL) {
+    Write-StreamLog "api base from BOT_HIVE_API_URL: $apiBase"
 }
 Write-StreamLog "api base: $apiBase"
 
@@ -77,9 +180,7 @@ if (-not $colony) {
     }
 }
 if (-not $colony) {
-    Write-StreamLog "FATAL: could not resolve colony via 'gh api user' or .bot-hive-identity"
-    Write-Error "stream.ps1: could not resolve colony from 'gh api user' or .bot-hive-identity"
-    exit 2
+    Fail-Startup -Reason "colony-unresolved" -ExitCode 2 -Message "stream.ps1: could not resolve colony from 'gh api user' or .bot-hive-identity"
 }
 Write-StreamLog "colony: $colony"
 
@@ -87,9 +188,7 @@ Write-StreamLog "colony: $colony"
 $originUrl = ""
 try { $originUrl = (git remote get-url origin 2>$null) } catch { $originUrl = "" }
 if (-not $originUrl) {
-    Write-StreamLog "FATAL: no 'origin' git remote"
-    Write-Error "stream.ps1: no 'origin' git remote"
-    exit 3
+    Fail-Startup -Reason "origin-remote-missing" -ExitCode 3 -Message "stream.ps1: no 'origin' git remote"
 }
 $repoFullName = $originUrl `
     -replace '\.git$', '' `
@@ -109,9 +208,7 @@ if (Test-Path $existingPidFile) {
         try { Get-Process -Id $existingPid -ErrorAction Stop | Out-Null; $pidAlive = $true } catch { }
         if ($pidAlive) {
             if (-not $StartupId) {
-                Write-StreamLog "FATAL: live stream already owns cwd (PID=$existingPid), but no StartupId was provided"
-                Write-Error "stream.ps1: live .bot-hive-stream.pid already exists; startup must pass -StartupId for same-root multi-bot startup."
-                exit 6
+                Fail-Startup -Reason "startup-id-required-for-secondary" -ExitCode 6 -Message "stream.ps1: live .bot-hive-stream.pid already exists; startup must pass -StartupId for same-root multi-bot startup."
             }
             $isSecondary = $true
             Write-StreamLog "live root stream detected (PID=$existingPid); secondary startup id=$StartupId"
@@ -134,6 +231,7 @@ if (-not $isSecondary) {
     }
 
     $PID | Out-File -FilePath (Join-Path $cwdPath ".bot-hive-stream.pid") -Encoding ascii -Force
+    $Script:pidFilePath = (Join-Path $cwdPath ".bot-hive-stream.pid")
     Write-StreamLog "wrote .bot-hive-stream.pid (PID=$PID)"
 }
 
@@ -197,8 +295,7 @@ function Set-StatePaths {
                     $checkoutExitCode = 1
                 }
                 if ($cloneExitCode -ne 0 -or $checkoutExitCode -ne 0) {
-                    Write-StreamLog "FATAL: fallback checkout failed (clone=$cloneExitCode checkout=$checkoutExitCode)"
-                    [Environment]::Exit(8)
+                    Fail-Startup -Reason "worktree-create-failed" -ExitCode 8 -Message "stream.ps1: fallback checkout failed (clone=$cloneExitCode checkout=$checkoutExitCode)"
                 }
             }
         } else {
@@ -206,6 +303,7 @@ function Set-StatePaths {
         }
         $Script:stateDir = $worktreePath
         $PID | Out-File -FilePath (Join-Path $worktreePath ".bot-hive-stream.pid") -Encoding ascii -Force
+        $Script:pidFilePath = (Join-Path $worktreePath ".bot-hive-stream.pid")
         Write-StreamLog "wrote $worktreePath\.bot-hive-stream.pid (PID=$PID)"
     }
     # Write identity file.
@@ -221,27 +319,7 @@ function Set-StatePaths {
 
 function Write-StartupHandoff {
     param($Event)
-    if (-not $StartupId) { return }
-    $handoffDir = Join-Path $cwdPath ".bot-hive-startups"
-    New-Item -ItemType Directory -Force -Path $handoffDir | Out-Null
-    $payload = [ordered]@{
-        startupId = $StartupId
-        stateDir = Resolve-Path $Script:stateDir | Select-Object -ExpandProperty Path
-        noticePath = Join-Path (Resolve-Path $Script:stateDir | Select-Object -ExpandProperty Path) ".bot-hive-role-notice"
-        colony = $colony
-        handle = $Script:handle
-        role = $Event.role
-        seat = $Event.seat
-        total = $Event.total
-        skillFiles = @($Event.skillFiles)
-        at = (Get-Date).ToUniversalTime().ToString('o')
-    } | ConvertTo-Json -Compress
-    [System.IO.File]::WriteAllText(
-        (Join-Path $handoffDir "$StartupId.json"),
-        $payload,
-        [System.Text.UTF8Encoding]::new($false)
-    )
-    Write-StreamLog "wrote startup handoff .bot-hive-startups/$StartupId.json"
+    Write-StartupResult -State "live" -Event $Event
 }
 
 function Write-RoleNotice {
@@ -326,8 +404,7 @@ try {
                                 "role=$($evt.role)" | Out-File -FilePath $bootStampPath -Encoding utf8
                                 Write-StreamLog "wrote boot bootannounced stamp (role='$($evt.role)')"
                             } elseif ($Script:handle -ne $evt.handle) {
-                                Write-StreamLog "FATAL: server returned handle '$($evt.handle)' for existing stream handle '$Script:handle'"
-                                [Environment]::Exit(7)
+                                Fail-Startup -Reason "handle-mismatch" -ExitCode 7 -Message "stream.ps1: server returned handle '$($evt.handle)' for existing stream handle '$Script:handle'"
                             }
                             Write-RoleNotice -Event $evt
                             Write-StartupHandoff -Event $evt
@@ -370,5 +447,6 @@ try {
         }
     }
 } finally {
+    Remove-OwnPidFile
     Write-StreamLog "script exiting (normal/exception/PowerShell shutdown)"
 }

@@ -73,6 +73,8 @@ Thumbs.db
 # Local Bot Hive dev/runtime files
 .bot-hive-api-url
 .bot-hive-dev.log
+.bot-hive-launches/
+.single-dev-*.log
 .dev-server.log
 logs/
 

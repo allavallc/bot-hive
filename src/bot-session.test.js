@@ -46,6 +46,25 @@ describe("bot-session helper", () => {
     ).toBe(stateDir);
   });
 
+  it("trusts the recorded stateDir even before that path exists locally", async () => {
+    const mod = await loadModule();
+    const sharedRoot = makeTempDir();
+    const stateDir = path.join(sharedRoot, "worktrees", "scout");
+
+    mod.writeSessionRecord(sharedRoot, "client-2", {
+      stateDir,
+      streamPid: 4321,
+    });
+
+    expect(
+      mod.resolveStateDir({
+        cwd: sharedRoot,
+        clientSessionId: "client-2",
+        execImpl: () => `${path.join(sharedRoot, ".git")}\n`,
+      }),
+    ).toBe(stateDir);
+  });
+
   it("falls back to cwd when no session record exists", async () => {
     const mod = await loadModule();
     const sharedRoot = makeTempDir();
@@ -56,6 +75,44 @@ describe("bot-session helper", () => {
         execImpl: () => `${path.join(sharedRoot, ".git")}\n`,
       }),
     ).toBe(sharedRoot);
+  });
+
+  it("reads the current session record using the derived client session id", async () => {
+    const mod = await loadModule();
+    const sharedRoot = makeTempDir();
+    const cwd = path.join(sharedRoot, "worktrees", "buzz");
+    fs.mkdirSync(cwd, { recursive: true });
+
+    const execImpl = (...args) => {
+      if (args[0] === "git") return `${path.join(sharedRoot, ".git")}\n`;
+      throw new Error(`unexpected command: ${args[0]}`);
+    };
+    const clientSessionId = mod.deriveClientSessionId({
+      cwd,
+      platform: process.platform,
+      env: process.env,
+      ppid: process.ppid,
+      execImpl,
+    });
+
+    mod.writeSessionRecord(sharedRoot, clientSessionId, {
+      stateDir: cwd,
+      streamPid: 5678,
+      handle: "buzz",
+    });
+
+    const result = mod.readCurrentSessionRecord({
+      cwd,
+      execImpl,
+    });
+
+    expect(result.clientSessionId).toBe(clientSessionId);
+    expect(result.sharedRoot).toBe(sharedRoot);
+    expect(result.record).toMatchObject({
+      stateDir: cwd,
+      streamPid: 5678,
+      handle: "buzz",
+    });
   });
 
   it("derives a stable posix session id from terminal env when present", async () => {

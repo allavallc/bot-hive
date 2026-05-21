@@ -1,174 +1,281 @@
 # Bot startup
 
-One procedure for all bots. Every session — PM, coder, tester — runs the same steps. The server assigns your handle and role; you do not need to know them in advance.
-
-**Triggers** (either one fires this procedure):
-
-1. The operator types `start the hive` in chat.
-2. A `.bot-hive-kickoff` marker file exists at the cwd (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed at step 5.
-
-If neither has fired, wait silently. Do not start work, claim tickets, or read skill files before completing startup.
-
-Both triggers are agent-neutral — Claude Code, Codex, Aider, Gemini, Cursor, and any future agent use the same checklist.
+One procedure for all bots. Every session — PM, coder, tester — runs the same startup. The server assigns your handle and role; you do not choose them locally.
 
 ---
 
-## Preflight — concurrent-owner check
+## STOP: do nothing until a trigger fires
 
-Before running steps 1–5, check whether another agent already owns this session:
+Do not read skill files, claim tickets, start work, or edit code until one of these triggers fires:
 
-- POSIX: `[ -f .bot-hive-stream.pid ] && kill -0 "$(cat .bot-hive-stream.pid)" 2>/dev/null`
-- Windows PowerShell: `if (Test-Path .bot-hive-stream.pid) { try { Get-Process -Id (Get-Content .bot-hive-stream.pid) -ErrorAction Stop | Out-Null; $true } catch { $false } }`
+1. The operator types `hive add a bot` in chat (preferred) or `start the hive` (legacy alias).
+2. A `.bot-hive-kickoff` marker file exists at the cwd root.
 
-If a live owner is found, **stop**. Tell the operator: "Another session is already running as a bot here. To add a new bot, open a fresh terminal and type `start the hive` there."
-
-Only continue if no live owner is found.
+If neither trigger has fired, wait silently.
 
 ---
 
-## Step 1. Start the SSE listener
+## Startup compliance contract
+
+Treat startup as a mandatory checklist, not free-form reasoning.
+
+You must:
+- execute the steps below in order
+- print the required `Step N: ...` line immediately after completing each step
+- stop immediately if any step fails
+- treat the wrapper's returned `key=value` output as the only authority for startup success
+
+If startup fails:
+- surface the wrapper error
+- stop immediately
+- do not improvise a fallback procedure
+- do not announce success
+
+### Forbidden during startup
+
+These are protocol violations even if the bot eventually connects:
+- checking `.bot-hive-stream.pid` to decide whether startup succeeded
+- polling temp task files to infer startup state
+- running `tasklist`, `ps`, or similar commands to prove startup succeeded
+- hand-running `stream.ps1`, `stream.sh`, role-notice polling, or identity writes
+- backgrounding the wrapper and reconstructing success from side effects
+- reading shared-root artifacts to infer startup success before wrapper failure is established
+- announcing startup success without first verifying the required wrapper fields
+
+### Required progress lines
+
+Print these exact lines, in order, only when the corresponding step is actually complete:
+
+```text
+Step 1: trigger confirmed.
+Step 2: wrapper started.
+Step 3: wrapper result captured.
+Step 4: startup fields verified.
+Step 5: skill files loaded.
+Step 6: startup complete.
+```
+
+### Final readiness line
+
+After the checklist succeeds, announce exactly:
+
+```text
+I'm <colony>.<handle>, seat <n> of <total>, role: <role>, ready.
+```
+
+---
+
+## Canonical startup entrypoint
+
+Use exactly one of these canonical wrapper entrypoints:
 
 ```bash
 # POSIX
-nohup ./scripts/stream.sh >/dev/null 2>&1 &
+./scripts/hive.sh add
 
 # Windows PowerShell
-Start-Process powershell -ArgumentList "-NoProfile","-WindowStyle","Hidden","-File","./scripts/stream.ps1" -WindowStyle Hidden
+./scripts/hive.ps1 add
 ```
 
-The script connects to `/api/bots/stream?colony=<colony>`. The `colony` value comes from `gh api user --jq .login`. The server picks your handle from the colony's pool, assigns your seat and role, and sends a `your-role` event. The script writes `.bot-hive-stream.pid` on start.
+Compatibility aliases `start` / `start the hive` still route to the same wrapper path, but the preferred human-facing command is `hive add a bot`.
+
+The wrapper is the product startup path. It is responsible for:
+- duplicate detection for the current terminal/session
+- deciding `primary` vs `secondary`
+- spawning the SSE listener
+- waiting for the assigned role notice or secondary handoff
+- registering the session in `.bot-hive-sessions/`
+- reporting the assigned `session_root`
+
+Startup success authority rule:
+- the wrapper's returned `key=value` result is the only authority for startup success
+- shared-root PID files, temp files, and manual process checks are not authority
+- if the wrapper has not returned the required success fields, startup is not complete
 
 ---
 
-## Step 2. Wait for the role notice
+## Required success fields
 
-Poll for `.bot-hive-role-notice` **or** `.bot-hive-role-ptr` at cwd (max 30s, 200ms interval).
+The wrapper prints machine-readable `key=value` lines on stdout. It also prints a short human-readable success confirmation on stderr telling the operator that the bot is live and the window should stay open.
 
-- If `.bot-hive-role-notice` appears first: read it directly.
-- If `.bot-hive-role-ptr` appears first: read the path from it (e.g. `worktrees/scout`), then poll for `.bot-hive-role-notice` at that path (another 30s max).
+Expected fields:
 
-This two-file protocol handles the secondary-bot case: a bot that starts at the same repo root as an existing bot has its state files written to a worktree subdirectory; `.bot-hive-role-ptr` is the pointer the stream script leaves at cwd so startup can find it.
-
-```bash
-# POSIX — poll for notice or ptr
-deadline=$(($(date +%s) + 30))
-notice_path=".bot-hive-role-notice"
-while [ "$(date +%s)" -lt "$deadline" ]; do
-  if [ -f ".bot-hive-role-notice" ]; then notice_path=".bot-hive-role-notice"; break; fi
-  if [ -f ".bot-hive-role-ptr" ]; then
-    subdir=$(cat .bot-hive-role-ptr)
-    inner_deadline=$(($(date +%s) + 30))
-    while [ "$(date +%s)" -lt "$inner_deadline" ]; do
-      [ -f "$subdir/.bot-hive-role-notice" ] && notice_path="$subdir/.bot-hive-role-notice" && break 2
-      sleep 0.2
-    done
-    break
-  fi
-  sleep 0.2
-done
-
-# Windows PowerShell
-$deadline = (Get-Date).AddSeconds(30)
-$noticePath = ".bot-hive-role-notice"
-while ((Get-Date) -lt $deadline) {
-  if (Test-Path ".bot-hive-role-notice") { $noticePath = ".bot-hive-role-notice"; break }
-  if (Test-Path ".bot-hive-role-ptr") {
-    $subdir = (Get-Content ".bot-hive-role-ptr" -Raw).Trim()
-    $inner = (Get-Date).AddSeconds(30)
-    while ((Get-Date) -lt $inner) {
-      if (Test-Path "$subdir\.bot-hive-role-notice") { $noticePath = "$subdir\.bot-hive-role-notice"; break }
-      Start-Sleep -Milliseconds 200
-    }
-    break
-  }
-  Start-Sleep -Milliseconds 200
-}
-```
-
-Parse the notice — `key=value` per line:
-
-```
+```text
+client_session_id=...
+startup_mode=primary|secondary
+session_root=...
+notice_path=...
 handle=scout
 role=coder
 seat=2
 total=2
 skillFiles=hive/skills/coder.md
-at=2026-05-14T20:00:00Z
+session_id=...
+at=...
+departed=...
 ```
 
-If the file never appears: surface the error (server unreachable, network blocked). Do not improvise a role. Exit and let the operator retry.
+Startup is successful only if all of these required fields are present:
+- `startup_mode`
+- `session_root`
+- `notice_path`
+- `handle`
+- `role`
+- `seat`
+- `total`
+- `skillFiles`
+
+Notes:
+- `session_root` is the bot's actual working root for state files. For secondary bots this may be a worktree such as `worktrees/<handle>/`.
+- `seat`, `total`, `role`, `handle`, and `skillFiles` come from the server-assigned role notice.
+- `startup_mode=secondary` is valid and expected when another bot is already alive.
+
+If any required field is missing, startup has failed. Surface the wrapper error and stop.
 
 ---
 
-## Step 3. Write identity
+## Required execution order
 
-Write `.bot-hive-identity` with the server-assigned handle:
+Follow these steps exactly.
 
+### Step 1 — confirm the trigger
+
+Condition:
+- `hive add a bot` / `start the hive` was said in chat, or `.bot-hive-kickoff` exists
+
+Then print exactly:
+
+```text
+Step 1: trigger confirmed.
 ```
-colony=<colony>
-handle=<handle from notice>
+
+### Step 2 — run the canonical wrapper
+
+Run exactly one command:
+
+```bash
+# POSIX
+./scripts/hive.sh add
+
+# Windows PowerShell
+./scripts/hive.ps1 add
 ```
 
-UTF-8, no BOM. On PowerShell use `[System.IO.File]::WriteAllText(path, content, [System.Text.UTF8Encoding]::new($false))` — never `Set-Content -Encoding utf8` (adds a BOM).
+Then print exactly:
 
----
+```text
+Step 2: wrapper started.
+```
 
-## Step 4. Read skill files and announce
+### Step 3 — capture the wrapper result
 
-Read **every** skill file listed in `skillFiles` (repo-relative paths, e.g. `hive/skills/pm.md`). The union defines what you do and don't do this session.
+Wait for the wrapper to finish and capture its stdout `key=value` output.
+
+Then print exactly:
+
+```text
+Step 3: wrapper result captured.
+```
+
+### Step 4 — verify required fields
+
+Verify that the wrapper result contains all required success fields:
+- `startup_mode`
+- `session_root`
+- `notice_path`
+- `handle`
+- `role`
+- `seat`
+- `total`
+- `skillFiles`
+
+Then print exactly:
+
+```text
+Step 4: startup fields verified.
+```
+
+### Step 5 — load assigned skill files
+
+Read every skill file listed in `skillFiles` before doing anything else.
+
+Then print exactly:
+
+```text
+Step 5: skill files loaded.
+```
+
+### Step 6 — announce readiness and stop
 
 Announce in chat, one sentence:
 
-```
+```text
 I'm <colony>.<handle>, seat <n> of <total>, role: <role>, ready.
 ```
 
-Use exact values from the notice.
+If `.bot-hive-kickoff` exists, delete it.
+
+Then print exactly:
+
+```text
+Step 6: startup complete.
+```
+
+Then stop and wait for the operator's next instruction.
+
+Do not claim a ticket, file work, or edit code until the operator gives a specific instruction.
 
 ---
 
-## Step 5. Consume the kickoff marker and stop
+## Invalid startup transcript examples
 
-If `.bot-hive-kickoff` exists, delete it — one-shot:
+These are wrong:
+- "Let me check `.bot-hive-stream.pid` to confirm startup."
+- "Let me inspect tasklist / ps while waiting."
+- "The background task should have completed; let me check output files."
+- "Startup completed" based only on PID checks or artifact checks.
+- any startup transcript that skips the required `Step N: ...` progress lines
 
-```bash
-rm -f .bot-hive-kickoff                                                # POSIX
-Remove-Item -Path .bot-hive-kickoff -ErrorAction SilentlyContinue      # PowerShell
-```
-
-Then stop. Do not claim a ticket, file work, or edit code until the operator gives a specific instruction.
+Reason:
+- these are legacy/shared-root heuristics
+- startup is successful only when the wrapper returns the required fields
 
 ---
 
 ## Mid-session role changes
 
-When a peer joins or leaves your colony, the server pushes a new `your-role` event down your open SSE stream. `scripts/stream.{ps1,sh}` rewrites `.bot-hive-role-notice`. The `UserPromptSubmit` hook (`scripts/check-role.{ps1,sh}`) reads it on your next operator prompt and injects a `[BOT-HIVE] Role changed: …` notice. Announce the new role at the start of your reply and re-read any new skill files listed.
+When a peer joins or leaves your colony, the server pushes a new `your-role` event down the open SSE stream. `scripts/check-role.{sh,ps1}` surfaces that on the next operator prompt.
+
+When that happens:
+1. Announce the new role at the start of your reply.
+2. Re-read any newly listed skill files.
+3. Continue under the new role.
 
 ---
 
 ## Sign-off
 
-When the operator says `stop your hive work`, `sign off`, or `leave the hive`, run the procedure in [`hive/bot-shutdown.md`](./bot-shutdown.md). Don't close the terminal until the procedure prints `Signed off. Safe to close this window.`
+When the operator says `hive shutdown`, `sign off`, `leave the hive`, `stop hive`, or `stop your hive work`, run the shutdown procedure in `hive/bot-shutdown.md` or the wrapper directly:
 
----
+```bash
+# POSIX
+./scripts/hive.sh shutdown
 
-## Recovery — role drift mid-session
+# Windows PowerShell
+./scripts/hive.ps1 shutdown
+```
 
-If asked to do work outside your assigned role:
+Do not close the terminal until it prints:
 
-1. Refuse politely, naming the mismatch.
-2. Re-read your skill rubric.
-3. Continue operating per the rubric.
-
-Exception: when you are the only bot in the colony, the consolidation table assigns every role to you. There is no "wrong role" in a solo colony.
+```text
+Signed off. Safe to close this window.
+```
 
 ---
 
 ## Reference
 
-- `AGENTS.md` — agent-neutral conventions.
-- `hive/HIVE.md` — format spec.
-- `hive/roles.md` — role consolidation table.
-- `hive/seats.md` — seat assignment and liveness.
-- `hive/bot-shutdown.md` — sign-off procedure.
-- `tasks/lessons.md` — past mistakes.
+- `AGENTS.md` — agent-neutral conventions
+- `hive/bot-shutdown.md` — sign-off procedure
+- `hive/seats.md` — seat/liveness model
+- `scripts/hive.sh` / `scripts/hive.ps1` — canonical startup/shutdown wrappers

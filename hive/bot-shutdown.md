@@ -2,12 +2,13 @@
 
 Run this procedure when the operator signals you to leave the hive. Trigger phrases (any of these, case-insensitive, listed in `AGENTS.md`):
 
-- `stop your hive work` (canonical)
+- `hive shutdown` (preferred)
 - `sign off`
 - `leave the hive`
 - `stop hive`
+- `stop your hive work` (legacy alias)
 
-Operators can also run `./scripts/hive.sh stop` (POSIX) or `.\scripts\hive.ps1 stop` (PowerShell) directly from a terminal to perform this procedure without an agent.
+Operators can also run `./scripts/hive.sh shutdown` (POSIX) or `.\scripts\hive.ps1 shutdown` (PowerShell) directly from a terminal to perform this procedure without an agent. Compatibility aliases `stop` / `sign off` still route to the same wrapper path.
 
 HV-136: there's no `/leave` API call anymore. Killing the SSE listener closes the TCP socket, which the server detects within ~1s and reaps the seat after a 15s grace window. Three steps.
 

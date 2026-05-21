@@ -8,7 +8,7 @@ Per-machine local-dev state (in-progress setup notes) lives in `tasks/local-dev-
 
 Two equivalent triggers, both run the single procedure in [`hive/bot-startup.md`](./hive/bot-startup.md):
 
-1. **Operator types `start the hive`** (or any equivalent — "kick off the hive", "begin a hive session", etc.) in chat. Run the wrapper-backed procedure in `hive/bot-startup.md`; duplicate detection is session-aware, so a live root `.bot-hive-stream.pid` only blocks the same terminal/session, not a valid second bot from a fresh terminal.
+1. **Operator types `hive add a bot`** (preferred) or `start the hive` (legacy equivalent) in chat. Run the wrapper-backed procedure in `hive/bot-startup.md`; duplicate detection is session-aware, so a live root `.bot-hive-stream.pid` only blocks the same terminal/session, not a valid second bot from a fresh terminal.
 2. **`.bot-hive-kickoff` marker file** exists at the cwd root (written by the Add-a-Bot spawn flow or the platform). One-shot — consumed during bootstrap.
 
 The server assigns your handle and role. You do not need to know them before connecting — they arrive in the `your-role` SSE event at step 2 of the startup procedure.
@@ -19,20 +19,21 @@ If neither trigger has fired, wait silently. Kickoff is the canonical entry poin
 
 When the operator wants you to leave the hive, they'll say one of these phrases (case-insensitive):
 
-1. **`stop your hive work`** (canonical)
+1. **`hive shutdown`** (preferred)
 2. **`sign off`**
 3. **`leave the hive`**
 4. **`stop hive`**
+5. **`stop your hive work`** (legacy canonical)
 
 Recognize any of them as the shutdown trigger, the same way `start the hive` is the kickoff trigger. Run the procedure in [`hive/bot-shutdown.md`](./hive/bot-shutdown.md): kill the SSE listener (the open TCP socket IS the liveness signal — the server reclaims the seat after a 15s grace), delete the local state files (`.bot-hive-role-notice`, `.bot-hive-role-bootannounced`, etc.), and only then print `Signed off. Safe to close this window.`.
 
-Operators can also run `./scripts/hive.sh start|stop` (or `.\scripts\hive.ps1 start|stop`) directly from a terminal to perform startup/shutdown without an agent.
+Operators can also run `./scripts/hive.sh add|shutdown` (or `.\scripts\hive.ps1 add|shutdown`) directly from a terminal to perform startup/shutdown without an agent. `start|stop` still work as compatibility aliases under the same wrapper path.
 
 The operator should not close the terminal until they see the all-clear line.
 
 ## Spawn additional bots
 
-To add a bot to the colony, the operator opens a new terminal and types `start the hive`. The startup wrapper allows a fresh terminal to continue in secondary mode even when the repo root already has a live stream; the server then assigns the next free handle and the appropriate role and pushes updates to all connected bots via SSE.
+To add a bot to the colony, the operator opens a new terminal and types `hive add a bot` (preferred) or `start the hive` (legacy alias). The startup wrapper allows a fresh terminal to continue in secondary mode even when the repo root already has a live stream; the server then assigns the next free handle and the appropriate role and pushes updates to all connected bots via SSE.
 
 There is no role argument to choose — the server derives the role from the consolidation table in `hive/roles.md` based on how many bots are already active in the colony. Role assignment is automatic and server-authoritative.
 
@@ -43,7 +44,7 @@ Existing bots receive their updated role notice on their next operator prompt vi
 
 ## Worktree isolation (preferred)
 
-When the human spawns you via the **"Add a bot"** button on the live board, your session starts in a dedicated git worktree at `worktrees/<your-handle>/` on a feature branch `<handle>-work`. Two bots in two worktrees physically can't edit the same files — coordination protocol catches the rest.
+When the human spawns you via the **"Add a bot"** button on the live board, the UI should direct them to the same single startup path: open a terminal, start their LLM, and type `hive add a bot`. Secondary startup still lands in a dedicated git worktree at `worktrees/<your-handle>/` on a feature branch `<handle>-work`. Two bots in two worktrees physically can't edit the same files — coordination protocol catches the rest.
 
 If you weren't spawned via the button (running in the main repo working dir), no harm — Bot Hive's protocol still works without worktrees. The button + worktree flow is a hardening, not a requirement.
 

@@ -86,3 +86,44 @@ The pattern: a ticket spec describes *what* a feature does; it does not describe
 Pre-build interview already exists as a global rule (`~/.claude/CLAUDE.md`); this is the UI-specific subcase that I kept skipping. UI approval is a separate gate from ticket approval.
 
 Also tied to scope drift: I built HV-020 while the user had explicitly said "stay focused on coordination". Acknowledge the assigned focus before claiming any ticket — if the ticket is outside scope, surface it instead of silently working around the assignment.
+
+## L10 — In mixed Windows/WSL startup, the wrapper must not classify primary vs secondary from PID liveness
+
+The startup wrapper and the stream process were both trying to answer the same question: "am I the primary bot or a secondary bot joining an existing colony?" The wrapper used a root `.bot-hive-stream.pid` liveness probe to decide whether to wait for a root `.bot-hive-role-notice` (primary path) or a request-scoped `.bot-hive-startups/<id>.json` handoff (secondary path).
+
+That design is unsafe in mixed-runtime local dev. A PowerShell-launched stream can be alive even when the wrapper's runtime-specific PID probe says otherwise, or the wrapper can classify the session differently from the stream process it just spawned. When those disagree, the wrapper waits on the wrong artifact: it blocks waiting for a root role notice that will never be written, while the stream correctly writes a startup handoff for a secondary session.
+
+The symptom is deceptive seat inflation: the next bot appears as seat 2 even though the human never successfully established seat 1 from that terminal flow. The underlying fault is not seat assignment — it is startup-mode misclassification before the wrapper begins waiting.
+
+**Rule:** treat the presence of shared-root startup artifacts only as a reason to request a startup handoff, never as authority about startup mode. The spawned stream process is the authority. The wrapper should infer primary vs secondary from the returned `stateDir` / handoff result after the stream has decided, not from a pre-spawn cross-runtime PID check.
+
+Corollary: when debugging Bot Hive startup, distrust any design where two layers independently classify ownership or startup mode from shared root files. Use one authority, and make the other layer observe its result.
+
+## L11 — Local startup must not trust a stale localhost API base or assume localhost is reachable across runtimes
+
+Bot Hive startup was reading `.bot-hive-api-url` and using it as the stream base without verifying that it still matched the running dev server. That broke in two ways during mixed Windows/WSL local runs:
+
+1. the dev server moved from `localhost:3000` to `localhost:3001` because port 3000 was already taken, but `.bot-hive-api-url` still pointed at 3000; and
+2. even the correct Windows-local URL (`http://localhost:3001`) was not reachable from the WSL runtime that launched `stream.sh`, while the dev log's network URL (`http://10.5.0.2:3001`) was reachable.
+
+The symptom looks like a startup-contract failure (`No role notice appeared within startup timeout`), but the actual fault is upstream: the stream never reached `/api/bots/stream` at all because it was dialing the wrong or unroutable base URL.
+
+**Rule:** in local dev, treat `.bot-hive-dev.log` as the freshest authority for the active Next.js port/address. If a persisted `.bot-hive-api-url` disagrees with the current dev log, override it. If `localhost` is not reachable from the current runtime and the dev log exposes a network URL, fall back to that network URL and persist the corrected base.
+
+## L12 — Distinguish Bot Hive startup failures as implementation bugs vs bad designs
+
+Two startup/seat failures looked similar on the surface but should be classified differently so future fixes target the right layer.
+
+1. **Implementation bug — shutdown tracked the wrong process identity.** In the Windows/PowerShell path, `.bot-hive-stream.pid` could point at a process that was no longer the real seat-owning SSE connection. Shutdown then reported success while the real stream stayed alive and kept the seat occupied. Symptom: the next startup appears as seat 2 even though the previous seat was thought to be gone.
+
+2. **Bad design — startup handoff mode was inferred from shared-root artifact presence instead of one authoritative owner.** `scripts/hive-start.mjs` treated the existence of `.bot-hive-stream.pid` as enough reason to classify startup/handoff behavior, even when that artifact was stale or belonged to a different runtime view. That is not just a conditional bug; it is an unsafe ownership model because two layers independently infer startup mode from shared files.
+
+**Rule:** when recommending Bot Hive startup fixes, first check this lessons file and reject any recommendation that repeats a known bug pattern or revives a known bad design. In particular, do not recommend shared-root PID-file authority, cross-runtime PID liveness as ownership truth, or dual-classification of primary vs secondary startup paths.
+
+## L13 — Don’t diagnose transient local Next route 500s as app-code bugs before checking for duplicate dev servers / shared build-output contention
+
+During HV-136/HV-148 local validation, project-scoped routes briefly failed with framework-level runtime symptoms (`__webpack_modules__[moduleId] is not a function`, other internal Next invariant errors). The tempting diagnosis was "`src/lib/github.ts` or the route code is broken" because the stack pointed through generated route bundles that imported that module.
+
+Re-checking showed the route bundles could be required successfully and the same endpoints later returned normal `401` unauthenticated responses. The stronger local-state clue was that two `next dev` processes were running from the same checkout at once (`:3000` and `:3001`), and logs also showed framework-level manifest/runtime corruption (`Expected clientReferenceManifest to be defined`).
+
+**Rule:** before treating a local Next route 500 as a durable application bug, check whether multiple dev servers are sharing one checkout/build-output tree. If the failure is transient and the stack/error shape is framework-internal, classify it first as possible local artifact/runtime contention. Reproduce again against one clearly authoritative dev server before changing app code.
