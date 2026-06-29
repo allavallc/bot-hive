@@ -110,6 +110,17 @@ gh pr merge --auto --squash --delete-branch
 
 When the GitHub merge queue is enabled (HV-080 — see `docs/DEPLOY.md` "Step 9"), source PRs are batched: multiple auto-mergeable PRs share a single CI run on a combined branch, then merge atomically. With 5 PRs in flight, total wall time stays ~3 min instead of growing to ~15 min. Coordination-metadata-only PRs (hive/, docs/, tasks/, AGENTS.md, etc.) skip CI entirely (HV-079) and land in seconds regardless.
 
+### One branch per ticket — never reuse, never pile
+
+Every unit of work starts on a **fresh branch cut from up-to-date `main`**. Before creating it: `git pull --rebase origin main`, then `git checkout -b hv-XXX-<slug>`.
+
+- **Never reuse an old feature branch for new work.** A branch named for a ticket carries only that ticket's changes. If you catch yourself committing unrelated work onto an existing branch, stop — that's how a branch becomes two tangled piles that can't be reviewed, shipped, or reverted separately.
+- **One ticket per branch, one ticket per PR.** If the work splits into two tickets, it splits into two branches.
+- **Don't let the working tree accumulate across tickets.** If `git status` shows changes spanning multiple unrelated tickets, separate them before committing.
+- **Run the pre-push report before any push to `origin`:** `./scripts/pre-push-report.sh`. It reports branch, divergence vs `origin/main`, changed files, hot-file collisions, and warns if the working tree looks like more than one ticket. It's a reporting aid, not a gate — read it, act on warnings, then push.
+
+**Untangling a mixed branch.** If a branch already mixes unrelated work: create one fresh branch per concern off current `main`, move each concern's files over (`git checkout <branch> -- <paths>`, or stash slices), commit each on its own branch, and open one PR each. Never ship the mixed branch as-is.
+
 ### Conceptually: still two lanes
 
 The mental split between coordination metadata and source code is still useful — it determines what the change is *about*, even though both flow through PRs:
