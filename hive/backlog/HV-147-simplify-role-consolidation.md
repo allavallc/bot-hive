@@ -113,10 +113,11 @@ This is a simplification - **delete old code**, don't just add to it:
 **`hive/skills/pm.md`:**
 - Delete: "When other bots exist in your colony (count ≥ 2), coding is the coder's job"
 - Replace with: "You never code; that's the coder's job" (PM always delegates coding)
+- Add: PM bot blocks any work (ticket claims, filing) if colony has <3 active bots
 
 **`src/lib/roles.ts`:**
-- The `roleForSeat()` function should throw an error if `total < 3`
-- No logic needed for handling 1-bot or 2-bot cases
+- No enforcement at connection time (PM must connect to spawn peers)
+- Bot work (claims) is blocked at the skill/convention level
 
 **Documentation:**
 - Search entire repo for "1-bot", "2-bot", "single bot", "PM + coder" and delete references

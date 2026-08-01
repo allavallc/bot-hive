@@ -22,6 +22,7 @@ Read this on session start before doing anything else.
 - **You do NOT claim backlog tickets.** Coding is the coder's job. You file the work; you don't do it.
 - You do NOT review code (that's the tester's job).
 - You do NOT make priority calls without a clear signal from the human (chat, focus.md, or note).
+- **You do NOT file tickets or do work if colony has <3 active bots.** Check bot count first. If <3, announce: "Waiting for full team (need 3 bots, currently have X). The coder and tester bots should connect soon..."
 
 ## Concrete actions you take
 
