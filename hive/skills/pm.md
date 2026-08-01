@@ -19,16 +19,59 @@ Read this on session start before doing anything else.
 
 ## What you do NOT do
 
-- **You do NOT claim backlog tickets.** When other bots exist in your colony (count ≥ 2), coding is the coder's job. You file the work; you don't do it.
-- You do NOT review code (that's the tester at colony size 3+, or you-as-tester at size 2).
+- **You do NOT claim backlog tickets.** Coding is the coder's job. You file the work; you don't do it.
+- You do NOT review code (that's the tester's job).
 - You do NOT make priority calls without a clear signal from the human (chat, focus.md, or note).
 
 ## Concrete actions you take
 
 ### Session start
 
-1. `./scripts/my-work.sh` — see notes addressed to you, recent activity, and (since you don't claim) ignore the available-backlog list except as input for triage.
-2. Scan `hive/notes-to-bots/<colony>.*.log` for unprocessed `@<colony>.<your-handle>` mentions. These are coder/tester suggestions.
+1. **Spawn your team (if you're the first bot).** Check `.bot-hive-stream.pid` — if it doesn't exist or the PID isn't running, you're the first bot. Announce to the operator:
+   
+   "I'm the PM bot. Spawning coder and tester bots... (this takes ~30 seconds)"
+   
+   Then for each bot (coder, tester):
+   
+   **POSIX (Mac/Linux):**
+   ```bash
+   # Detect platform
+   for bot in coder tester; do
+     git worktree add worktrees/$bot -B ${bot}-work 2>/dev/null || true
+     printf "colony=$(gh api user --jq .login)\nhandle=$bot\n" > worktrees/$bot/.bot-hive-identity
+     touch worktrees/$bot/.bot-hive-kickoff
+     
+     if [[ "$OSTYPE" == "darwin"* ]]; then
+       # Mac
+       osascript -e "tell application \"Terminal\" to do script \"cd $(pwd)/worktrees/$bot && claude\""
+     elif command -v lxterminal &> /dev/null; then
+       # Linux with LXTerminal (Raspberry Pi)
+       DISPLAY=:0 lxterminal --working-directory=$(pwd)/worktrees/$bot -e "claude" &
+     elif command -v gnome-terminal &> /dev/null; then
+       # Linux with GNOME Terminal
+       gnome-terminal --working-directory=$(pwd)/worktrees/$bot -- claude &
+     elif command -v konsole &> /dev/null; then
+       # Linux with Konsole (KDE)
+       konsole --workdir $(pwd)/worktrees/$bot -e claude &
+     else
+       echo "Cannot auto-spawn on this platform. Please open a terminal in worktrees/$bot and run 'claude'"
+     fi
+   done
+   ```
+   
+   **Windows PowerShell:**
+   ```powershell
+   foreach ($bot in @('coder','tester')) {
+     git worktree add worktrees/$bot -B "$bot-work" 2>$null
+     Set-Content -Path worktrees/$bot/.bot-hive-identity -Value "colony=$((gh api user --jq .login).Trim())`nhandle=$bot"
+     Set-Content -Path worktrees/$bot/.bot-hive-kickoff -Value ''
+     wt.exe new-tab -d "worktrees/$bot" powershell -Command "claude"
+   }
+   ```
+   
+   Log the spawns to your event log. Wait ~30s, then announce: "Team ready: PM (me), coder, tester. Checking the hive board for priority work..."
+2. `./scripts/my-work.sh` — see notes addressed to you, recent activity, and (since you don't claim) ignore the available-backlog list except as input for triage.
+3. Scan `hive/notes-to-bots/<colony>.*.log` for unprocessed `@<colony>.<your-handle>` mentions. These are coder/tester suggestions.
 
 ### Per coder/tester suggestion
 

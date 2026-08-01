@@ -142,10 +142,6 @@ Then stop. Do not claim a ticket, file work, or edit code until the operator giv
 
 ---
 
-## Mid-session role changes
-
-When a peer joins or leaves your colony, the server pushes a new `your-role` event down your open SSE stream. `scripts/stream.{ps1,sh}` rewrites `.bot-hive-role-notice`. The `UserPromptSubmit` hook (`scripts/check-role.{ps1,sh}`) reads it on your next operator prompt and injects a `[BOT-HIVE] Role changed: …` notice. Announce the new role at the start of your reply and re-read any new skill files listed.
-
 ---
 
 ## Sign-off

@@ -78,6 +78,9 @@ function pickRule(rules: ConsolidationRule[], total: number): ConsolidationRule 
 }
 
 export function roleForSeat(total: number, position: number): RoleAssignment {
+  if (total < 3) {
+    throw new Error(`Bot Hive requires minimum 3 bots per colony (got ${total})`);
+  }
   if (total < 1 || position < 1 || position > total) {
     throw new Error(`invalid seat: total=${total}, position=${position}`);
   }

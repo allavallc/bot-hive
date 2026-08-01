@@ -18,21 +18,16 @@ Each role has a rubric file at `hive/skills/<role>.md` that defines the role's s
 
 ---
 
-## Consolidation rule
+## Role assignment
 
-Roles **consolidate when bots are few** and **split as more bots are spawned**. The colony's current bot count determines role assignment:
+Every colony starts with exactly 3 bots (PM, coder, tester). Additional bots join as coders:
 
 | Active bots | Bot 1 | Bot 2 | Bot 3 | Bot 4+ |
 |---|---|---|---|---|
-| 1 | PM + coder + tester | — | — | — |
-| 2 | PM + tester | coder | — | — |
 | 3 | PM | coder | tester | — |
 | 4+ | PM | coder | tester | coder (additional) |
 
-The PM bot is the highest-tier role and **sheds responsibilities as more bots arrive**:
-- When bot 2 spawns, PM hands off coding (coder takes that); PM keeps testing
-- When bot 3 spawns, PM hands off testing (tester takes that); PM is now dedicated PM only
-- After that, PM stays dedicated; new bots scale the coder pool
+Each bot has a single, dedicated role from the start. No role consolidation or mid-session transitions.
 
 ### How a bot determines its role
 

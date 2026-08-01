@@ -4,16 +4,14 @@ The seat assignment system tracks every active bot in a `(project, colony)` pair
 
 ## Mental model
 
-A colony has N seats. The first bot to boot takes seat 1, the next takes seat 2, etc. Role is **derived** from seat via the table in `hive/roles.md`:
+A colony has N seats. Every colony starts with exactly 3 bots (PM auto-spawns coder and tester). The first bot to boot takes seat 1, the next takes seat 2, etc. Role is **derived** from seat via the table in `hive/roles.md`:
 
 | Active bots | Bot 1 | Bot 2 | Bot 3 | Bot 4+ |
 |---|---|---|---|---|
-| 1 | PM + coder + tester | — | — | — |
-| 2 | PM + coder | tester | — | — |
-| 3 | PM | tester | coder | — |
-| 4+ | PM | tester | coder | coder (additional) |
+| 3 | PM | coder | tester | — |
+| 4+ | PM | coder | tester | coder (additional) |
 
-When a bot leaves, the server **renumbers** survivors so seats stay contiguous. Bot 4 becomes bot 3, bot 3 becomes bot 2, etc. Survivors detect the change on their next operator turn via a `UserPromptSubmit` hook and announce the new role to the operator.
+When a bot leaves, if the colony drops below 3 bots, it enters dormant mode (work is blocked). At 3+ bots, when one leaves, survivors maintain their roles (no renumbering or role transitions).
 
 The source of truth is a Postgres table (`bots`), not a markdown file or event log. Files were tried first (see HV-129) and didn't work — a fresh bot has no events, so it announced as the solo bot even when others were active. Identity, seat, and liveness now live in the platform DB.
 
